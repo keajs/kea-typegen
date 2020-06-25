@@ -1,0 +1,16 @@
+{
+  "name": "kea-typegen",
+  "version": "0.0.1",
+  "description": "Generate type definitions for kea logic",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@rauschma/stringio": "^1.4.0",
+    "ts-morph": "^7.1.2"
+  }
+}
