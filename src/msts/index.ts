@@ -27,6 +27,7 @@ function checkLogics(
     // Visit every sourceFile in the program
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile) {
+            // console.log(sourceFile)
             // Walk the tree to search for classes
             ts.forEachChild(sourceFile, visit);
         }
@@ -39,59 +40,108 @@ function checkLogics(
 
     /** visit nodes finding exported classes */
     function visit(node: ts.Node) {
-        // Only consider exported nodes
-        if (!isNodeExported(node)) {
-            return;
+        if (!ts.isIdentifier(node)) {
+            ts.forEachChild(node, visit);
+            return
         }
 
-        if (ts.isClassDeclaration(node) && node.name) {
-            // This is a top level class, get its symbol
-            let symbol = checker.getSymbolAtLocation(node.name);
-            if (symbol) {
-                output.push(serializeClass(symbol));
-            }
-            // No need to walk any further, class expressions/inner declarations
-            // cannot be exported
-        } else if (ts.isModuleDeclaration(node)) {
-            // This is a namespace, visit its children
-            ts.forEachChild(node, visit);
+        if (!node.parent || !ts.isCallExpression(node.parent)) {
+            return
         }
+
+        const symbol = checker.getSymbolAtLocation(node);
+        if (!symbol || symbol.getName() !== 'kea') {
+            return
+        }
+
+        const input = node.parent.arguments[0]
+
+        if (!ts.isObjectLiteralExpression(input)) {
+            return
+        }
+
+        // ts.get
+        const symbol3 = checker.getSymbolAtLocation(input);
+
+        const properties = input.properties as unknown as ts.PropertySignature[]
+
+        for (const property of properties) {
+            const symbol = checker.getSymbolAtLocation(property.name as ts.Identifier);
+            const name = symbol?.getName()
+
+            if (symbol && name === 'actions') {
+                const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
+                const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
+                console.log(checker.typeToString(type))
+
+                if (ts.isFunctionTypeNode(typeNode)) {
+                    const signature = type.getCallSignatures()[0]
+                    const returnType = signature.getReturnType()
+                    console.log(checker.typeToString(returnType))
+                    debugger
+
+                }
+
+                debugger
+
+            }
+
+            // const value = property.initializer as ts.Node
+            //
+            // if (ts.isArrowFunction(value)) {
+            //     symbol.valueDeclaration
+            //     // returnType: checker.typeToString(signature.getReturnType()),
+            //
+            //
+            //     debugger
+            // }
+            //
+            // if (name === 'actions') {
+            //     const value = property.initializer
+            //     debugger
+            // }
+        }
+
+        console.log('!!!')
+
+
+        debugger
+
     }
 
     /** Serialize a symbol into a json object */
     function serializeSymbol(symbol: ts.Symbol): DocEntry {
         return {
             name: symbol.getName(),
-            documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker)),
             type: checker.typeToString(
                 checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
             )
         };
     }
 
-    /** Serialize a class symbol information */
-    function serializeClass(symbol: ts.Symbol) {
-        let details = serializeSymbol(symbol);
-
-        // Get the construct signatures
-        let constructorType = checker.getTypeOfSymbolAtLocation(
-            symbol,
-            symbol.valueDeclaration!
-        );
-        details.constructors = constructorType
-            .getConstructSignatures()
-            .map(serializeSignature);
-        return details;
-    }
-
-    /** Serialize a signature (call or construct) */
-    function serializeSignature(signature: ts.Signature) {
-        return {
-            parameters: signature.parameters.map(serializeSymbol),
-            returnType: checker.typeToString(signature.getReturnType()),
-            documentation: ts.displayPartsToString(signature.getDocumentationComment(checker))
-        };
-    }
+    // /** Serialize a class symbol information */
+    // function serializeClass(symbol: ts.Symbol) {
+    //     let details = serializeSymbol(symbol);
+    //
+    //     // Get the construct signatures
+    //     let constructorType = checker.getTypeOfSymbolAtLocation(
+    //         symbol,
+    //         symbol.valueDeclaration!
+    //     );
+    //     details.constructors = constructorType
+    //         .getConstructSignatures()
+    //         .map(serializeSignature);
+    //     return details;
+    // }
+    //
+    // /** Serialize a signature (call or construct) */
+    // function serializeSignature(signature: ts.Signature) {
+    //     return {
+    //         parameters: signature.parameters.map(serializeSymbol),
+    //         returnType: checker.typeToString(signature.getReturnType()),
+    //         documentation: ts.displayPartsToString(signature.getDocumentationComment(checker))
+    //     };
+    // }
 
     /** True if this is visible outside this file, false otherwise */
     function isNodeExported(node: ts.Node): boolean {

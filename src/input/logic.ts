@@ -1,56 +1,54 @@
 import { kea } from 'kea'
 
 const logic = kea({
-    path: () => ['scenes', 'homepage', 'index'],
-    constants: () => [
-        'SOMETHING',
-        'SOMETHING_ELSE'
+  path: () => ['scenes', 'homepage', 'index'],
+  constants: () => ['SOMETHING', 'SOMETHING_ELSE'],
+  actions: () => ({
+    updateName: (name) => ({ name }),
+  }),
+  reducers: ({ actions }) => ({
+    name: [
+      'chirpy',
+      {
+        [actions.updateName]: (state, payload) => payload.name,
+      },
     ],
-    actions: ({ constants }) => ({
-        updateName: name => ({ name })
-    }),
-    reducers: ({ actions, constants }) => ({
-        name: ['chirpy', PropTypes.string, {
-            [actions.updateName]: (state, payload) => payload.name
-        }]
-    }),
-    selectors: ({ constants, selectors }) => ({
-        upperCaseName: [
-            () => [selectors.capitalizedName],
-            (capitalizedName) => {
-                return capitalizedName.toUpperCase()
-            },
-            PropTypes.string
+  }),
+  selectors: ({ selectors }) => ({
+    upperCaseName: [
+      () => [selectors.capitalizedName],
+      (capitalizedName) => {
+        return capitalizedName.toUpperCase()
+      },
+    ],
+    capitalizedName: [
+      () => [selectors.name],
+      (name) => {
+        return name
+          .trim()
+          .split(' ')
+          .map((k) => `${k.charAt(0).toUpperCase()}${k.slice(1).toLowerCase()}`)
+          .join(' ')
+      },
+    ],
+  }),
+  extend: [
+    {
+      constants: () => ['SOMETHING_BLUE', 'SOMETHING_ELSE'],
+      actions: () => ({
+        updateDescription: (description) => ({ description }),
+      }),
+      reducers: ({ actions }) => ({
+        description: [
+          '',
+          {
+            [actions.updateDescription]: (state, payload) => payload.description,
+          },
         ],
-        capitalizedName: [
-            () => [selectors.name],
-            (name) => {
-                return name.trim().split(' ').map(k => `${k.charAt(0).toUpperCase()}${k.slice(1).toLowerCase()}`).join(' ')
-            },
-            PropTypes.string
-        ]
-    }),
-    extend: [
-        {
-            constants: () => [
-                'SOMETHING_BLUE',
-                'SOMETHING_ELSE'
-            ],
-            actions: ({ constants }) => ({
-                updateDescription: description => ({ description })
-            }),
-            reducers: ({ actions, constants }) => ({
-                description: ['', PropTypes.string, {
-                    [actions.updateDescription]: (state, payload) => payload.description
-                }]
-            }),
-            selectors: ({ constants, selectors }) => ({
-                upperCaseDescription: [
-                    () => [selectors.description],
-                    (description) => description.toUpperCase(),
-                    PropTypes.string
-                ]
-            })
-        }
-    ]
+      }),
+      selectors: ({ selectors }) => ({
+        upperCaseDescription: [() => [selectors.description], (description) => description.toUpperCase()],
+      }),
+    },
+  ],
 })
