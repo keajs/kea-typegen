@@ -1,0 +1,25 @@
+[
+    {
+        "name": "C",
+        "documentation": "Documentation for C",
+        "type": "typeof C",
+        "constructors": [
+            {
+                "parameters": [
+                    {
+                        "name": "a",
+                        "documentation": "my parameter documentation",
+                        "type": "string"
+                    },
+                    {
+                        "name": "b",
+                        "documentation": "another parameter documentation",
+                        "type": "C"
+                    }
+                ],
+                "returnType": "C",
+                "documentation": "constructor documentation"
+            }
+        ]
+    }
+]

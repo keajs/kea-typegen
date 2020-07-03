@@ -1,6 +1,6 @@
 const { streamWrite, streamEnd, onExit } = require('@rauschma/stringio')
 const { chunksToLinesAsync, chomp } = require('@rauschma/stringio')
-const { spawn } = require('child_process')
+const { spawn } = require('src/tutorials/child_process')
 
 function openExternalProject(tsserver, configPath) {
   const request = JSON.stringify({
