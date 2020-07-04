@@ -1,47 +1,73 @@
 // https://github.com/Microsoft/TypeScript/wiki/Using-the-Compiler-API#using-the-type-checker
-import * as ts from "typescript";
-import * as fs from "fs";
+import * as ts from 'typescript'
+import * as fs from 'fs'
+//
+// interface DocEntry {
+//     name?: string
+//     fileName?: string
+//     documentation?: string
+//     type?: string
+//     constructors?: DocEntry[]
+//     parameters?: DocEntry[]
+//     returnType?: string
+// }
 
-interface DocEntry {
-    name?: string;
-    fileName?: string;
-    documentation?: string;
-    type?: string;
-    constructors?: DocEntry[];
-    parameters?: DocEntry[];
-    returnType?: string;
+interface ActionTransform {
+    name: string
+    type: ts.Type
+    signature: ts.Signature
+    typeNode: ts.TypeNode
 }
 
 /** Generate documentation for all classes in a set of .ts files */
-function checkLogics(
-    fileNames: string[],
-    options: ts.CompilerOptions
-): void {
+function checkLogics(fileNames: string[], options: ts.CompilerOptions): void {
     // Build a program using the set of root file names in fileNames
-    let program = ts.createProgram(fileNames, options);
+    let program = ts.createProgram(fileNames, options)
 
     // Get the checker, we will use it to find more about classes
-    let checker = program.getTypeChecker();
-    let output: DocEntry[] = [];
-
+    let checker = program.getTypeChecker()
+    let actions: ActionTransform[]
     // Visit every sourceFile in the program
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile) {
             // console.log(sourceFile)
             // Walk the tree to search for classes
-            ts.forEachChild(sourceFile, visit);
+            // let output: DocEntry[] = []
+            actions = []
+
+            ts.forEachChild(sourceFile, visit)
+
+            if (actions.length > 0) {
+                const logicType = createLogicType({ actions })
+
+                const resultFile = ts.createSourceFile(
+                    sourceFile.fileName.replace('.ts', '.d.ts'),
+                    '',
+                    ts.ScriptTarget.Latest,
+                    /*setParentNodes*/ false,
+                    ts.ScriptKind.TS,
+                )
+                const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
+                const result = printer.printNode(ts.EmitHint.Unspecified, logicType, resultFile)
+                console.log(result)
+                fs.writeFileSync(resultFile.fileName, result);
+
+                printer.printFile(resultFile)
+                // checker.typeToString(logicType)
+                // debugger
+            }
         }
     }
 
     // print out the doc
-    fs.writeFileSync("classes.json", JSON.stringify(output, undefined, 4));
+    // fs.writeFileSync('classes.json', JSON.stringify(output, undefined, 4))
 
-    return;
+    return
 
     /** visit nodes finding exported classes */
     function visit(node: ts.Node) {
         if (!ts.isIdentifier(node)) {
-            ts.forEachChild(node, visit);
+            ts.forEachChild(node, visit)
             return
         }
 
@@ -49,7 +75,7 @@ function checkLogics(
             return
         }
 
-        const symbol = checker.getSymbolAtLocation(node);
+        const symbol = checker.getSymbolAtLocation(node)
         if (!symbol || symbol.getName() !== 'kea') {
             return
         }
@@ -61,12 +87,12 @@ function checkLogics(
         }
 
         // ts.get
-        const symbol3 = checker.getSymbolAtLocation(input);
+        const symbol3 = checker.getSymbolAtLocation(input)
 
-        const properties = input.properties as unknown as ts.PropertySignature[]
+        const properties = (input.properties as unknown) as ts.PropertySignature[]
 
         for (const property of properties) {
-            const symbol = checker.getSymbolAtLocation(property.name as ts.Identifier);
+            const symbol = checker.getSymbolAtLocation(property.name as ts.Identifier)
             const name = symbol?.getName()
 
             if (symbol && name === 'actions') {
@@ -78,45 +104,113 @@ function checkLogics(
                     const signature = type.getCallSignatures()[0]
                     const returnType = signature.getReturnType()
                     console.log(checker.typeToString(returnType))
-                    debugger
 
+                    for (const actionProperty of returnType.getProperties()) {
+                        const name = actionProperty.getName()
+                        const type = checker.getTypeOfSymbolAtLocation(actionProperty, actionProperty.valueDeclaration!)
+                        const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
+                        const signature = type.getCallSignatures()[0]
+
+                        actions.push({ name, type,typeNode, signature })
+
+                        console.log(checker.typeToString(type))
+
+                        const returnType = signature.getReturnType()
+                        console.log(checker.typeToString(returnType))
+
+                        // debugger
+                    }
                 }
 
-                debugger
-
+                // debugger
             }
-
-            // const value = property.initializer as ts.Node
-            //
-            // if (ts.isArrowFunction(value)) {
-            //     symbol.valueDeclaration
-            //     // returnType: checker.typeToString(signature.getReturnType()),
-            //
-            //
-            //     debugger
-            // }
-            //
-            // if (name === 'actions') {
-            //     const value = property.initializer
-            //     debugger
-            // }
         }
 
-        console.log('!!!')
+        // debugger
+    }
 
+    function createLogicType({ actions }) {
+        return ts.createInterfaceDeclaration(
+            undefined,
+            [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
+            ts.createIdentifier('logicInterface'),
+            undefined,
+            undefined,
+            [
+                ts.createPropertySignature(
+                    undefined,
+                    ts.createIdentifier('actions'),
+                    undefined,
+                    ts.createTypeLiteralNode(createActions(actions)),
+                    undefined,
+                ),
+                ts.createPropertySignature(
+                    undefined,
+                    ts.createIdentifier('actionsCreators'),
+                    undefined,
+                    ts.createTypeLiteralNode(createActions(actions)),
+                    undefined,
+                ),
+            ],
+        )
+    }
 
-        debugger
+    function createActions(actions: ActionTransform[]) {
+        return actions.map((action) => {
+            // ts.getMutableClone(action.signature./getReturnType().)
 
+            const returnType = action.signature.getReturnType()
+            const parameters = action.signature.getDeclaration().parameters
+
+            // ...parameters.map(checker.typeToTypeNode),
+            const params = parameters.map(param => {
+                // const type = checker.getTypeOfSymbolAtLocation(param, param.valueDeclaration!)
+                // const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
+                // // ts.getMutableClone()
+                // return typeNode
+                return param
+            }) as unknown as ts.ParameterDeclaration[]
+
+            console.log(checker.typeToString(action.type))
+            console.log(checker.typeToString(returnType))
+            // debugger
+            return ts.createPropertySignature(
+                undefined,
+                ts.createIdentifier(action.name),
+                undefined,
+                ts.createFunctionTypeNode(
+                    undefined,
+                    params,
+                    ts.createParenthesizedType(
+                        ts.createTypeLiteralNode([
+                            ts.createPropertySignature(
+                                undefined,
+                                ts.createIdentifier('type'),
+                                undefined,
+                                ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                                undefined,
+                            ),
+                            ts.createPropertySignature(
+                                undefined,
+                                ts.createIdentifier('payload'),
+                                undefined,
+                                checker.typeToTypeNode(returnType),
+                                undefined,
+                            ),
+                        ]),
+                    ),
+                ),
+                undefined,
+            )
+        })
     }
 
     /** Serialize a symbol into a json object */
-    function serializeSymbol(symbol: ts.Symbol): DocEntry {
+    function serializeSymbol(symbol: ts.Symbol): any {
         return {
             name: symbol.getName(),
-            type: checker.typeToString(
-                checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
-            )
-        };
+            type: checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)),
+        }
     }
 
     // /** Serialize a class symbol information */
@@ -148,11 +242,11 @@ function checkLogics(
         return (
             (ts.getCombinedModifierFlags(node as ts.Declaration) & ts.ModifierFlags.Export) !== 0 ||
             (!!node.parent && node.parent.kind === ts.SyntaxKind.SourceFile)
-        );
+        )
     }
 }
 
-checkLogics(["./src/input/logic.ts"], {
+checkLogics(['./src/input/logic.ts'], {
     target: ts.ScriptTarget.ES5,
-    module: ts.ModuleKind.CommonJS
-});
+    module: ts.ModuleKind.CommonJS,
+})
