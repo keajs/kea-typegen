@@ -1,4 +1,4 @@
-import * as ts from "typescript";
+import * as ts from 'typescript'
 
 export interface ActionTransform {
     name: string
@@ -13,6 +13,8 @@ export interface ReducerTransform {
 }
 
 export interface ParsedLogic {
+    fileName: string
+    logicName: string
     checker: ts.TypeChecker
     actions: ActionTransform[]
     reducers: ReducerTransform[]

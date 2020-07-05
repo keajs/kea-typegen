@@ -6,28 +6,34 @@ import { isKeaCall } from './utils'
 export function visitProgram(program: ts.Program) {
     const checker = program.getTypeChecker()
     const parsedLogics: ParsedLogic[] = []
-    const visit = createVisit(checker, parsedLogics)
 
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile) {
-            ts.forEachChild(sourceFile, visit)
+            ts.forEachChild(sourceFile, createVisit(checker, parsedLogics, sourceFile))
         }
     }
 
     return parsedLogics
 }
 
-export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]) {
+export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[], sourceFile: ts.SourceFile) {
     return function visit(node: ts.Node) {
         if (!isKeaCall(node, checker)) {
             ts.forEachChild(node, visit)
             return
         }
 
+        let logicName = 'logic'
+        if (ts.isCallExpression(node.parent) && ts.isVariableDeclaration(node.parent.parent)) {
+            logicName = node.parent.parent.name.getText()
+        }
+
         const parsedLogic: ParsedLogic = {
+            checker,
+            logicName,
+            fileName: sourceFile.fileName,
             actions: [],
             reducers: [],
-            checker: checker,
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression

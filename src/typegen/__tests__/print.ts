@@ -1,6 +1,6 @@
 import { programFromSource } from '../utils'
 import { visitProgram } from '../visit'
-import { logicToTypeString } from '../build'
+import { logicToTypeString } from '../print'
 
 test('logicToTypeString', () => {
     const logicSource = `
@@ -18,7 +18,7 @@ test('logicToTypeString', () => {
 
     expect(string).toEqual(
         `
-export interface logicInterface {
+export interface logicType {
     actions: {
         updateName: (name: string) => ({
             type: string;
