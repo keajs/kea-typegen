@@ -1,5 +1,4 @@
 import * as ts from 'typescript'
-import {ScriptTarget} from "typescript";
 
 export function sourceToSourceFile(sourceCode: string, filename: string = 'logic.ts') {
     return ts.createSourceFile(filename, sourceCode, ts.ScriptTarget.ES5, true)
