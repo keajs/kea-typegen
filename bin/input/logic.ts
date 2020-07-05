@@ -1,5 +1,5 @@
 import { kea } from 'kea'
-import { logicInterface } from './logic.d'
+import { logicInterface } from './logic'
 
 export const logic: logicInterface = kea<logicInterface>({
     path: () => ['scenes', 'homepage', 'index'],

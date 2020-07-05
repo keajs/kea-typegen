@@ -1,10 +1,9 @@
-// https://github.com/Microsoft/TypeScript/wiki/Using-the-Compiler-API#using-the-type-checker
-import * as ts from 'typescript'
-import { visitProgram } from './typegen/visit'
+import {visitProgram} from "./visit";
+import {programFromSource} from "./utils";
+import {logicToTypeString} from "./print";
 
-const program = ts.createProgram(['./src/input/logic.ts'], {
-    target: ts.ScriptTarget.ES5,
-    module: ts.ModuleKind.CommonJS,
-})
-
-visitProgram(program)
+export function logicSourceToLogicType(logicSource: string) {
+    const program = programFromSource(logicSource)
+    const [parsedLogic] = visitProgram(program)
+    return logicToTypeString(parsedLogic)
+}

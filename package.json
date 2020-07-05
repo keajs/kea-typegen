@@ -4,7 +4,7 @@
   "description": "Generate type definitions for kea logic",
   "main": "trials/index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
+    "start": "ts-node bin/index.ts",
     "test": "jest"
   },
   "author": "",
