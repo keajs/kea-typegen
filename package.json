@@ -2,9 +2,9 @@
   "name": "kea-typegen",
   "version": "0.0.1",
   "description": "Generate type definitions for kea logic",
-  "main": "src/tutorials/index.js",
+  "main": "trials/index.js",
   "scripts": {
-    "start": "ts-node src/msts/index.ts",
+    "start": "ts-node src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -16,5 +16,12 @@
     "ts-morph": "^7.1.2",
     "ts-node": "^8.10.2",
     "typescript": "^3.9.6"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.10.4",
+    "@babel/preset-env": "^7.10.4",
+    "@babel/preset-typescript": "^7.10.4",
+    "babel-jest": "^26.1.0",
+    "jest": "^26.1.0"
   }
 }

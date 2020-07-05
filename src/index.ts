@@ -1,22 +1,17 @@
 // https://github.com/Microsoft/TypeScript/wiki/Using-the-Compiler-API#using-the-type-checker
 import * as ts from 'typescript'
 import * as fs from 'fs'
-//
-// interface DocEntry {
-//     name?: string
-//     fileName?: string
-//     documentation?: string
-//     type?: string
-//     constructors?: DocEntry[]
-//     parameters?: DocEntry[]
-//     returnType?: string
-// }
 
 interface ActionTransform {
     name: string
     type: ts.Type
     signature: ts.Signature
     typeNode: ts.TypeNode
+}
+
+interface ReducerTransform {
+    name: string
+    type: ts.Type | undefined
 }
 
 /** Generate documentation for all classes in a set of .ts files */
@@ -27,6 +22,7 @@ function checkLogics(fileNames: string[], options: ts.CompilerOptions): void {
     // Get the checker, we will use it to find more about classes
     let checker = program.getTypeChecker()
     let actions: ActionTransform[]
+    let reducers: ReducerTransform[]
     // Visit every sourceFile in the program
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile) {
@@ -34,11 +30,12 @@ function checkLogics(fileNames: string[], options: ts.CompilerOptions): void {
             // Walk the tree to search for classes
             // let output: DocEntry[] = []
             actions = []
+            reducers = []
 
             ts.forEachChild(sourceFile, visit)
 
-            if (actions.length > 0) {
-                const logicType = createLogicType({ actions })
+            if (actions.length > 0 || reducers.length > 0) {
+                const logicType = createLogicType()
 
                 const resultFile = ts.createSourceFile(
                     sourceFile.fileName.replace('.ts', '.d.ts'),
@@ -93,43 +90,63 @@ function checkLogics(fileNames: string[], options: ts.CompilerOptions): void {
 
         for (const property of properties) {
             const symbol = checker.getSymbolAtLocation(property.name as ts.Identifier)
+
+            if (!symbol) {
+                continue
+            }
+
             const name = symbol?.getName()
+            let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
 
-            if (symbol && name === 'actions') {
-                const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
-                const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
-                console.log(checker.typeToString(type))
+            if (ts.isFunctionTypeNode(checker.typeToTypeNode(type) as ts.TypeNode)) {
+                type = type.getCallSignatures()[0].getReturnType()
+            }
+            console.log({ name, type: checker.typeToString(type) })
 
-                if (ts.isFunctionTypeNode(typeNode)) {
+            if (name === 'actions') {
+                const properties = checker.getPropertiesOfType(type)
+
+                for (const property of properties) {
+                    const name = property.getName()
+                    const type = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration!)
+                    const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
                     const signature = type.getCallSignatures()[0]
-                    const returnType = signature.getReturnType()
-                    console.log(checker.typeToString(returnType))
 
-                    for (const actionProperty of returnType.getProperties()) {
-                        const name = actionProperty.getName()
-                        const type = checker.getTypeOfSymbolAtLocation(actionProperty, actionProperty.valueDeclaration!)
-                        const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
-                        const signature = type.getCallSignatures()[0]
+                    actions.push({name, type, typeNode, signature})
 
-                        actions.push({ name, type,typeNode, signature })
-
-                        console.log(checker.typeToString(type))
-
-                        const returnType = signature.getReturnType()
-                        console.log(checker.typeToString(returnType))
-
-                        // debugger
-                    }
+                    // console.log(checker.typeToString(type))
+                    // const returnType = signature.getReturnType()
+                    // console.log(checker.typeToString(returnType))
                 }
 
-                // debugger
+            } else if (name === 'reducers') {
+                for (const property of type.getProperties()) {
+                    parseReducerProperty(property)
+                }
             }
         }
-
-        // debugger
     }
 
-    function createLogicType({ actions }) {
+    function parseReducerProperty (property: ts.Symbol) {
+        const name = property.getName()
+        const type = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration!)
+        console.log(checker.typeToString(type))
+        const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
+
+        // typeNode.elementType.type.types[0]
+
+        // if (ts.IntersectionTypeNode(typeNode)){
+        //     //typeNode.
+        //     // const typeOfFirstInArray = (type as ts.TypeReference).resolvedTypeArguments?.[0]?.types?.[0]
+        //
+        //     // reducers.push({name, type: typeOfFirstInArray})
+        //     console.log('.')
+        // }
+
+        console.log('.')
+    }
+
+    function createLogicType() {
         return ts.createInterfaceDeclaration(
             undefined,
             [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -171,8 +188,8 @@ function checkLogics(fileNames: string[], options: ts.CompilerOptions): void {
                 return param
             }) as unknown as ts.ParameterDeclaration[]
 
-            console.log(checker.typeToString(action.type))
-            console.log(checker.typeToString(returnType))
+            // console.log(checker.typeToString(action.type))
+            // console.log(checker.typeToString(returnType))
             // debugger
             return ts.createPropertySignature(
                 undefined,

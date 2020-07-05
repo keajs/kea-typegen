@@ -1,5 +1,5 @@
 import { kea } from 'kea'
-import { logic as logicInterface } from './logic.d'
+import { logicInterface } from './logic.d'
 
 export const logic: logicInterface = kea<logicInterface>({
     path: () => ['scenes', 'homepage', 'index'],
@@ -8,15 +8,21 @@ export const logic: logicInterface = kea<logicInterface>({
         updateName: (name: string) => ({ name }),
         updateOtherName: (otherName: string) => ({ otherName }),
     }),
-    reducers: ({ actions }: logicInterface) => ({
-        name: [
-            'chirpy',
-            {
-                [actions.updateName]: (state, payload) => payload.name,
+    reducers: ({ actions }: logicInterface) => {
+        return {
+            name: [
+                'birdname',
+                {
+                    updateName: (_, { name }) => name,
+                    [actions.updateOtherName as any]: (state, payload) => payload.name,
+                },
+            ],
+            otherNameNoDefault: {
+                updateName: (_, { name }) => name,
             },
-        ],
-    }),
-    selectors: ({ selectors }) => ({
+        }
+    },
+    selectors: ({ selectors }: logicInterface) => ({
         upperCaseName: [
             () => [selectors.capitalizedName],
             (capitalizedName) => {
@@ -24,7 +30,7 @@ export const logic: logicInterface = kea<logicInterface>({
             },
         ],
         capitalizedName: [
-            () => [selectors.name],
+            (s) => [s.name],
             (name) => {
                 return name
                     .trim()
@@ -34,23 +40,4 @@ export const logic: logicInterface = kea<logicInterface>({
             },
         ],
     }),
-    extend: [
-        {
-            constants: () => ['SOMETHING_BLUE', 'SOMETHING_ELSE'],
-            actions: () => ({
-                updateDescription: (description) => ({ description }),
-            }),
-            reducers: ({ actions }) => ({
-                description: [
-                    '',
-                    {
-                        [actions.updateDescription]: (state, payload) => payload.description,
-                    },
-                ],
-            }),
-            selectors: ({ selectors }) => ({
-                upperCaseDescription: [() => [selectors.description], (description) => description.toUpperCase()],
-            }),
-        },
-    ],
 })
