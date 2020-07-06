@@ -10,10 +10,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@rauschma/stringio": "^1.4.0",
-    "kea": "^2.1.1",
-    "ts-jest": "^26.1.1",
-    "ts-morph": "^7.1.2",
     "ts-node": "^8.10.2",
     "typescript": "^3.9.6"
   },
@@ -24,6 +20,8 @@
     "@types/jest": "^26.0.3",
     "@types/node": "^14.0.14",
     "babel-jest": "^26.1.0",
-    "jest": "^26.1.0"
+    "jest": "^26.1.0",
+    "kea": "^2.1.1",
+    "ts-jest": "^26.1.1"
   }
 }
