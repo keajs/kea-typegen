@@ -1,4 +1,4 @@
-export interface logicInterface {
+export type logicType = {
     actions: {
         updateName: (name: string) => ({
             type: string;

@@ -1,17 +1,17 @@
 import { kea } from 'kea'
-import { logicInterface } from './logic'
+import { logicType } from './logic.d'
 
-export const logic: logicInterface = kea<logicInterface>({
+export const logic: logicType = kea<logicType>({
     path: () => ['scenes', 'homepage', 'index'],
     constants: () => ['SOMETHING', 'SOMETHING_ELSE'],
     actions: () => ({
         updateName: (name: string) => ({ name }),
         updateOtherName: (otherName: string) => ({ otherName }),
     }),
-    reducers: ({ actions }: logicInterface) => {
+    reducers: ({ actions }: logicType) => {
         return {
             name: [
-                'birdname',
+                'birdname' as (string | null),
                 {
                     updateName: (_, { name }) => name,
                     [actions.updateOtherName as any]: (state, payload) => payload.name,
@@ -20,9 +20,15 @@ export const logic: logicInterface = kea<logicInterface>({
             otherNameNoDefault: {
                 updateName: (_, { name }) => name,
             },
+            yetAnotherNameWithNullDefault: [
+                null as (string | null),
+                {
+                    updateName: (_, { name }) => name,
+                },
+            ],
         }
     },
-    selectors: ({ selectors }: logicInterface) => ({
+    selectors: ({ selectors }: logicType) => ({
         upperCaseName: [
             () => [selectors.capitalizedName],
             (capitalizedName) => {
