@@ -11,7 +11,7 @@ export const logic: logicType = kea<logicType>({
     reducers: ({ actions }: logicType) => {
         return {
             name: [
-                'birdname' as (string | null),
+                'birdname',
                 {
                     updateName: (_, { name }) => name,
                     [actions.updateOtherName as any]: (state, payload) => payload.name,

@@ -38,8 +38,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
 
-        for (const property of input.properties) {
-            const symbol = checker.getSymbolAtLocation(property.name as ts.Identifier)
+        for (const inputProperty of input.properties) {
+            const symbol = checker.getSymbolAtLocation(inputProperty.name as ts.Identifier)
 
             if (!symbol) {
                 continue
@@ -47,6 +47,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
 
             const name = symbol.getName()
             let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
+
+            console.log(name, checker.typeToString(type))
 
             if (ts.isFunctionTypeNode(checker.typeToTypeNode(type) as ts.TypeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()
@@ -59,6 +61,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
                     parseActionProperty(property, checker, parsedLogic)
                 }
             } else if (name === 'reducers') {
+                console.log(name, checker.typeToString(type))
+
                 for (const property of type.getProperties()) {
                     parseReducerProperty(property, checker, parsedLogic)
                 }
