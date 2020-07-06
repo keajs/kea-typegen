@@ -14,7 +14,7 @@ test('reducers', () => {
                     'birdname',
                     {
                         updateName: (_, { name }) => name,
-                        [actions.updateOtherName as any]: (state, payload) => payload.name,
+                        [actions.updateOtherName]: (state, payload) => payload.name,
                     },
                 ],
                 otherNameNoDefault: {

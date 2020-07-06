@@ -36,6 +36,13 @@ export function createLogicType(parsedLogic: ParsedLogic) {
                 ts.createTypeLiteralNode(createActions(parsedLogic)),
                 undefined,
             ),
+            ts.createPropertySignature(
+                undefined,
+                ts.createIdentifier('reducers'),
+                undefined,
+                ts.createTypeLiteralNode(createReducers(parsedLogic)),
+                undefined,
+            ),
         ],
     )
 }
@@ -86,6 +93,45 @@ function createActions(parsedLogic: ParsedLogic) {
                 ),
             ),
             undefined,
+        )
+    })
+}
+
+function createReducers(parsedLogic: ParsedLogic) {
+    return parsedLogic.reducers.map((reducer) => {
+        return ts.createPropertySignature(
+            undefined,
+            ts.createIdentifier(reducer.name),
+            undefined,
+            ts.createFunctionTypeNode(
+                undefined,
+                [
+                    ts.createParameter(
+                        undefined,
+                        undefined,
+                        undefined,
+                        ts.createIdentifier("state"),
+                        undefined,
+                        reducer.typeNode,
+                        undefined
+                    ),
+                    ts.createParameter(
+                        undefined,
+                        undefined,
+                        undefined,
+                        ts.createIdentifier("action"),
+                        undefined,
+                        ts.createFunctionTypeNode(
+                            undefined,
+                            [],
+                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                        ),
+                        undefined
+                    )
+                ],
+                reducer.typeNode
+            ),
+            undefined
         )
     })
 }

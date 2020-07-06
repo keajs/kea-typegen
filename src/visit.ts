@@ -1,5 +1,4 @@
 import * as ts from 'typescript'
-import { parseActionProperty, parseReducerProperty } from './parse'
 import { ParsedLogic } from './types'
 import { isKeaCall } from './utils'
 
@@ -58,13 +57,26 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
                 const properties = checker.getPropertiesOfType(type)
 
                 for (const property of properties) {
-                    parseActionProperty(property, checker, parsedLogic)
+                    const name = property.getName()
+                    const type = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration!)
+                    const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
+                    const signature = type.getCallSignatures()[0]
+
+                    parsedLogic.actions.push({ name, type, typeNode, signature })
                 }
             } else if (name === 'reducers') {
-                console.log(name, checker.typeToString(type))
-
                 for (const property of type.getProperties()) {
-                    parseReducerProperty(property, checker, parsedLogic)
+                    const name = property.getName()
+                    const value = (property.valueDeclaration as ts.PropertyAssignment).initializer
+
+                    if (ts.isArrayLiteralExpression(value)) {
+                        const defaultValue = value.elements[0]
+                        const type = checker.getTypeAtLocation(defaultValue)
+                        parsedLogic.reducers.push({ name, type, typeNode: checker.typeToTypeNode(type)  })
+                    } else {
+                        // ts.isObjectLiteralExpression
+                        parsedLogic.reducers.push({ name, typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword) })
+                    }
                 }
             }
         }

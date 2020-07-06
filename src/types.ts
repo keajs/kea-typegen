@@ -9,7 +9,8 @@ export interface ActionTransform {
 
 export interface ReducerTransform {
     name: string
-    type: ts.Type | undefined
+    type?: ts.Type
+    typeNode?: ts.TypeNode | ts.KeywordTypeNode
 }
 
 export interface ParsedLogic {
