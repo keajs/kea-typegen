@@ -46,6 +46,7 @@ export function createLogicType(parsedLogic: ParsedLogic) {
             // reducerOptions
             createProperty('reducers', ts.createTypeLiteralNode(createReducers(parsedLogic))),
             // selector
+            createProperty('selector', createSelector(parsedLogic)),
             createProperty('selectors', ts.createTypeLiteralNode(createSelectors(parsedLogic))),
             // sharedListeners
             createProperty('values', ts.createTypeLiteralNode(createValues(parsedLogic))),
@@ -119,6 +120,15 @@ function createReducers(parsedLogic: ParsedLogic) {
                         ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         undefined,
                     ),
+                    ts.createParameter(
+                        undefined,
+                        undefined,
+                        undefined,
+                        ts.createIdentifier('fullState'),
+                        undefined,
+                        ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        undefined,
+                    ),
                 ],
                 reducer.typeNode,
             ),
@@ -147,6 +157,43 @@ function createReducer(parsedLogic: ParsedLogic) {
                 ts.createIdentifier('action'),
                 undefined,
                 ts.createFunctionTypeNode(undefined, [], ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+                undefined,
+            ),
+            ts.createParameter(
+                undefined,
+                undefined,
+                undefined,
+                ts.createIdentifier('fullState'),
+                undefined,
+                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                undefined,
+            ),
+        ],
+        ts.createTypeLiteralNode(
+            parsedLogic.reducers.map((reducer) =>
+                ts.createPropertySignature(
+                    undefined,
+                    ts.createIdentifier(reducer.name),
+                    undefined,
+                    reducer.typeNode,
+                    undefined,
+                ),
+            ),
+        ),
+    )
+}
+
+function createSelector(parsedLogic: ParsedLogic) {
+    return ts.createFunctionTypeNode(
+        undefined,
+        [
+            ts.createParameter(
+                undefined,
+                undefined,
+                undefined,
+                ts.createIdentifier('state'),
+                undefined,
+                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                 undefined,
             ),
         ],
