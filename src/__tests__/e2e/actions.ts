@@ -130,3 +130,63 @@ export interface logicType {
 }`.trim(),
     )
 })
+
+test('actions - with random values instead of functions', () => {
+    const logicSource = `
+        import { kea } from 'kea'
+        
+        const logic = kea({
+            actions: {
+                updateName: (name: string) => ({ name }),
+                withBool: true,
+                withRandomPayload: { bla: 123 },
+            }
+        })
+    `
+    expect(logicSourceToLogicType(logicSource)).toEqual(
+        `
+export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        withBool: () => ({
+            type: string;
+            payload: {
+                value: boolean;
+            };
+        });
+        withRandomPayload: () => ({
+            type: string;
+            payload: {
+                value: { bla: number; };
+            };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        withBool: () => ({
+            type: string;
+            payload: {
+                value: boolean;
+            };
+        });
+        withRandomPayload: () => ({
+            type: string;
+            payload: {
+                value: { bla: number; };
+            };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+}`.trim(),
+    )
+})

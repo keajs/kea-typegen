@@ -1,11 +1,26 @@
-import {ParsedLogic} from "../types";
-import * as ts from "typescript";
+import { ParsedLogic } from '../types'
+import * as ts from 'typescript'
 
 export function printActions(parsedLogic: ParsedLogic) {
     return ts.createTypeLiteralNode(
         parsedLogic.actions.map((action) => {
-            const returnType = action.signature.getReturnType()
-            const parameters = action.signature.getDeclaration().parameters
+            let returnTypeNode
+            let parameters: ts.NodeArray<ts.ParameterDeclaration> | undefined = undefined
+
+            if (ts.isFunctionTypeNode(action.typeNode)) {
+                parameters = action.signature.getDeclaration().parameters
+                returnTypeNode = parsedLogic.checker.typeToTypeNode(action.signature.getReturnType())
+            } else {
+                returnTypeNode = ts.createTypeLiteralNode([
+                    ts.createPropertySignature(
+                        undefined,
+                        ts.createIdentifier('value'),
+                        undefined,
+                        action.typeNode,
+                        undefined,
+                    ),
+                ])
+            }
 
             return ts.createPropertySignature(
                 undefined,
@@ -27,7 +42,7 @@ export function printActions(parsedLogic: ParsedLogic) {
                                 undefined,
                                 ts.createIdentifier('payload'),
                                 undefined,
-                                parsedLogic.checker.typeToTypeNode(returnType),
+                                returnTypeNode,
                                 undefined,
                             ),
                         ]),
