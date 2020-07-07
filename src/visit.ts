@@ -33,6 +33,7 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
             fileName: sourceFile.fileName,
             actions: [],
             reducers: [],
+            selectors: [],
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
@@ -47,7 +48,7 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
             const name = symbol.getName()
             let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
 
-            if (ts.isFunctionTypeNode(checker.typeToTypeNode(type) as ts.TypeNode)) {
+            if (ts.isFunctionTypeNode(checker.typeToTypeNode(type))) {
                 type = type.getCallSignatures()[0].getReturnType()
             }
 
@@ -57,7 +58,7 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
                 for (const property of properties) {
                     const name = property.getName()
                     const type = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration!)
-                    const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
+                    const typeNode = checker.typeToTypeNode(type)
                     const signature = type.getCallSignatures()[0]
 
                     parsedLogic.actions.push({ name, type, typeNode, signature })
@@ -94,6 +95,22 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
                         parsedLogic.reducers.push({
                             name,
                             typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        })
+                    }
+                }
+            } else if (name === 'selectors') {
+                for (const property of type.getProperties()) {
+                    const name = property.getName()
+                    const value = (property.valueDeclaration as ts.PropertyAssignment).initializer
+                    if (ts.isArrayLiteralExpression(value)) {
+                        const computedFunction = value.elements[1] as ts.ArrowFunction | ts.FunctionDeclaration
+                        const computedFunctionTypeNode = checker.getTypeAtLocation(computedFunction)
+                        const type = computedFunctionTypeNode.getCallSignatures()[0].getReturnType()
+
+                        parsedLogic.selectors.push({
+                            name,
+                            type,
+                            typeNode: checker.typeToTypeNode(type)
                         })
                     }
                 }

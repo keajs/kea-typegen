@@ -211,7 +211,7 @@ function createSelector(parsedLogic: ParsedLogic) {
 }
 
 function createSelectors(parsedLogic: ParsedLogic) {
-    return parsedLogic.reducers.map((reducer) => {
+    return parsedLogic.reducers.concat(parsedLogic.selectors).map((reducer) => {
         return ts.createPropertySignature(
             undefined,
             ts.createIdentifier(reducer.name),
@@ -249,7 +249,7 @@ function createSelectors(parsedLogic: ParsedLogic) {
 }
 
 function createValues(parsedLogic: ParsedLogic) {
-    return parsedLogic.reducers.map((reducer) => {
+    return parsedLogic.reducers.concat(parsedLogic.selectors).map((reducer) => {
         return ts.createPropertySignature(
             undefined,
             ts.createIdentifier(reducer.name),

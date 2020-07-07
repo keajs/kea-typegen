@@ -13,10 +13,17 @@ export interface ReducerTransform {
     typeNode?: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
+export interface SelectorTransform {
+    name: string
+    type?: ts.Type
+    typeNode?: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
+}
+
 export interface ParsedLogic {
     fileName: string
     logicName: string
     checker: ts.TypeChecker
     actions: ActionTransform[]
     reducers: ReducerTransform[]
+    selectors: SelectorTransform[]
 }
