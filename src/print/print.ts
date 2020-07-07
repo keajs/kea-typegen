@@ -1,4 +1,5 @@
 import * as ts from 'typescript'
+import * as fs from 'fs'
 import { ParsedLogic } from '../types'
 import { printActions } from './printActions'
 import { printReducers } from './printReducers'
@@ -7,7 +8,26 @@ import { printSelector } from './printSelector'
 import { printSelectors } from './printSelectors'
 import { printValues } from './printValues'
 
-export function logicToTypeString(parsedLogic: ParsedLogic) {
+export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = false) {
+    const groupedByFile: Record<string, ParsedLogic[]> = {}
+    parsedLogics.forEach((parsedLogic) => {
+        if (!groupedByFile[parsedLogic.fileName]) {
+            groupedByFile[parsedLogic.fileName] = []
+        }
+        groupedByFile[parsedLogic.fileName].push(parsedLogic)
+    })
+
+    Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
+        const output = parsedLogics.map(parsedLogicToTypeString).join('\n\n')
+        fileName = fileName.replace(/\.[tj]sx?$/, '.type.ts')
+        if (verbose) {
+            console.log(`Writing: ${fileName}`)
+        }
+        fs.writeFileSync(fileName, output)
+    })
+}
+
+export function parsedLogicToTypeString(parsedLogic: ParsedLogic) {
     const logicType = printLogicType(parsedLogic)
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
     const sourceFile = ts.createSourceFile('logic.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)

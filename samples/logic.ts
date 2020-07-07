@@ -1,5 +1,5 @@
 import { kea } from 'kea'
-import { logicType } from './logic.d'
+import { logicType } from './logic.type'
 
 export const logic: logicType = kea<logicType>({
     path: () => ['scenes', 'homepage', 'index'],
@@ -28,16 +28,16 @@ export const logic: logicType = kea<logicType>({
             ],
         }
     },
-    selectors: ({ selectors }: logicType) => ({
+    selectors: ({ selectors, values }: logicType) => ({
         upperCaseName: [
             () => [selectors.capitalizedName],
-            (capitalizedName) => {
+            (capitalizedName: typeof values.capitalizedName) => {
                 return capitalizedName.toUpperCase()
             },
         ],
         capitalizedName: [
             (s) => [s.name],
-            (name) => {
+            (name: typeof values.name) => {
                 return name
                     .trim()
                     .split(' ')

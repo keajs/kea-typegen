@@ -1,11 +1,11 @@
 import * as ts from 'typescript'
 import {visitProgram} from "./visit/visit";
-import {logicToTypeString} from "./print/print";
+import {parsedLogicToTypeString} from "./print/print";
 
 export function logicSourceToLogicType(logicSource: string) {
     const program = programFromSource(logicSource)
     const [parsedLogic] = visitProgram(program)
-    return logicToTypeString(parsedLogic)
+    return parsedLogicToTypeString(parsedLogic)
 }
 
 export function sourceToSourceFile(sourceCode: string, filename: string = 'logic.ts') {

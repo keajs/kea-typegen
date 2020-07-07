@@ -1,18 +1,21 @@
-// https://github.com/Microsoft/TypeScript/wiki/Using-the-Compiler-API#using-the-type-checker
+#!/usr/bin/env ts-node
 import * as ts from 'typescript'
-import { visitProgram } from '../src/visit/visit'
 import * as yargs from 'yargs'
+import { visitProgram } from '../visit/visit'
+import {printToFiles} from "../print/print";
 
 const parser = yargs
     .usage('Use one of:\n - kea-typegen -f logic.ts\n - kea-typegen -c tsconfig.json')
     .option('f', { alias: 'file', describe: 'Logic file', type: 'string' })
     .option('c', { alias: 'config', describe: 'Path to tsconfig.json', type: 'string' })
+    .option('w', { alias: 'write', describe: 'Write logic.type.ts files', type: 'string' })
 
 const options = parser.argv
 
 let program
 
 if (options.file) {
+    console.log(`Loading file: ${options.file}`)
     program = ts.createProgram([options.file as string], {
         target: ts.ScriptTarget.ES5,
         module: ts.ModuleKind.CommonJS,
@@ -32,6 +35,12 @@ if (options.file) {
 
 if (program) {
     const parsedLogics = visitProgram(program)
+    console.log(`Found ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'}!`)
+    if (typeof options.write !== 'undefined') {
+        printToFiles(parsedLogics, true)
+    } else {
+        console.log("Run with --write to write logic.type.ts files")
+    }
 } else {
     parser.showHelp()
 }
