@@ -8,13 +8,16 @@ export function logicToTypeString(parsedLogic: ParsedLogic) {
         'logic.ts',
         '',
         ts.ScriptTarget.Latest,
-        /*setParentNodes*/ false,
+        false,
         ts.ScriptKind.TS,
     )
     return printer.printNode(ts.EmitHint.Unspecified, logicType, sourceFile)
 }
 
 export function createLogicType(parsedLogic: ParsedLogic) {
+    const createProperty = (name, typeNode) =>
+        ts.createPropertySignature(undefined, ts.createIdentifier(name), undefined, typeNode, undefined)
+
     return ts.createInterfaceDeclaration(
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -22,78 +25,49 @@ export function createLogicType(parsedLogic: ParsedLogic) {
         undefined,
         undefined,
         [
-            ts.createPropertySignature(
-                undefined,
-                ts.createIdentifier('actionCreators'),
-                undefined,
-                ts.createTypeLiteralNode(createActions(parsedLogic)),
-                undefined,
-            ),
-            ts.createPropertySignature(
-                undefined,
-                ts.createIdentifier('actions'),
-                undefined,
-                ts.createTypeLiteralNode(createActions(parsedLogic)),
-                undefined,
-            ),
-            ts.createPropertySignature(
-                undefined,
-                ts.createIdentifier('reducers'),
-                undefined,
-                ts.createTypeLiteralNode(createReducers(parsedLogic)),
-                undefined,
-            ),
-            ts.createPropertySignature(
-                undefined,
-                ts.createIdentifier('reducer'),
-                undefined,
-                createReducer(parsedLogic),
-                undefined,
-            ),
-            ts.createPropertySignature(
-                undefined,
-                ts.createIdentifier('selectors'),
-                undefined,
-                ts.createTypeLiteralNode(createSelectors(parsedLogic)),
-                undefined,
-            ),
-            ts.createPropertySignature(
-                undefined,
-                ts.createIdentifier('values'),
-                undefined,
-                ts.createTypeLiteralNode(createValues(parsedLogic)),
-                undefined,
-            ),
+            createProperty('actionCreators', ts.createTypeLiteralNode(createActions(parsedLogic))),
+            // actionKeys
+            createProperty('actions', ts.createTypeLiteralNode(createActions(parsedLogic))),
+            // build
+            // cache
+            // connections
+            // constants
+            // defaults
+            // events
+            // extend
+            // inputs
+            // listeners
+            // mount
+            // path
+            // pathString
+            // propTypes
+            // props
+            createProperty('reducer', createReducer(parsedLogic)),
+            // reducerOptions
+            createProperty('reducers', ts.createTypeLiteralNode(createReducers(parsedLogic))),
+            // selector
+            createProperty('selectors', ts.createTypeLiteralNode(createSelectors(parsedLogic))),
+            // sharedListeners
+            createProperty('values', ts.createTypeLiteralNode(createValues(parsedLogic))),
+            // wrap
+            // _isKea
+            // _isKeaWithKey
         ],
     )
 }
 
 function createActions(parsedLogic: ParsedLogic) {
     return parsedLogic.actions.map((action) => {
-        // ts.getMutableClone(action.signature./getReturnType().)
-
         const returnType = action.signature.getReturnType()
         const parameters = action.signature.getDeclaration().parameters
 
-        // ...parameters.map(checker.typeToTypeNode),
-        const params = (parameters.map((param) => {
-            // const type = checker.getTypeOfSymbolAtLocation(param, param.valueDeclaration!)
-            // const typeNode = checker.typeToTypeNode(type) as ts.TypeNode
-            // // ts.getMutableClone()
-            // return typeNode
-            return param
-        }) as unknown) as ts.ParameterDeclaration[]
-
-        // console.log(checker.typeToString(action.type))
-        // console.log(checker.typeToString(returnType))
-        // debugger
         return ts.createPropertySignature(
             undefined,
             ts.createIdentifier(action.name),
             undefined,
             ts.createFunctionTypeNode(
                 undefined,
-                params,
+                parameters,
                 ts.createParenthesizedType(
                     ts.createTypeLiteralNode([
                         ts.createPropertySignature(

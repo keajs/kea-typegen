@@ -52,15 +52,15 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    reducers: {
-        name: (state: string, action: any) => string;
-        otherNameNoDefault: (state: any, action: any) => any;
-        yetAnotherNameWithNullDefault: (state: string | null, action: any) => string | null;
-    };
     reducer: (state: any, action: () => any) => {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
+    };
+    reducers: {
+        name: (state: string, action: any) => string;
+        otherNameNoDefault: (state: any, action: any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: any) => string | null;
     };
     selectors: {
         name: (state: any, props: Record<string, any>) => string;
@@ -127,15 +127,15 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    reducers: {
-        name: (state: string, action: any) => string;
-        otherNameNoDefault: (state: any, action: any) => any;
-        yetAnotherNameWithNullDefault: (state: string | null, action: any) => string | null;
-    };
     reducer: (state: any, action: () => any) => {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
+    };
+    reducers: {
+        name: (state: string, action: any) => string;
+        otherNameNoDefault: (state: any, action: any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: any) => string | null;
     };
     selectors: {
         name: (state: any, props: Record<string, any>) => string;
@@ -205,15 +205,15 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    reducers: {
-        name: (state: string, action: any) => string;
-        otherNameNoDefault: (state: any, action: any) => any;
-        yetAnotherNameWithNullDefault: (state: string | null, action: any) => string | null;
-    };
     reducer: (state: any, action: () => any) => {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
+    };
+    reducers: {
+        name: (state: string, action: any) => string;
+        otherNameNoDefault: (state: any, action: any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: any) => string | null;
     };
     selectors: {
         name: (state: any, props: Record<string, any>) => string;

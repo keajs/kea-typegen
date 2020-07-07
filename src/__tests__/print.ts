@@ -39,8 +39,8 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    reducers: {};
     reducer: (state: any, action: () => any) => {};
+    reducers: {};
     selectors: {};
     values: {};
 }`.trim(),
