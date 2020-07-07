@@ -45,7 +45,6 @@ export function createLogicType(parsedLogic: ParsedLogic) {
             createProperty('reducer', createReducer(parsedLogic)),
             // reducerOptions
             createProperty('reducers', ts.createTypeLiteralNode(createReducers(parsedLogic))),
-            // selector
             createProperty('selector', createSelector(parsedLogic)),
             createProperty('selectors', ts.createTypeLiteralNode(createSelectors(parsedLogic))),
             // sharedListeners
