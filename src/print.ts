@@ -45,6 +45,13 @@ export function createLogicType(parsedLogic: ParsedLogic) {
             ),
             ts.createPropertySignature(
                 undefined,
+                ts.createIdentifier('reducer'),
+                undefined,
+                createReducer(parsedLogic),
+                undefined,
+            ),
+            ts.createPropertySignature(
+                undefined,
                 ts.createIdentifier('selectors'),
                 undefined,
                 ts.createTypeLiteralNode(createSelectors(parsedLogic)),
@@ -117,30 +124,63 @@ function createReducers(parsedLogic: ParsedLogic) {
                         undefined,
                         undefined,
                         undefined,
-                        ts.createIdentifier("state"),
+                        ts.createIdentifier('state'),
                         undefined,
                         reducer.typeNode,
-                        undefined
+                        undefined,
                     ),
                     ts.createParameter(
                         undefined,
                         undefined,
                         undefined,
-                        ts.createIdentifier("action"),
+                        ts.createIdentifier('action'),
                         undefined,
-                        ts.createFunctionTypeNode(
-                            undefined,
-                            [],
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
-                        ),
-                        undefined
-                    )
+                        ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        undefined,
+                    ),
                 ],
-                reducer.typeNode
+                reducer.typeNode,
             ),
-            undefined
+            undefined,
         )
     })
+}
+
+function createReducer(parsedLogic: ParsedLogic) {
+    return ts.createFunctionTypeNode(
+        undefined,
+        [
+            ts.createParameter(
+                undefined,
+                undefined,
+                undefined,
+                ts.createIdentifier('state'),
+                undefined,
+                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                undefined,
+            ),
+            ts.createParameter(
+                undefined,
+                undefined,
+                undefined,
+                ts.createIdentifier('action'),
+                undefined,
+                ts.createFunctionTypeNode(undefined, [], ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+                undefined,
+            ),
+        ],
+        ts.createTypeLiteralNode(
+            parsedLogic.reducers.map((reducer) =>
+                ts.createPropertySignature(
+                    undefined,
+                    ts.createIdentifier(reducer.name),
+                    undefined,
+                    reducer.typeNode,
+                    undefined,
+                ),
+            ),
+        ),
+    )
 }
 
 function createSelectors(parsedLogic: ParsedLogic) {
@@ -156,31 +196,27 @@ function createSelectors(parsedLogic: ParsedLogic) {
                         undefined,
                         undefined,
                         undefined,
-                        ts.createIdentifier("state"),
+                        ts.createIdentifier('state'),
                         undefined,
                         ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                        undefined
+                        undefined,
                     ),
                     ts.createParameter(
                         undefined,
                         undefined,
                         undefined,
-                        ts.createIdentifier("props"),
+                        ts.createIdentifier('props'),
                         undefined,
-                        ts.createTypeReferenceNode(
-                            ts.createIdentifier("Record"),
-                            [
-                                ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
-                            ]
-                        )
-                        ,
-                        undefined
-                    )
+                        ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
+                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        ]),
+                        undefined,
+                    ),
                 ],
-                reducer.typeNode
+                reducer.typeNode,
             ),
-            undefined
+            undefined,
         )
     })
 }

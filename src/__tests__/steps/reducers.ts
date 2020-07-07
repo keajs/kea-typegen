@@ -53,9 +53,14 @@ export interface logicType {
         });
     };
     reducers: {
-        name: (state: string, action: () => any) => string;
-        otherNameNoDefault: (state: any, action: () => any) => any;
-        yetAnotherNameWithNullDefault: (state: string | null, action: () => any) => string | null;
+        name: (state: string, action: any) => string;
+        otherNameNoDefault: (state: any, action: any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: any) => string | null;
+    };
+    reducer: (state: any, action: () => any) => {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
     };
     selectors: {
         name: (state: any, props: Record<string, any>) => string;
