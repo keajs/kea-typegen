@@ -2,7 +2,6 @@
   "name": "kea-typegen",
   "version": "0.0.1",
   "description": "Generate type definitions for kea logic",
-  "main": "trials/index.js",
   "scripts": {
     "start": "ts-node bin/index.ts",
     "test": "jest"
@@ -11,7 +10,8 @@
   "license": "MIT",
   "dependencies": {
     "ts-node": "^8.10.2",
-    "typescript": "^3.9.6"
+    "typescript": "^3.9.6",
+    "yargs": "^15.4.0"
   },
   "devDependencies": {
     "@babel/core": "^7.10.4",
@@ -19,6 +19,7 @@
     "@babel/preset-typescript": "^7.10.4",
     "@types/jest": "^26.0.3",
     "@types/node": "^14.0.14",
+    "@types/yargs": "^15.0.5",
     "babel-jest": "^26.1.0",
     "jest": "^26.1.0",
     "kea": "^2.1.1",
