@@ -5,12 +5,15 @@ import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
 
-export function visitProgram(program: ts.Program) {
+export function visitProgram(program: ts.Program, verbose: boolean = false) {
     const checker = program.getTypeChecker()
     const parsedLogics: ParsedLogic[] = []
 
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile) {
+            if (verbose) {
+                console.log(`Visiting: ${sourceFile.fileName}`)
+            }
             ts.forEachChild(sourceFile, createVisit(checker, parsedLogics, sourceFile))
         }
     }

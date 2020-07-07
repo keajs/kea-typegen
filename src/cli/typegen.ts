@@ -1,8 +1,9 @@
 #!/usr/bin/env ts-node
 import * as ts from 'typescript'
 import * as yargs from 'yargs'
+import * as path from 'path'
 import { visitProgram } from '../visit/visit'
-import {printToFiles} from "../print/print";
+import { printToFiles } from '../print/print'
 
 const parser = yargs
     .usage('Use one of:\n - kea-typegen -f logic.ts\n - kea-typegen -c tsconfig.json')
@@ -21,25 +22,26 @@ if (options.file) {
         module: ts.ModuleKind.CommonJS,
     })
 } else {
-    const configFileName = options.config || ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')
+    const configFileName = (options.config || ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
 
     if (configFileName) {
         console.log(`Using Config: ${configFileName}`)
-        const configFile = ts.readConfigFile(configFileName as string, ts.sys.readFile)
-        const compilerOptions = ts.parseJsonConfigFileContent(configFile.config, ts.sys, './')
-
+        const configFile = ts.readJsonConfigFile(configFileName as string, ts.sys.readFile)
+        const rootFolder = path.resolve(configFileName.replace(/tsconfig\.json$/, ''))
+        const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
         const host = ts.createCompilerHost(compilerOptions.options)
-        program = ts.createProgram([], compilerOptions.options, host)
+
+        program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
     }
 }
 
 if (program) {
-    const parsedLogics = visitProgram(program)
+    const parsedLogics = visitProgram(program, true)
     console.log(`Found ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'}!`)
     if (typeof options.write !== 'undefined') {
         printToFiles(parsedLogics, true)
     } else {
-        console.log("Run with --write to write logic.type.ts files")
+        console.log('Run with --write to write logic.type.ts files')
     }
 } else {
     parser.showHelp()
