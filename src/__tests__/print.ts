@@ -19,6 +19,16 @@ test('logicToTypeString', () => {
     expect(string).toEqual(
         `
 export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: string;
+            payload: { otherName: string; };
+        });
+    };
     actions: {
         updateName: (name: string) => ({
             type: string;
@@ -29,16 +39,9 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    actionsCreators: {
-        updateName: (name: string) => ({
-            type: string;
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: string;
-            payload: { otherName: string; };
-        });
-    };
+    reducers: {};
+    reducer: (state: any, action: () => any) => {};
+    selectors: {};
 }`.trim(),
     )
 })

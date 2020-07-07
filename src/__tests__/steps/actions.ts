@@ -14,6 +14,16 @@ test('actions - with a function', () => {
     expect(logicSourceToLogicType(logicSource)).toEqual(
         `
 export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: string;
+            payload: { otherName: string; };
+        });
+    };
     actions: {
         updateName: (name: string) => ({
             type: string;
@@ -24,16 +34,9 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    actionsCreators: {
-        updateName: (name: string) => ({
-            type: string;
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: string;
-            payload: { otherName: string; };
-        });
-    };
+    reducers: {};
+    reducer: (state: any, action: () => any) => {};
+    selectors: {};
 }`.trim(),
     )
 })
@@ -52,6 +55,16 @@ test('actions - as an object', () => {
     expect(logicSourceToLogicType(logicSource)).toEqual(
         `
 export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: string;
+            payload: { otherName: string; };
+        });
+    };
     actions: {
         updateName: (name: string) => ({
             type: string;
@@ -62,16 +75,9 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    actionsCreators: {
-        updateName: (name: string) => ({
-            type: string;
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: string;
-            payload: { otherName: string; };
-        });
-    };
+    reducers: {};
+    reducer: (state: any, action: () => any) => {};
+    selectors: {};
 }`.trim(),
     )
 })
@@ -92,6 +98,16 @@ test('actions - as a function returning a object', () => {
     expect(logicSourceToLogicType(logicSource)).toEqual(
         `
 export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: string;
+            payload: { otherName: string; };
+        });
+    };
     actions: {
         updateName: (name: string) => ({
             type: string;
@@ -102,16 +118,9 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    actionsCreators: {
-        updateName: (name: string) => ({
-            type: string;
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: string;
-            payload: { otherName: string; };
-        });
-    };
+    reducers: {};
+    reducer: (state: any, action: () => any) => {};
+    selectors: {};
 }`.trim(),
     )
 })

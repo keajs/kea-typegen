@@ -32,7 +32,7 @@ test('reducers', () => {
     expect(logicSourceToLogicType(logicSource)).toEqual(
         `
 export interface logicType {
-    actions: {
+    actionCreators: {
         updateName: (name: string) => ({
             type: string;
             payload: { name: string; };
@@ -42,7 +42,7 @@ export interface logicType {
             payload: { otherName: string; };
         });
     };
-    actionsCreators: {
+    actions: {
         updateName: (name: string) => ({
             type: string;
             payload: { name: string; };

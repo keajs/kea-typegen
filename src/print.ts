@@ -24,14 +24,14 @@ export function createLogicType(parsedLogic: ParsedLogic) {
         [
             ts.createPropertySignature(
                 undefined,
-                ts.createIdentifier('actions'),
+                ts.createIdentifier('actionCreators'),
                 undefined,
                 ts.createTypeLiteralNode(createActions(parsedLogic)),
                 undefined,
             ),
             ts.createPropertySignature(
                 undefined,
-                ts.createIdentifier('actionsCreators'),
+                ts.createIdentifier('actions'),
                 undefined,
                 ts.createTypeLiteralNode(createActions(parsedLogic)),
                 undefined,
