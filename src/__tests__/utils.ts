@@ -1,4 +1,4 @@
-import { sourceToSourceFile, programFromSource } from '../utils'
+import { sourceToSourceFile, programFromSource, logicSourceToLogicType } from '../utils'
 import * as ts from 'typescript'
 
 test('sourceToSourceFile', () => {
@@ -18,4 +18,20 @@ test('programFromSource', () => {
     const program = programFromSource(source)
     expect(program).toBeDefined
     expect(typeof program.getSourceFile).toBe('function')
+})
+
+test('logicSourceToLogicType', () => {
+    const logicSource = `
+        import { kea } from 'kea'
+        
+        const myRandomLogic = kea({
+            actions: () => ({
+                updateName: (name: string) => ({ name }),
+                updateOtherName: (otherName: string) => ({ otherName }),
+            })
+        })
+    `
+    const string = logicSourceToLogicType(logicSource)
+
+    expect(string).toContain('export interface myRandomLogicType {')
 })

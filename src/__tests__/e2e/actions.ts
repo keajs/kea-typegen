@@ -1,4 +1,4 @@
-import { logicSourceToLogicType } from '../../index'
+import { logicSourceToLogicType } from '../../utils'
 
 test('actions - with a function', () => {
     const logicSource = `

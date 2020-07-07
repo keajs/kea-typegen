@@ -1,4 +1,12 @@
 import * as ts from 'typescript'
+import {visitProgram} from "./visit/visit";
+import {logicToTypeString} from "./print/print";
+
+export function logicSourceToLogicType(logicSource: string) {
+    const program = programFromSource(logicSource)
+    const [parsedLogic] = visitProgram(program)
+    return logicToTypeString(parsedLogic)
+}
 
 export function sourceToSourceFile(sourceCode: string, filename: string = 'logic.ts') {
     return ts.createSourceFile(filename, sourceCode, ts.ScriptTarget.ES5, true)

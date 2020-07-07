@@ -1,4 +1,4 @@
-import { programFromSource } from '../utils'
+import { programFromSource } from '../../utils'
 import { visitProgram } from '../visit'
 
 test('visitProgram', () => {
