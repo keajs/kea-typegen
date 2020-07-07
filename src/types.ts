@@ -10,7 +10,7 @@ export interface ActionTransform {
 export interface ReducerTransform {
     name: string
     type?: ts.Type
-    typeNode?: ts.TypeNode | ts.KeywordTypeNode
+    typeNode?: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
 export interface ParsedLogic {

@@ -47,8 +47,6 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
             const name = symbol.getName()
             let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
 
-            console.log(name, checker.typeToString(type))
-
             if (ts.isFunctionTypeNode(checker.typeToTypeNode(type) as ts.TypeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()
             }
@@ -71,11 +69,32 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
 
                     if (ts.isArrayLiteralExpression(value)) {
                         const defaultValue = value.elements[0]
-                        const type = checker.getTypeAtLocation(defaultValue)
-                        parsedLogic.reducers.push({ name, type, typeNode: checker.typeToTypeNode(type)  })
-                    } else {
-                        // ts.isObjectLiteralExpression
-                        parsedLogic.reducers.push({ name, typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword) })
+
+                        if (ts.isAsExpression(defaultValue)) {
+                            let typeNode = defaultValue.type
+                            if (ts.isParenthesizedTypeNode(typeNode)) {
+                                typeNode = typeNode.type
+                            }
+                            parsedLogic.reducers.push({ name, typeNode })
+                        } else if (ts.isStringLiteralLike(defaultValue)) {
+                            parsedLogic.reducers.push({
+                                name,
+                                typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            })
+                        } else if (ts.isNumericLiteral(defaultValue)) {
+                            parsedLogic.reducers.push({
+                                name,
+                                typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword),
+                            })
+                        } else {
+                            const type = checker.getTypeAtLocation(defaultValue)
+                            parsedLogic.reducers.push({ name, type, typeNode: checker.typeToTypeNode(type) })
+                        }
+                    } else if (ts.isObjectLiteralExpression(value)) {
+                        parsedLogic.reducers.push({
+                            name,
+                            typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        })
                     }
                 }
             }

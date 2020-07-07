@@ -11,7 +11,7 @@ test('reducers', () => {
             }),
             reducers: () => ({
                 name: [
-                    'birdname',
+                    'my name',
                     {
                         updateName: (_, { name }) => name,
                         [actions.updateOtherName]: (state, payload) => payload.name,
@@ -53,9 +53,14 @@ export interface logicType {
         });
     };
     reducers: {
-        name: () => string;
-        otherNameNoDefault: () => any;
-        yetAnotherNameWithNullDefault: () => (string | null);
+        name: (state: string, action: () => any) => string;
+        otherNameNoDefault: (state: any, action: () => any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: () => any) => string | null;
+    };
+    selectors: {
+        name: (state: any, props: Record<string, any>) => string;
+        otherNameNoDefault: (state: any, props: Record<string, any>) => any;
+        yetAnotherNameWithNullDefault: (state: any, props: Record<string, any>) => string | null;
     };
 }`.trim(),
     )

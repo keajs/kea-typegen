@@ -43,6 +43,13 @@ export function createLogicType(parsedLogic: ParsedLogic) {
                 ts.createTypeLiteralNode(createReducers(parsedLogic)),
                 undefined,
             ),
+            ts.createPropertySignature(
+                undefined,
+                ts.createIdentifier('selectors'),
+                undefined,
+                ts.createTypeLiteralNode(createSelectors(parsedLogic)),
+                undefined,
+            ),
         ],
     )
 }
@@ -126,6 +133,48 @@ function createReducers(parsedLogic: ParsedLogic) {
                             [],
                             ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                         ),
+                        undefined
+                    )
+                ],
+                reducer.typeNode
+            ),
+            undefined
+        )
+    })
+}
+
+function createSelectors(parsedLogic: ParsedLogic) {
+    return parsedLogic.reducers.map((reducer) => {
+        return ts.createPropertySignature(
+            undefined,
+            ts.createIdentifier(reducer.name),
+            undefined,
+            ts.createFunctionTypeNode(
+                undefined,
+                [
+                    ts.createParameter(
+                        undefined,
+                        undefined,
+                        undefined,
+                        ts.createIdentifier("state"),
+                        undefined,
+                        ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        undefined
+                    ),
+                    ts.createParameter(
+                        undefined,
+                        undefined,
+                        undefined,
+                        ts.createIdentifier("props"),
+                        undefined,
+                        ts.createTypeReferenceNode(
+                            ts.createIdentifier("Record"),
+                            [
+                                ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                            ]
+                        )
+                        ,
                         undefined
                     )
                 ],
