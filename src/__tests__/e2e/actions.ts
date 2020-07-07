@@ -138,6 +138,8 @@ test('actions - with random values instead of functions', () => {
         const logic = kea({
             actions: {
                 updateName: (name: string) => ({ name }),
+                withDefaultValue: (name = "john") => ({ name }),
+                withDefaultValueAndType: (name: string = "john") => ({ name }),
                 withBool: true,
                 withRandomPayload: { bla: 123 },
             }
@@ -148,6 +150,14 @@ test('actions - with random values instead of functions', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        withDefaultValue: (name) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        withDefaultValueAndType: (name: string) => ({
             type: string;
             payload: { name: string; };
         });
@@ -166,6 +176,14 @@ export interface logicType {
     };
     actions: {
         updateName: (name: string) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        withDefaultValue: (name) => ({
+            type: string;
+            payload: { name: string; };
+        });
+        withDefaultValueAndType: (name: string) => ({
             type: string;
             payload: { name: string; };
         });
