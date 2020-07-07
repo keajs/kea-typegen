@@ -15,7 +15,7 @@ export function printActions(parsedLogic: ParsedLogic) {
                         undefined,
                         ts.createIdentifier(param.name.getText()),
                         undefined,
-                        param.type,
+                        param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         undefined
                     )
                 })

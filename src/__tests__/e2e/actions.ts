@@ -153,7 +153,7 @@ export interface logicType {
             type: string;
             payload: { name: string; };
         });
-        withDefaultValue: (name) => ({
+        withDefaultValue: (name: any) => ({
             type: string;
             payload: { name: string; };
         });
@@ -179,7 +179,7 @@ export interface logicType {
             type: string;
             payload: { name: string; };
         });
-        withDefaultValue: (name) => ({
+        withDefaultValue: (name: any) => ({
             type: string;
             payload: { name: string; };
         });
