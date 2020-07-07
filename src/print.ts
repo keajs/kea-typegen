@@ -57,6 +57,13 @@ export function createLogicType(parsedLogic: ParsedLogic) {
                 ts.createTypeLiteralNode(createSelectors(parsedLogic)),
                 undefined,
             ),
+            ts.createPropertySignature(
+                undefined,
+                ts.createIdentifier('values'),
+                undefined,
+                ts.createTypeLiteralNode(createValues(parsedLogic)),
+                undefined,
+            ),
         ],
     )
 }
@@ -216,6 +223,18 @@ function createSelectors(parsedLogic: ParsedLogic) {
                 ],
                 reducer.typeNode,
             ),
+            undefined,
+        )
+    })
+}
+
+function createValues(parsedLogic: ParsedLogic) {
+    return parsedLogic.reducers.map((reducer) => {
+        return ts.createPropertySignature(
+            undefined,
+            ts.createIdentifier(reducer.name),
+            undefined,
+            reducer.typeNode,
             undefined,
         )
     })

@@ -42,6 +42,7 @@ export interface logicType {
     reducers: {};
     reducer: (state: any, action: () => any) => {};
     selectors: {};
+    values: {};
 }`.trim(),
     )
 })

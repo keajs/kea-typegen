@@ -67,6 +67,11 @@ export interface logicType {
         otherNameNoDefault: (state: any, props: Record<string, any>) => any;
         yetAnotherNameWithNullDefault: (state: any, props: Record<string, any>) => string | null;
     };
+    values: {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
 }`.trim(),
     )
 })
@@ -136,6 +141,11 @@ export interface logicType {
         name: (state: any, props: Record<string, any>) => string;
         otherNameNoDefault: (state: any, props: Record<string, any>) => any;
         yetAnotherNameWithNullDefault: (state: any, props: Record<string, any>) => string | null;
+    };
+    values: {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
     };
 }`.trim(),
     )
@@ -209,6 +219,11 @@ export interface logicType {
         name: (state: any, props: Record<string, any>) => string;
         otherNameNoDefault: (state: any, props: Record<string, any>) => any;
         yetAnotherNameWithNullDefault: (state: any, props: Record<string, any>) => string | null;
+    };
+    values: {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
     };
 }`.trim(),
     )
