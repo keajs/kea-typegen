@@ -44,7 +44,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                         undefined,
                         undefined,
                         ts.createIdentifier(param.name.getText()),
-                        undefined,
+                        param.initializer ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
                         param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         undefined,
                     ),

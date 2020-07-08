@@ -15,27 +15,21 @@ export function visitActions(type: ts.Type, parsedLogic: ParsedLogic) {
         let parameters
 
         if (ts.isFunctionTypeNode(typeNode)) {
-            parameters = signature.getDeclaration().parameters.map(param => {
+            parameters = signature.getDeclaration().parameters.map((param) => {
                 return ts.createParameter(
                     undefined,
                     undefined,
                     undefined,
                     ts.createIdentifier(param.name.getText()),
-                    undefined,
+                    param.initializer ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
                     param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                    undefined
+                    undefined,
                 )
             })
             returnTypeNode = checker.typeToTypeNode(signature.getReturnType())
         } else {
             returnTypeNode = ts.createTypeLiteralNode([
-                ts.createPropertySignature(
-                    undefined,
-                    ts.createIdentifier('value'),
-                    undefined,
-                    typeNode,
-                    undefined,
-                ),
+                ts.createPropertySignature(undefined, ts.createIdentifier('value'), undefined, typeNode, undefined),
             ])
         }
 
