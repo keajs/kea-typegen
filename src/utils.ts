@@ -45,3 +45,24 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
 
     return true
 }
+
+export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.TypeChecker): ts.TypeNode {
+    let typeNode
+    if (defaultValue) {
+        if (ts.isAsExpression(defaultValue)) {
+            typeNode = defaultValue.type
+            if (ts.isParenthesizedTypeNode(typeNode)) {
+                typeNode = typeNode.type
+            }
+        } else if (ts.isStringLiteralLike(defaultValue)) {
+            typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
+        } else if (ts.isNumericLiteral(defaultValue)) {
+            typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword)
+        } else {
+            typeNode = checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue))
+        }
+    } else {
+        typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+    }
+    return typeNode
+}

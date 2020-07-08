@@ -4,6 +4,7 @@ import { isKeaCall } from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
+import { visitLoaders } from './visitLoaders'
 
 export function visitProgram(program: ts.Program, verbose: boolean = false) {
     const checker = program.getTypeChecker()
@@ -64,6 +65,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
                 visitReducers(type, parsedLogic)
             } else if (name === 'selectors') {
                 visitSelectors(type, parsedLogic)
+            } else if (name === 'loaders') {
+                visitLoaders(type, parsedLogic)
             }
         }
 

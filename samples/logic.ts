@@ -1,6 +1,11 @@
 import { kea } from 'kea'
 import { logicType } from './logic.type'
 
+interface Session {
+    user: number,
+    type: string
+}
+
 export const logic: logicType = kea<logicType>({
     path: () => ['scenes', 'homepage', 'index'],
     constants: () => ['SOMETHING', 'SOMETHING_ELSE'],
@@ -45,5 +50,14 @@ export const logic: logicType = kea<logicType>({
                     .join(' ')
             },
         ],
+    }),
+    loaders: ({ actions }) => ({
+        sessions: {
+            __default: [] as Session[],
+            loadSessions: async (selectedDate): Promise<Session[]> => {
+                const response = { user: 3, type: 'bla' }
+                return [response]
+            },
+        },
     }),
 })

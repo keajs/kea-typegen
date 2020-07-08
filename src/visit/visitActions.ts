@@ -11,6 +11,34 @@ export function visitActions(type: ts.Type, parsedLogic: ParsedLogic) {
         const typeNode = checker.typeToTypeNode(type)
         const signature = type.getCallSignatures()[0]
 
-        parsedLogic.actions.push({ name, type, typeNode, signature })
+        let returnTypeNode
+        let parameters
+
+        if (ts.isFunctionTypeNode(typeNode)) {
+            parameters = signature.getDeclaration().parameters.map(param => {
+                return ts.createParameter(
+                    undefined,
+                    undefined,
+                    undefined,
+                    ts.createIdentifier(param.name.getText()),
+                    undefined,
+                    param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    undefined
+                )
+            })
+            returnTypeNode = checker.typeToTypeNode(signature.getReturnType())
+        } else {
+            returnTypeNode = ts.createTypeLiteralNode([
+                ts.createPropertySignature(
+                    undefined,
+                    ts.createIdentifier('value'),
+                    undefined,
+                    typeNode,
+                    undefined,
+                ),
+            ])
+        }
+
+        parsedLogic.actions.push({ name, parameters, returnTypeNode })
     }
 }

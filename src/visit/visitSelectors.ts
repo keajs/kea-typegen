@@ -14,7 +14,6 @@ export function visitSelectors(type: ts.Type, parsedLogic: ParsedLogic) {
 
             parsedLogic.selectors.push({
                 name,
-                type,
                 typeNode: checker.typeToTypeNode(type)
             })
         }

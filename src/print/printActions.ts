@@ -3,38 +3,10 @@ import * as ts from 'typescript'
 
 export function printActions(parsedLogic: ParsedLogic) {
     return ts.createTypeLiteralNode(
-        parsedLogic.actions.map((action) => {
-            let returnTypeNode
-            let parameters: ts.ParameterDeclaration[] | undefined = undefined
-
-            if (ts.isFunctionTypeNode(action.typeNode)) {
-                parameters = action.signature.getDeclaration().parameters.map(param => {
-                    return ts.createParameter(
-                        undefined,
-                        undefined,
-                        undefined,
-                        ts.createIdentifier(param.name.getText()),
-                        undefined,
-                        param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                        undefined
-                    )
-                })
-                returnTypeNode = parsedLogic.checker.typeToTypeNode(action.signature.getReturnType())
-            } else {
-                returnTypeNode = ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
-                        undefined,
-                        ts.createIdentifier('value'),
-                        undefined,
-                        action.typeNode,
-                        undefined,
-                    ),
-                ])
-            }
-
+        parsedLogic.actions.map(({ name, parameters, returnTypeNode }) => {
             return ts.createPropertySignature(
                 undefined,
-                ts.createIdentifier(action.name),
+                ts.createIdentifier(name),
                 undefined,
                 ts.createFunctionTypeNode(
                     undefined,
