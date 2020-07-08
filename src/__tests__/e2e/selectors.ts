@@ -68,10 +68,10 @@ export interface logicType {
         otherName: any;
     };
     selectors: {
-        name: (state: any, props: Record<string, any>) => string;
-        otherName: (state: any, props: Record<string, any>) => any;
-        upperName: (state: any, props: Record<string, any>) => string;
-        combinedLength: (state: any, props: Record<string, any>) => number;
+        name: (state: any, props: any) => string;
+        otherName: (state: any, props: any) => any;
+        upperName: (state: any, props: any) => string;
+        combinedLength: (state: any, props: any) => number;
     };
     values: {
         name: string;
@@ -151,10 +151,10 @@ export interface logicType {
         otherName: any;
     };
     selectors: {
-        name: (state: any, props: Record<string, any>) => string;
-        otherName: (state: any, props: Record<string, any>) => any;
-        upperName: (state: any, props: Record<string, any>) => string;
-        combinedLength: (state: any, props: Record<string, any>) => number;
+        name: (state: any, props: any) => string;
+        otherName: (state: any, props: any) => any;
+        upperName: (state: any, props: any) => string;
+        combinedLength: (state: any, props: any) => number;
     };
     values: {
         name: string;
@@ -236,10 +236,10 @@ export interface logicType {
         otherName: any;
     };
     selectors: {
-        name: (state: any, props: Record<string, any>) => string;
-        otherName: (state: any, props: Record<string, any>) => any;
-        upperName: (state: any, props: Record<string, any>) => string;
-        combinedLength: (state: any, props: Record<string, any>) => number;
+        name: (state: any, props: any) => string;
+        otherName: (state: any, props: any) => any;
+        upperName: (state: any, props: any) => string;
+        combinedLength: (state: any, props: any) => number;
     };
     values: {
         name: string;

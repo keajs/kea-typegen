@@ -25,10 +25,7 @@ export function printSelectors(parsedLogic: ParsedLogic) {
                         undefined,
                         ts.createIdentifier('props'),
                         undefined,
-                        ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                        ]),
+                        ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         undefined,
                     ),
                 ],

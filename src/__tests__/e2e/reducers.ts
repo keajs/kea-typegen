@@ -68,9 +68,9 @@ export interface logicType {
         yetAnotherNameWithNullDefault: string | null;
     };
     selectors: {
-        name: (state: any, props: Record<string, any>) => string;
-        otherNameNoDefault: (state: any, props: Record<string, any>) => any;
-        yetAnotherNameWithNullDefault: (state: any, props: Record<string, any>) => string | null;
+        name: (state: any, props: any) => string;
+        otherNameNoDefault: (state: any, props: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
     values: {
         name: string;
@@ -148,9 +148,9 @@ export interface logicType {
         yetAnotherNameWithNullDefault: string | null;
     };
     selectors: {
-        name: (state: any, props: Record<string, any>) => string;
-        otherNameNoDefault: (state: any, props: Record<string, any>) => any;
-        yetAnotherNameWithNullDefault: (state: any, props: Record<string, any>) => string | null;
+        name: (state: any, props: any) => string;
+        otherNameNoDefault: (state: any, props: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
     values: {
         name: string;
@@ -231,9 +231,9 @@ export interface logicType {
         yetAnotherNameWithNullDefault: string | null;
     };
     selectors: {
-        name: (state: any, props: Record<string, any>) => string;
-        otherNameNoDefault: (state: any, props: Record<string, any>) => any;
-        yetAnotherNameWithNullDefault: (state: any, props: Record<string, any>) => string | null;
+        name: (state: any, props: any) => string;
+        otherNameNoDefault: (state: any, props: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
     values: {
         name: string;
