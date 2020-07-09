@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import * as ts from 'typescript'
 import * as yargs from 'yargs'
 import * as path from 'path'
