@@ -54,8 +54,9 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
 
             const name = symbol.getName()
             let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
+            let typeNode = type ? checker.typeToTypeNode(type) : null
 
-            if (ts.isFunctionTypeNode(checker.typeToTypeNode(type))) {
+            if (typeNode && ts.isFunctionTypeNode(typeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()
             }
 
