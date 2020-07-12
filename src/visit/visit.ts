@@ -11,7 +11,7 @@ export function visitProgram(program: ts.Program, verbose: boolean = false) {
     const parsedLogics: ParsedLogic[] = []
 
     for (const sourceFile of program.getSourceFiles()) {
-        if (!sourceFile.isDeclarationFile) {
+        if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('.type.ts')) {
             if (verbose) {
                 console.log(`Visiting: ${sourceFile.fileName}`)
             }
@@ -34,9 +34,26 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
             logicName = node.parent.parent.name.getText()
         }
 
+        const logicTypeName = `${logicName}Type`
+
+        let logicTypeArguments = []
+
+        const keaTypeArguments = ts.isCallExpression(node.parent) ? node.parent.typeArguments : []
+        const keaTypeArgument = keaTypeArguments[0]
+
+        // // kea<logicType>(..)
+        if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {
+            // kea<logicType<somethingElse>>(...)
+            // store <somethingElse> on the generated type!
+            if (keaTypeArgument.typeArguments.length > 0) {
+                logicTypeArguments = (keaTypeArgument.typeArguments as ts.Node[]).map((a) => a.getFullText())
+            }
+        }
+
         const parsedLogic: ParsedLogic = {
             checker,
             logicName,
+            logicTypeArguments: logicTypeArguments,
             fileName: sourceFile.fileName,
             actions: [],
             reducers: [],

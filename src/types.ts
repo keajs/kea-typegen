@@ -19,6 +19,7 @@ export interface SelectorTransform {
 export interface ParsedLogic {
     fileName: string
     logicName: string
+    logicTypeArguments: string[]
     checker: ts.TypeChecker
     actions: ActionTransform[]
     reducers: ReducerTransform[]

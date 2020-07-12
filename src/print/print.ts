@@ -42,7 +42,9 @@ export function printLogicType(parsedLogic: ParsedLogic) {
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
         ts.createIdentifier(`${parsedLogic.logicName}Type`),
-        undefined,
+        parsedLogic.logicTypeArguments.map((text) =>
+            ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined),
+        ),
         undefined,
         [
             printProperty('actionCreators', printActions(parsedLogic)),
