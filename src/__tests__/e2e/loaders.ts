@@ -27,21 +27,21 @@ test('loaders - with a function', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         loadSessions: (query: string) => ({
-            type: string;
+            type: "load sessions (logic)";
             payload: string;
         });
         loadSessionsSuccess: (sessions: Session[]) => ({
-            type: string;
+            type: "load sessions success (logic)";
             payload: {
                 sessions: Session[];
             };
         });
         loadSessionsFailure: (error: string) => ({
-            type: string;
+            type: "load sessions failure (logic)";
             payload: {
                 error: string;
             };
@@ -49,21 +49,21 @@ export interface logicType {
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         loadSessions: (query: string) => ({
-            type: string;
+            type: "load sessions (logic)";
             payload: string;
         });
         loadSessionsSuccess: (sessions: Session[]) => ({
-            type: string;
+            type: "load sessions success (logic)";
             payload: {
                 sessions: Session[];
             };
         });
         loadSessionsFailure: (error: string) => ({
-            type: string;
+            type: "load sessions failure (logic)";
             payload: {
                 error: string;
             };

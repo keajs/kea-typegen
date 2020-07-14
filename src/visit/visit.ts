@@ -39,7 +39,7 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
         let logicTypeArguments = []
 
         const keaTypeArguments = ts.isCallExpression(node.parent) ? node.parent.typeArguments : []
-        const keaTypeArgument = keaTypeArguments[0]
+        const keaTypeArgument = keaTypeArguments?.[0]
 
         // // kea<logicType>(..)
         if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {

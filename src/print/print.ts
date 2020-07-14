@@ -39,6 +39,8 @@ export function printLogicType(parsedLogic: ParsedLogic) {
     const printProperty = (name, typeNode) =>
         ts.createPropertySignature(undefined, ts.createIdentifier(name), undefined, typeNode, undefined)
 
+    const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
+
     return ts.createInterfaceDeclaration(
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -75,7 +77,7 @@ export function printLogicType(parsedLogic: ParsedLogic) {
             // wrap
             // _isKea
             // _isKeaWithKey,
-            printProperty('__selectorTypeHelp', printSelectorTypeHelp(parsedLogic)),
-        ],
+            addSelectorTypeHelp ? printProperty('__selectorTypeHelp', printSelectorTypeHelp(parsedLogic)) : null,
+        ].filter((a) => a),
     )
 }

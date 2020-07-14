@@ -16,21 +16,21 @@ test('actions - with a function', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
@@ -59,21 +59,21 @@ test('actions - as an object', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
@@ -104,21 +104,21 @@ test('actions - as a function returning a object', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
@@ -150,25 +150,25 @@ test('actions - with random values instead of functions', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name?: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         withDefaultValue: (name?: any) => ({
-            type: string;
+            type: "with default value (logic)";
             payload: { name: string; };
         });
         withDefaultValueAndType: (name?: string) => ({
-            type: string;
+            type: "with default value and type (logic)";
             payload: { name: string; };
         });
         withBool: () => ({
-            type: string;
+            type: "with bool (logic)";
             payload: {
                 value: boolean;
             };
         });
         withRandomPayload: () => ({
-            type: string;
+            type: "with random payload (logic)";
             payload: {
                 value: { bla: number; };
             };
@@ -176,25 +176,25 @@ export interface logicType {
     };
     actions: {
         updateName: (name?: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         withDefaultValue: (name?: any) => ({
-            type: string;
+            type: "with default value (logic)";
             payload: { name: string; };
         });
         withDefaultValueAndType: (name?: string) => ({
-            type: string;
+            type: "with default value and type (logic)";
             payload: { name: string; };
         });
         withBool: () => ({
-            type: string;
+            type: "with bool (logic)";
             payload: {
                 value: boolean;
             };
         });
         withRandomPayload: () => ({
-            type: string;
+            type: "with random payload (logic)";
             payload: {
                 value: { bla: number; };
             };

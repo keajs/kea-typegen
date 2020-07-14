@@ -34,21 +34,21 @@ test('reducers - with a function', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
@@ -114,21 +114,21 @@ test('reducers - as an object', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
@@ -197,21 +197,21 @@ test('reducers - as a function returning a object', () => {
 export interface logicType {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (logic)";
             payload: { name: string; };
         });
         updateOtherName: (otherName: string) => ({
-            type: string;
+            type: "update other name (logic)";
             payload: { otherName: string; };
         });
     };

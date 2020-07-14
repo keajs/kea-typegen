@@ -4,6 +4,8 @@ import { kea as regularKea, useValues as useRegularValues } from 'kea'
 
 type BlankLogic = {
     actions?: any
+    actionCreators?: any
+    actionTypes?: any
     reducers?: any
     selectors?: any
     listeners?: any
@@ -55,9 +57,9 @@ type ListenerDefinitions<LogicType extends BlankLogic> = {
     [K in keyof LogicType['actions']]?:
         | ((
               payload: ReturnType<LogicType['actions'][K]>['payload'],
-              breakpoint?: () => void,
-              action?: ReturnType<LogicType['actions'][K]>,
-              previousState?: any,
+              breakpoint: (() => void) | ((ms: number) => Promise<void>),
+              action: ReturnType<LogicType['actions'][K]>,
+              previousState: any,
           ) => void | Promise<void>)
         | (() => void | Promise<void>)
 }
