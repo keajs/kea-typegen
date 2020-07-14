@@ -7,6 +7,7 @@ import { printReducer } from './printReducer'
 import { printSelector } from './printSelector'
 import { printSelectors } from './printSelectors'
 import { printValues } from './printValues'
+import { printSelectorTypeHelp } from './printSelectorTypeHelp'
 
 export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = false) {
     const groupedByFile: Record<string, ParsedLogic[]> = {}
@@ -73,7 +74,8 @@ export function printLogicType(parsedLogic: ParsedLogic) {
             printProperty('values', printValues(parsedLogic)),
             // wrap
             // _isKea
-            // _isKeaWithKey
+            // _isKeaWithKey,
+            printProperty('__selectorTypeHelp', printSelectorTypeHelp(parsedLogic)),
         ],
     )
 }

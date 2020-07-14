@@ -8,46 +8,58 @@ type BlankLogic = {
     selectors?: any
     listeners?: any
     values?: any
+    __selectorTypeHelp?: any
 }
 
 type ReducerActions<LogicType extends BlankLogic, ReducerType> = {
     [K in keyof LogicType['actions']]?: (
         state: any,
-        payload: ReturnType<LogicType['actions'][K]>['payload']
+        payload: ReturnType<LogicType['actions'][K]>['payload'],
     ) => ReducerType
 }
 type ReducerDefinitions<LogicType extends BlankLogic> = {
     [K in keyof LogicType['reducers']]?:
-    | [ReturnType<LogicType['reducers'][K]>, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
-    | ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>
+        | [ReturnType<LogicType['reducers'][K]>, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
+        | ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>
 }
-type Selector = (state: any, props: any) => any
+type Selector = (state?: any, props?: any) => any
 
-type SelectorDefinition<Selectors, S extends Selector> = ReturnType<<T>() => [
-    (s?: Selectors) => [(state: any, props: any) => T],
-    (a1?: T) => ReturnType<S>
-]>
-
-
-
-    | [
-    (s?: Selectors) => [Selector, Selector],
-    (a1?: any, a2?: any) => ReturnType<S>
+type SelectorDefinition<Selectors, S extends Selector, SelectorFunction extends any> = [
+    (
+        s?: Selectors,
+    ) =>
+        | []
+        | [Selector]
+        | [Selector, Selector]
+        | [Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector, Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector]
+        | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector],
+    SelectorFunction,
 ]
 
 type SelectorDefinitions<LogicType extends BlankLogic> = {
-    [K in keyof LogicType['selectors']]?: SelectorDefinition<LogicType['selectors'], LogicType['selectors'][K]>
+    [K in keyof LogicType['selectors']]?: SelectorDefinition<
+        LogicType['selectors'],
+        LogicType['selectors'][K],
+        LogicType['__selectorTypeHelp'][K]
+    >
 }
 
 type ListenerDefinitions<LogicType extends BlankLogic> = {
     [K in keyof LogicType['actions']]?:
-    | ((
-    payload: ReturnType<LogicType['actions'][K]>['payload'],
-    breakpoint?: () => void,
-    action?: ReturnType<LogicType['actions'][K]>,
-    previousState?: any
-) => void | Promise<void>)
-    | (() => void | Promise<void>)
+        | ((
+              payload: ReturnType<LogicType['actions'][K]>['payload'],
+              breakpoint?: () => void,
+              action?: ReturnType<LogicType['actions'][K]>,
+              previousState?: any,
+          ) => void | Promise<void>)
+        | (() => void | Promise<void>)
 }
 type LogicInput<LogicType> = {
     path?: any

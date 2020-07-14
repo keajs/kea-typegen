@@ -82,8 +82,8 @@ export interface logicType<Session> {
         yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
         sessions: (state: any, props: any) => Session[];
         sessionsLoading: (state: any, props: any) => boolean;
-        upperCaseName: (state: any, props: any) => any;
-        capitalizedName: (state: any, props: any) => any;
+        capitalizedName: (state: any, props: any) => string;
+        upperCaseName: (state: any, props: any) => string;
     };
     values: {
         name: string;
@@ -92,7 +92,11 @@ export interface logicType<Session> {
         yetAnotherNameWithNullDefault: string | null;
         sessions: Session[];
         sessionsLoading: boolean;
-        upperCaseName: any;
-        capitalizedName: any;
+        capitalizedName: string;
+        upperCaseName: string;
+    };
+    __selectorTypeHelp: {
+        capitalizedName: (arg0?: string, arg1?: number) => string;
+        upperCaseName: (arg0?: string) => string;
     };
 }

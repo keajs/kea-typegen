@@ -14,6 +14,7 @@ export interface ReducerTransform {
 export interface SelectorTransform {
     name: string
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
+    functionTypes: { name: string, type: ts.TypeNode }[]
 }
 
 export interface ParsedLogic {

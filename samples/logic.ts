@@ -40,12 +40,6 @@ export const logic = kea<logicType<Session>>({
         }
     },
     selectors: ({ selectors, values }) => ({
-        upperCaseName: [
-            () => [selectors.capitalizedName],
-            (capitalizedName) => {
-                return capitalizedName.toUpperCase()
-            },
-        ],
         capitalizedName: [
             (s) => [s.name, s.number],
             (name, number) => {
@@ -56,6 +50,12 @@ export const logic = kea<logicType<Session>>({
                         .map((k) => `${k.charAt(0).toUpperCase()}${k.slice(1).toLowerCase()}`)
                         .join(' ') + number.toString()
                 )
+            },
+        ],
+        upperCaseName: [
+            () => [selectors.capitalizedName],
+            (capitalizedName) => {
+                return capitalizedName.toUpperCase()
             },
         ],
     }),
