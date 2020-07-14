@@ -1,8 +1,14 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
+import * as path from 'path'
 
 export function printActions(parsedLogic: ParsedLogic) {
-    const path = parsedLogic.fileName.replace(/\.[jt]sx?$/, '').replace(/\//g,'.')
+    const pathName = path
+        .relative(process.cwd(), parsedLogic.fileName)
+        .replace(/^.\//, '')
+        .replace(/\.[jt]sx?$/, '')
+        .replace(/\//g, '.')
+
     const toSpaces = (key) => key.replace(/(?:^|\.?)([A-Z])/g, (x, y) => ' ' + y.toLowerCase()).replace(/^ /, '')
 
     return ts.createTypeLiteralNode(
@@ -20,7 +26,7 @@ export function printActions(parsedLogic: ParsedLogic) {
                                 undefined,
                                 ts.createIdentifier('type'),
                                 undefined,
-                                ts.createLiteralTypeNode(ts.createStringLiteral(`${toSpaces(name)} (${path})`)),
+                                ts.createLiteralTypeNode(ts.createStringLiteral(`${toSpaces(name)} (${pathName})`)),
                                 undefined,
                             ),
                             ts.createPropertySignature(

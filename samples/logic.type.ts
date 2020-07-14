@@ -1,3 +1,5 @@
+// Auto-generated with kea-typegen v0.0.6. DO NOT EDIT!
+
 export interface logicType<Session> {
     actionCreators: {
         updateName: (name: string) => ({

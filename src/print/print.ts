@@ -1,5 +1,6 @@
 import * as ts from 'typescript'
 import * as fs from 'fs'
+import { version } from '../../package.json'
 import { ParsedLogic } from '../types'
 import { printActions } from './printActions'
 import { printReducers } from './printReducers'
@@ -24,7 +25,7 @@ export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = fal
         if (verbose) {
             console.log(`Writing: ${fileName}`)
         }
-        fs.writeFileSync(fileName, output)
+        fs.writeFileSync(fileName, `// Auto-generated with kea-typegen v${version}. DO NOT EDIT!\n\n${output}`)
     })
 }
 
