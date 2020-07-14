@@ -24,7 +24,7 @@ export function printSelectorTypeHelp(parsedLogic: ParsedLogic) {
                                 undefined,
                             ),
                         ),
-                        ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                        selector.typeNode,
                     ),
                     undefined,
                 )
