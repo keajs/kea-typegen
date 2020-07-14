@@ -28,7 +28,7 @@ type Selector = (state?: any, props?: any) => any
 
 type SelectorDefinition<Selectors, S extends Selector, SelectorFunction extends any> = [
     (
-        s?: Selectors,
+        s: Selectors,
     ) =>
         | []
         | [Selector]

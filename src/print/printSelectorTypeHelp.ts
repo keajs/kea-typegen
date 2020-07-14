@@ -19,7 +19,7 @@ export function printSelectorTypeHelp(parsedLogic: ParsedLogic) {
                                 undefined,
                                 undefined,
                                 ts.createIdentifier(functionType.name),
-                                ts.createToken(ts.SyntaxKind.QuestionToken),
+                                undefined,
                                 functionType.type,
                                 undefined,
                             ),

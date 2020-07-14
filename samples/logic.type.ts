@@ -96,7 +96,7 @@ export interface logicType<Session> {
         upperCaseName: string;
     };
     __selectorTypeHelp: {
-        capitalizedName: (arg0?: string, arg1?: number) => string;
-        upperCaseName: (arg0?: string) => string;
+        capitalizedName: (arg0: string, arg1: number) => string;
+        upperCaseName: (arg0: string) => string;
     };
 }
