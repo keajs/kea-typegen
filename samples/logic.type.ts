@@ -1,25 +1,25 @@
 export interface logicType<Session> {
     actionCreators: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (samples.logic)";
             payload: { name: string; };
         });
         updateNumber: (number: number) => ({
-            type: string;
+            type: "update number (samples.logic)";
             payload: { number: number; };
         });
         loadSessions: (selectedDate: any) => ({
-            type: string;
+            type: "load sessions (samples.logic)";
             payload: any;
         });
         loadSessionsSuccess: (sessions: Session[]) => ({
-            type: string;
+            type: "load sessions success (samples.logic)";
             payload: {
                 sessions: Session[];
             };
         });
         loadSessionsFailure: (error: string) => ({
-            type: string;
+            type: "load sessions failure (samples.logic)";
             payload: {
                 error: string;
             };
@@ -27,25 +27,25 @@ export interface logicType<Session> {
     };
     actions: {
         updateName: (name: string) => ({
-            type: string;
+            type: "update name (samples.logic)";
             payload: { name: string; };
         });
         updateNumber: (number: number) => ({
-            type: string;
+            type: "update number (samples.logic)";
             payload: { number: number; };
         });
         loadSessions: (selectedDate: any) => ({
-            type: string;
+            type: "load sessions (samples.logic)";
             payload: any;
         });
         loadSessionsSuccess: (sessions: Session[]) => ({
-            type: string;
+            type: "load sessions success (samples.logic)";
             payload: {
                 sessions: Session[];
             };
         });
         loadSessionsFailure: (error: string) => ({
-            type: string;
+            type: "load sessions failure (samples.logic)";
             payload: {
                 error: string;
             };

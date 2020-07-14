@@ -54,7 +54,7 @@ export const logic = kea<logicType<Session>>({
                         .trim()
                         .split(' ')
                         .map((k) => `${k.charAt(0).toUpperCase()}${k.slice(1).toLowerCase()}`)
-                        .join(' ') + number
+                        .join(' ') + number.toString()
                 )
             },
         ],
