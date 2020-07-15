@@ -55,6 +55,32 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                         }
                     }
                 }
+
+                if (loaderName === 'values' || loaderName === 'props') {
+                    const selectorsForLogic = (otherLogicType as any).properties.find((p) => p.escapedName === 'selectors')
+                    const selectorTypes = selectorsForLogic.valueDeclaration.type.members
+
+                    for (const selectorType of selectorTypes) {
+                        if (ts.isPropertySignature(selectorType)) {
+                            const name = selectorType.name.getText()
+
+                            const functionTypeNode = selectorType.type
+                            if (strings.includes(name) && ts.isFunctionTypeNode(functionTypeNode)) {
+                                let returnType = functionTypeNode.type
+
+                                if (ts.isParenthesizedTypeNode(returnType)) {
+                                    returnType = returnType.type
+                                }
+
+                                parsedLogic.selectors.push({
+                                    name: name,
+                                    typeNode: returnType,
+                                    functionTypes: []
+                                })
+                            }
+                        }
+                    }
+                }
             }
         }
     }

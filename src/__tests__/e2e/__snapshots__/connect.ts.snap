@@ -1,5 +1,44 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`connect actions from another logic 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: {
+                name: string;
+            };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: {
+                otherName: string;
+            };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: {
+                name: string;
+            };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: {
+                otherName: string;
+            };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+    _isKea: true;
+}"
+`;
+
 exports[`connect actions from multiple other logics 1`] = `
 "export interface logicType {
     actionCreators: {
@@ -74,6 +113,44 @@ exports[`connect from another logic with a given type 1`] = `
     selector: (state: any) => {};
     selectors: {};
     values: {};
+    _isKea: true;
+}"
+`;
+
+exports[`connect props from another logic 1`] = `
+"export interface logicType {
+    actionCreators: {};
+    actions: {};
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {
+        name: (state: any, props: any) => string;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+    };
+    values: {
+        name: string;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+    _isKea: true;
+}"
+`;
+
+exports[`connect values from another logic 1`] = `
+"export interface logicType {
+    actionCreators: {};
+    actions: {};
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {
+        name: (state: any, props: any) => string;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+    };
+    values: {
+        name: string;
+        yetAnotherNameWithNullDefault: string | null;
+    };
     _isKea: true;
 }"
 `;
