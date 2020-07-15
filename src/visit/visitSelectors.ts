@@ -18,7 +18,7 @@ export function visitSelectors(type: ts.Type, parsedLogic: ParsedLogic) {
             if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
                 functionTypes = selectorInputTypeNode.elementTypes.map((selectorTypeNode, index) => ({
                     // TODO: figure out the real name of the input
-                    name: `arg${index}`,
+                    name: `arg${index + 1}`,
                     type: ts.isFunctionTypeNode(selectorTypeNode)
                         ? selectorTypeNode.type
                         : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
