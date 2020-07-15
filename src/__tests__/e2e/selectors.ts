@@ -32,55 +32,7 @@ test('selectors - with a function', () => {
             })
         })
     `
-    expect(logicSourceToLogicType(logicSource)).toEqual(
-        `
-export interface logicType {
-    actionCreators: {
-        updateName: (name: string) => ({
-            type: "update name (logic)";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: "update other name (logic)";
-            payload: { otherName: string; };
-        });
-    };
-    actions: {
-        updateName: (name: string) => ({
-            type: "update name (logic)";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: "update other name (logic)";
-            payload: { otherName: string; };
-        });
-    };
-    reducer: (state: any, action: () => any, fullState: any) => {
-        name: string;
-        otherName: any;
-    };
-    reducers: {
-        name: (state: string, action: any, fullState: any) => string;
-        otherName: (state: any, action: any, fullState: any) => any;
-    };
-    selector: (state: any) => {
-        name: string;
-        otherName: any;
-    };
-    selectors: {
-        name: (state: any, props: any) => string;
-        otherName: (state: any, props: any) => any;
-        upperName: (state: any, props: any) => string;
-        combinedLength: (state: any, props: any) => number;
-    };
-    values: {
-        name: string;
-        otherName: any;
-        upperName: string;
-        combinedLength: number;
-    };
-}`.trim(),
-    )
+    expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
 
 test('selectors - as an object', () => {
@@ -115,55 +67,7 @@ test('selectors - as an object', () => {
             }
         })
     `
-    expect(logicSourceToLogicType(logicSource)).toEqual(
-        `
-export interface logicType {
-    actionCreators: {
-        updateName: (name: string) => ({
-            type: "update name (logic)";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: "update other name (logic)";
-            payload: { otherName: string; };
-        });
-    };
-    actions: {
-        updateName: (name: string) => ({
-            type: "update name (logic)";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: "update other name (logic)";
-            payload: { otherName: string; };
-        });
-    };
-    reducer: (state: any, action: () => any, fullState: any) => {
-        name: string;
-        otherName: any;
-    };
-    reducers: {
-        name: (state: string, action: any, fullState: any) => string;
-        otherName: (state: any, action: any, fullState: any) => any;
-    };
-    selector: (state: any) => {
-        name: string;
-        otherName: any;
-    };
-    selectors: {
-        name: (state: any, props: any) => string;
-        otherName: (state: any, props: any) => any;
-        upperName: (state: any, props: any) => string;
-        combinedLength: (state: any, props: any) => number;
-    };
-    values: {
-        name: string;
-        otherName: any;
-        upperName: string;
-        combinedLength: number;
-    };
-}`.trim(),
-    )
+    expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
 
 test('selectors - as a function returning a object', () => {
@@ -200,53 +104,5 @@ test('selectors - as a function returning a object', () => {
             }
         })
     `
-    expect(logicSourceToLogicType(logicSource)).toEqual(
-        `
-export interface logicType {
-    actionCreators: {
-        updateName: (name: string) => ({
-            type: "update name (logic)";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: "update other name (logic)";
-            payload: { otherName: string; };
-        });
-    };
-    actions: {
-        updateName: (name: string) => ({
-            type: "update name (logic)";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: "update other name (logic)";
-            payload: { otherName: string; };
-        });
-    };
-    reducer: (state: any, action: () => any, fullState: any) => {
-        name: string;
-        otherName: any;
-    };
-    reducers: {
-        name: (state: string, action: any, fullState: any) => string;
-        otherName: (state: any, action: any, fullState: any) => any;
-    };
-    selector: (state: any) => {
-        name: string;
-        otherName: any;
-    };
-    selectors: {
-        name: (state: any, props: any) => string;
-        otherName: (state: any, props: any) => any;
-        upperName: (state: any, props: any) => string;
-        combinedLength: (state: any, props: any) => number;
-    };
-    values: {
-        name: string;
-        otherName: any;
-        upperName: string;
-        combinedLength: number;
-    };
-}`.trim(),
-    )
+    expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })

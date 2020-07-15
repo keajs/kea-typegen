@@ -1,0 +1,148 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`selectors - as a function returning a object 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {
+        name: string;
+        otherName: any;
+    };
+    reducers: {
+        name: (state: string, action: any, fullState: any) => string;
+        otherName: (state: any, action: any, fullState: any) => any;
+    };
+    selector: (state: any) => {
+        name: string;
+        otherName: any;
+    };
+    selectors: {
+        name: (state: any, props: any) => string;
+        otherName: (state: any, props: any) => any;
+        upperName: (state: any, props: any) => string;
+        combinedLength: (state: any, props: any) => number;
+    };
+    values: {
+        name: string;
+        otherName: any;
+        upperName: string;
+        combinedLength: number;
+    };
+}"
+`;
+
+exports[`selectors - as an object 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {
+        name: string;
+        otherName: any;
+    };
+    reducers: {
+        name: (state: string, action: any, fullState: any) => string;
+        otherName: (state: any, action: any, fullState: any) => any;
+    };
+    selector: (state: any) => {
+        name: string;
+        otherName: any;
+    };
+    selectors: {
+        name: (state: any, props: any) => string;
+        otherName: (state: any, props: any) => any;
+        upperName: (state: any, props: any) => string;
+        combinedLength: (state: any, props: any) => number;
+    };
+    values: {
+        name: string;
+        otherName: any;
+        upperName: string;
+        combinedLength: number;
+    };
+}"
+`;
+
+exports[`selectors - with a function 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {
+        name: string;
+        otherName: any;
+    };
+    reducers: {
+        name: (state: string, action: any, fullState: any) => string;
+        otherName: (state: any, action: any, fullState: any) => any;
+    };
+    selector: (state: any) => {
+        name: string;
+        otherName: any;
+    };
+    selectors: {
+        name: (state: any, props: any) => string;
+        otherName: (state: any, props: any) => any;
+        upperName: (state: any, props: any) => string;
+        combinedLength: (state: any, props: any) => number;
+    };
+    values: {
+        name: string;
+        otherName: any;
+        upperName: string;
+        combinedLength: number;
+    };
+}"
+`;

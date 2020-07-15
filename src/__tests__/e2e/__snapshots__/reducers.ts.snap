@@ -1,0 +1,151 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`reducers - as a function returning a object 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+    reducers: {
+        name: (state: string, action: any, fullState: any) => string;
+        otherNameNoDefault: (state: any, action: any, fullState: any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: any, fullState: any) => string | null;
+    };
+    selector: (state: any) => {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+    selectors: {
+        name: (state: any, props: any) => string;
+        otherNameNoDefault: (state: any, props: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+    };
+    values: {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+}"
+`;
+
+exports[`reducers - as an object 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+    reducers: {
+        name: (state: string, action: any, fullState: any) => string;
+        otherNameNoDefault: (state: any, action: any, fullState: any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: any, fullState: any) => string | null;
+    };
+    selector: (state: any) => {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+    selectors: {
+        name: (state: any, props: any) => string;
+        otherNameNoDefault: (state: any, props: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+    };
+    values: {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+}"
+`;
+
+exports[`reducers - with a function 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+    reducers: {
+        name: (state: string, action: any, fullState: any) => string;
+        otherNameNoDefault: (state: any, action: any, fullState: any) => any;
+        yetAnotherNameWithNullDefault: (state: string | null, action: any, fullState: any) => string | null;
+    };
+    selector: (state: any) => {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+    selectors: {
+        name: (state: any, props: any) => string;
+        otherNameNoDefault: (state: any, props: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+    };
+    values: {
+        name: string;
+        otherNameNoDefault: any;
+        yetAnotherNameWithNullDefault: string | null;
+    };
+}"
+`;

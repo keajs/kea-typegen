@@ -1,0 +1,153 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`actions - as a function returning a object 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+}"
+`;
+
+exports[`actions - as an object 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+}"
+`;
+
+exports[`actions - with a function 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: { otherName: string; };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+}"
+`;
+
+exports[`actions - with random values instead of functions 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name?: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        withDefaultValue: (name?: any) => ({
+            type: \\"with default value (logic)\\";
+            payload: { name: string; };
+        });
+        withDefaultValueAndType: (name?: string) => ({
+            type: \\"with default value and type (logic)\\";
+            payload: { name: string; };
+        });
+        withBool: () => ({
+            type: \\"with bool (logic)\\";
+            payload: {
+                value: boolean;
+            };
+        });
+        withRandomPayload: () => ({
+            type: \\"with random payload (logic)\\";
+            payload: {
+                value: { bla: number; };
+            };
+        });
+    };
+    actions: {
+        updateName: (name?: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        withDefaultValue: (name?: any) => ({
+            type: \\"with default value (logic)\\";
+            payload: { name: string; };
+        });
+        withDefaultValueAndType: (name?: string) => ({
+            type: \\"with default value and type (logic)\\";
+            payload: { name: string; };
+        });
+        withBool: () => ({
+            type: \\"with bool (logic)\\";
+            payload: {
+                value: boolean;
+            };
+        });
+        withRandomPayload: () => ({
+            type: \\"with random payload (logic)\\";
+            payload: {
+                value: { bla: number; };
+            };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+}"
+`;
