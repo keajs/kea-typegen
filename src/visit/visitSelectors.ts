@@ -15,7 +15,7 @@ export function visitSelectors(type: ts.Type, parsedLogic: ParsedLogic) {
             const selectorInputTypeNode = checker.typeToTypeNode(selectorInputFunctionType)
 
             let functionTypes = []
-            if (ts.isTupleTypeNode(selectorInputTypeNode)) {
+            if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
                 functionTypes = selectorInputTypeNode.elementTypes.map((selectorTypeNode, index) => ({
                     // TODO: figure out the real name of the input
                     name: `arg${index}`,

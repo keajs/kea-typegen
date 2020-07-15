@@ -15,7 +15,7 @@ type BlankLogic = {
 
 type ReducerActions<LogicType extends BlankLogic, ReducerType> = {
     [K in keyof LogicType['actions']]?: (
-        state: any,
+        state: ReducerType,
         payload: ReturnType<LogicType['actions'][K]>['payload'],
     ) => ReducerType
 }
