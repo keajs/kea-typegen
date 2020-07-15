@@ -7,21 +7,21 @@ test('connect from another logic with a given type', () => {
         export interface otherLogicType {
             actionCreators: {
                 updateName: (name: string) => ({
-                    type: \\\\"update name (logic)\\\\";
+                    type: "update name (logic)";
                     payload: { name: string; };
                 });
                 updateOtherName: (otherName: string) => ({
-                    type: \\\\"update other name (logic)\\\\";
+                    type: "update other name (logic)";
                     payload: { otherName: string; };
                 });
             };
             actions: {
                 updateName: (name: string) => ({
-                    type: \\\\"update name (logic)\\\\";
+                    type: "update name (logic)";
                     payload: { name: string; };
                 });
                 updateOtherName: (otherName: string) => ({
-                    type: \\\\"update other name (logic)\\\\";
+                    type: "update other name (logic)";
                     payload: { otherName: string; };
                 });
             };
@@ -31,11 +31,11 @@ test('connect from another logic with a given type', () => {
             selectors: {};
             values: {};
         }
-        
+        const otherLogic = {} as otherLogicType;
         const logic = kea({
             connect: {
                 actions: [
-                    otherLogic as otherLogicType, [
+                    otherLogic, [
                         'updateName',  
                         'updateOtherName',  
                     ]

@@ -89,7 +89,7 @@ export function printLogicType(parsedLogic: ParsedLogic) {
             // sharedListeners
             printProperty('values', printValues(parsedLogic)),
             // wrap
-            // _isKea
+            printProperty('_isKea', ts.createTrue()),
             // _isKeaWithKey,
             addSelectorTypeHelp ? printProperty('__selectorTypeHelp', printSelectorTypeHelp(parsedLogic)) : null,
         ].filter((a) => a),

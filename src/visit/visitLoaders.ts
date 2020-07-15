@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { getTypeNodeForDefaultValue } from '../utils'
+import { getParameterDeclaration, getTypeNodeForDefaultValue } from '../utils'
 
 export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -38,17 +38,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                 const func = property.initializer as ts.ArrowFunction
                 const param = func.parameters[0] as ts.ParameterDeclaration
 
-                const parameters = param ? [
-                    ts.createParameter(
-                        undefined,
-                        undefined,
-                        undefined,
-                        ts.createIdentifier(param.name.getText()),
-                        param.initializer || param.questionToken ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
-                        param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                        undefined,
-                    ),
-                ] : []
+                const parameters = param ? [getParameterDeclaration(param)] : []
                 const returnTypeNode = param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                 parsedLogic.actions.push({ name: `${name}`, parameters, returnTypeNode })
 
@@ -64,7 +54,13 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                     ),
                 ]
                 const successReturnTypeNode = ts.createTypeLiteralNode([
-                    ts.createPropertySignature(undefined, ts.createIdentifier(loaderName), undefined, typeNode, undefined),
+                    ts.createPropertySignature(
+                        undefined,
+                        ts.createIdentifier(loaderName),
+                        undefined,
+                        typeNode,
+                        undefined,
+                    ),
                 ])
                 parsedLogic.actions.push({
                     name: `${name}Success`,

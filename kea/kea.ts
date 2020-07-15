@@ -10,6 +10,7 @@ type BlankLogic = {
     selectors?: any
     listeners?: any
     values?: any
+    _isKea?: true
     __selectorTypeHelp?: any
 }
 
@@ -67,6 +68,7 @@ type ListenerDefinitions<LogicType extends BlankLogic> = {
 }
 type LogicInput<LogicType> = {
     path?: any
+    connect?: any
     constants?: any
     actions?: (logic: LogicType) => any | any
     reducers?: ReducerDefinitions<LogicType> | ((logic: LogicType) => ReducerDefinitions<LogicType>)

@@ -6,6 +6,7 @@ import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
 import { visitLoaders } from './visitLoaders'
+import {visitConnect} from "./visitConnect";
 
 export function visitProgram(program: ts.Program, verbose: boolean = false): ParsedLogic[] {
     const checker = program.getTypeChecker()
@@ -86,6 +87,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
                 visitSelectors(type, parsedLogic)
             } else if (name === 'loaders') {
                 visitLoaders(type, parsedLogic)
+            } else if (name === 'connect') {
+                visitConnect(type, parsedLogic)
             }
         }
 

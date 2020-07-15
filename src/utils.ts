@@ -66,3 +66,15 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
     }
     return typeNode
 }
+
+export function getParameterDeclaration(param: ts.ParameterDeclaration) {
+    return ts.createParameter(
+        undefined,
+        undefined,
+        undefined,
+        ts.createIdentifier(param.name.getText()),
+        param.initializer || param.questionToken ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
+        param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+        undefined,
+    );
+}
