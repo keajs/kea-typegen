@@ -46,7 +46,7 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
         if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {
             // kea<logicType<somethingElse>>(...)
             // store <somethingElse> on the generated type!
-            if (keaTypeArgument.typeArguments.length > 0) {
+            if (keaTypeArgument.typeArguments && keaTypeArgument.typeArguments.length > 0) {
                 logicTypeArguments = (keaTypeArgument.typeArguments as ts.Node[]).map((a) => a.getFullText())
             }
         }
