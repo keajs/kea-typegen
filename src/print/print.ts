@@ -1,5 +1,6 @@
 import * as ts from 'typescript'
 import * as fs from 'fs'
+import * as path from 'path'
 import { version } from '../../package.json'
 import { ParsedLogic } from '../types'
 import { printActions } from './printActions'
@@ -22,10 +23,22 @@ export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = fal
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
         const output = parsedLogics.map(parsedLogicToTypeString).join('\n\n')
         fileName = fileName.replace(/\.[tj]sx?$/, '.type.ts')
-        if (verbose) {
-            console.log(`Writing: ${fileName}`)
+        const finalOutput = `// Auto-generated with kea-typegen v${version}. DO NOT EDIT!\n\n${output}`
+
+        let existingOutput
+
+        try {
+            existingOutput = fs.readFileSync(fileName)
+        } catch (error) {}
+
+        if (existingOutput?.toString() !== finalOutput) {
+            fs.writeFileSync(fileName, finalOutput)
+            console.log(`!! Writing: ${path.relative(process.cwd(), fileName)}`)
+        } else {
+            if (verbose) {
+                console.log(`>> Unchanged: ${path.relative(process.cwd(), fileName)}`)
+            }
         }
-        fs.writeFileSync(fileName, `// Auto-generated with kea-typegen v${version}. DO NOT EDIT!\n\n${output}`)
     })
 }
 

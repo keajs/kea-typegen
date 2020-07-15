@@ -8,7 +8,8 @@
     "prepublish": "npm run test && npm run build",
     "run-built-cli": "node dist/cli/typegen.js",
     "test": "jest",
-    "samples": "ts-node ./src/cli/typegen.ts -f ./samples/logic.ts --write"
+    "samples": "ts-node ./src/cli/typegen.ts -f ./samples/logic.ts --write",
+    "samples-watch": "ts-node ./src/cli/typegen.ts -c ./samples/tsconfig.json --write --watch"
   },
   "author": "",
   "license": "MIT",
