@@ -38,7 +38,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                 const func = property.initializer as ts.ArrowFunction
                 const param = func.parameters[0] as ts.ParameterDeclaration
 
-                const parameters = [
+                const parameters = param ? [
                     ts.createParameter(
                         undefined,
                         undefined,
@@ -48,7 +48,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                         param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         undefined,
                     ),
-                ]
+                ] : []
                 const returnTypeNode = param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                 parsedLogic.actions.push({ name: `${name}`, parameters, returnTypeNode })
 

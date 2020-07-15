@@ -21,6 +21,8 @@ type ReducerActions<LogicType extends BlankLogic, ReducerType> = {
 }
 type ReducerDefinitions<LogicType extends BlankLogic> = {
     [K in keyof LogicType['reducers']]?:
+        | [ReturnType<LogicType['reducers'][K]>, any, any, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
+        | [ReturnType<LogicType['reducers'][K]>, any, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
         | [ReturnType<LogicType['reducers'][K]>, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
         | ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>
 }
