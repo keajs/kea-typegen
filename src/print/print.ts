@@ -23,7 +23,7 @@ export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = fal
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
         const output = parsedLogics.map(parsedLogicToTypeString).join('\n\n')
         fileName = fileName.replace(/\.[tj]sx?$/, '.type.ts')
-        const finalOutput = `// Auto-generated with kea-typegen v${version}. DO NOT EDIT!\n\n${output}`
+        const finalOutput = `// Auto-generated with kea-typegen. DO NOT EDIT!\n\n${output}`
 
         let existingOutput
 
