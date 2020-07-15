@@ -11,7 +11,11 @@ const parser = yargs
     .option('f', { alias: 'file', describe: 'Logic file', type: 'string' })
     .option('c', { alias: 'config', describe: 'Path to tsconfig.json', type: 'string' })
     .option('write', { describe: 'Write logic.type.ts files', type: 'string' })
-    .option('w', { alias: 'watch', describe: 'Watch for changes (NB! Only works with tsconfig.json files!)', type: 'string' })
+    .option('w', {
+        alias: 'watch',
+        describe: 'Watch for changes (NB! Only works with tsconfig.json files!)',
+        type: 'string',
+    })
 
 const options = parser.argv
 
@@ -25,6 +29,7 @@ if (options.file) {
     program = ts.createProgram([options.file as string], {
         target: ts.ScriptTarget.ES5,
         module: ts.ModuleKind.CommonJS,
+        noEmit: true,
     })
 } else {
     const configFileName = (options.config || ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
@@ -36,12 +41,20 @@ if (options.file) {
         const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
 
         if (watch) {
-            const createProgram = ts.createSemanticDiagnosticsBuilderProgram
+            const createProgram = ts.createEmitAndSemanticDiagnosticsBuilderProgram
 
             const host = ts.createWatchCompilerHost(
                 configFileName,
                 compilerOptions.options,
-                ts.sys,
+                {
+                    ...ts.sys,
+                    writeFile(path: string, data: string, writeByteOrderMark?: boolean) {
+                        // skip emit
+                        // https://github.com/microsoft/TypeScript/issues/32385
+                        // https://github.com/microsoft/TypeScript/issues/36917
+                        return null
+                    },
+                },
                 createProgram,
                 reportDiagnostic,
                 reportWatchStatusChanged,

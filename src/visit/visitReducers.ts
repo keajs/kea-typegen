@@ -9,13 +9,15 @@ export function visitReducers(type: ts.Type, parsedLogic: ParsedLogic) {
         const name = property.getName()
         const value = (property.valueDeclaration as ts.PropertyAssignment).initializer
 
-        let typeNode
-        if (ts.isArrayLiteralExpression(value)) {
-            const defaultValue = value.elements[0]
-            typeNode = getTypeNodeForDefaultValue(defaultValue, checker)
-        } else if (ts.isObjectLiteralExpression(value)) {
-            typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+        if (value) {
+            let typeNode
+            if (ts.isArrayLiteralExpression(value)) {
+                const defaultValue = value.elements[0]
+                typeNode = getTypeNodeForDefaultValue(defaultValue, checker)
+            } else if (ts.isObjectLiteralExpression(value)) {
+                typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+            }
+            parsedLogic.reducers.push({name, typeNode})
         }
-        parsedLogic.reducers.push({ name, typeNode })
     }
 }
