@@ -1,5 +1,44 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`connect actions from multiple other logics 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: {
+                name: string;
+            };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: {
+                otherName: string;
+            };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: {
+                name: string;
+            };
+        });
+        updateOtherName: (otherName: string) => ({
+            type: \\"update other name (logic)\\";
+            payload: {
+                otherName: string;
+            };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+    _isKea: true;
+}"
+`;
+
 exports[`connect from another logic with a given type 1`] = `
 "export interface logicType {
     actionCreators: {
