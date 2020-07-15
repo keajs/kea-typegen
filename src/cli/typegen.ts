@@ -11,7 +11,7 @@ const parser = yargs
     .option('f', { alias: 'file', describe: 'Logic file', type: 'string' })
     .option('c', { alias: 'config', describe: 'Path to tsconfig.json', type: 'string' })
     .option('write', { describe: 'Write logic.type.ts files', type: 'string' })
-    .option('w', { alias: 'watch', describe: 'Watch for changes', type: 'string' })
+    .option('w', { alias: 'watch', describe: 'Watch for changes (NB! Only works with tsconfig.json files!)', type: 'string' })
 
 const options = parser.argv
 
