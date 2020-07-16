@@ -147,3 +147,101 @@ exports[`loaders - with an array and default 1`] = `
     _isKea: true;
 }"
 `;
+
+exports[`loaders - with no param 1`] = `
+"export interface logicType {
+    actionCreators: {
+        loadSessions: () => ({
+            type: \\"load sessions (logic)\\";
+            payload: any;
+        });
+        loadSessionsSuccess: (sessions: string[]) => ({
+            type: \\"load sessions success (logic)\\";
+            payload: {
+                sessions: string[];
+            };
+        });
+        loadSessionsFailure: (error: string) => ({
+            type: \\"load sessions failure (logic)\\";
+            payload: {
+                error: string;
+            };
+        });
+        loadResults: () => ({
+            type: \\"load results (logic)\\";
+            payload: any;
+        });
+        loadResultsSuccess: (sessions: string[]) => ({
+            type: \\"load results success (logic)\\";
+            payload: {
+                sessions: string[];
+            };
+        });
+        loadResultsFailure: (error: string) => ({
+            type: \\"load results failure (logic)\\";
+            payload: {
+                error: string;
+            };
+        });
+    };
+    actions: {
+        loadSessions: () => ({
+            type: \\"load sessions (logic)\\";
+            payload: any;
+        });
+        loadSessionsSuccess: (sessions: string[]) => ({
+            type: \\"load sessions success (logic)\\";
+            payload: {
+                sessions: string[];
+            };
+        });
+        loadSessionsFailure: (error: string) => ({
+            type: \\"load sessions failure (logic)\\";
+            payload: {
+                error: string;
+            };
+        });
+        loadResults: () => ({
+            type: \\"load results (logic)\\";
+            payload: any;
+        });
+        loadResultsSuccess: (sessions: string[]) => ({
+            type: \\"load results success (logic)\\";
+            payload: {
+                sessions: string[];
+            };
+        });
+        loadResultsFailure: (error: string) => ({
+            type: \\"load results failure (logic)\\";
+            payload: {
+                error: string;
+            };
+        });
+    };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
+    reducer: (state: any, action: () => any, fullState: any) => {
+        sessions: string[];
+        sessionsLoading: boolean;
+    };
+    reducers: {
+        sessions: (state: string[], action: any, fullState: any) => string[];
+        sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
+    };
+    selector: (state: any) => {
+        sessions: string[];
+        sessionsLoading: boolean;
+    };
+    selectors: {
+        sessions: (state: any, props: any) => string[];
+        sessionsLoading: (state: any, props: any) => boolean;
+    };
+    values: {
+        sessions: string[];
+        sessionsLoading: boolean;
+    };
+    _isKea: true;
+}"
+`;

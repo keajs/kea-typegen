@@ -52,3 +52,23 @@ test('loaders - with an array and default', () => {
     `
     expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
+
+test('loaders - with no param', () => {
+    const logicSource = `
+        import { kea } from 'kea'
+        const logic = kea({
+            loaders: ({ actions }) => ({
+                sessions: [
+                    [] as string[],
+                    {
+                        loadSessions: () => []
+                        loadResults: async () => {
+                            return []
+                        }
+                    }
+                ],
+            })
+        })
+    `
+    expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
+})
