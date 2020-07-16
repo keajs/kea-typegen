@@ -24,3 +24,31 @@ test('loaders - with a function', () => {
     `
     expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
+
+
+test('loaders - with an array and default', () => {
+    const logicSource = `
+        import { kea } from 'kea'
+        interface Session {
+            user: number,
+            type: string
+        }
+        const logic = kea({
+            actions: () => ({
+                updateName: (name: string) => ({ name }),
+            }),
+            loaders: ({ actions }) => ({
+                sessions: [
+                    [] as Session[],
+                    {
+                        loadSessions: async (query: string): Promise<Session[]> => {
+                            const response = { user: 3, type: 'bla' }
+                            return [response]
+                        },
+                    }
+                ],
+            })
+        })
+    `
+    expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
+})

@@ -73,3 +73,77 @@ exports[`loaders - with a function 1`] = `
     _isKea: true;
 }"
 `;
+
+exports[`loaders - with an array and default 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        loadSessions: (query: string) => ({
+            type: \\"load sessions (logic)\\";
+            payload: string;
+        });
+        loadSessionsSuccess: (sessions: Session[]) => ({
+            type: \\"load sessions success (logic)\\";
+            payload: {
+                sessions: Session[];
+            };
+        });
+        loadSessionsFailure: (error: string) => ({
+            type: \\"load sessions failure (logic)\\";
+            payload: {
+                error: string;
+            };
+        });
+    };
+    actions: {
+        updateName: (name: string) => ({
+            type: \\"update name (logic)\\";
+            payload: { name: string; };
+        });
+        loadSessions: (query: string) => ({
+            type: \\"load sessions (logic)\\";
+            payload: string;
+        });
+        loadSessionsSuccess: (sessions: Session[]) => ({
+            type: \\"load sessions success (logic)\\";
+            payload: {
+                sessions: Session[];
+            };
+        });
+        loadSessionsFailure: (error: string) => ({
+            type: \\"load sessions failure (logic)\\";
+            payload: {
+                error: string;
+            };
+        });
+    };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
+    reducer: (state: any, action: () => any, fullState: any) => {
+        sessions: Session[];
+        sessionsLoading: boolean;
+    };
+    reducers: {
+        sessions: (state: Session[], action: any, fullState: any) => Session[];
+        sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
+    };
+    selector: (state: any) => {
+        sessions: Session[];
+        sessionsLoading: boolean;
+    };
+    selectors: {
+        sessions: (state: any, props: any) => Session[];
+        sessionsLoading: (state: any, props: any) => boolean;
+    };
+    values: {
+        sessions: Session[];
+        sessionsLoading: boolean;
+    };
+    _isKea: true;
+}"
+`;
