@@ -10,6 +10,7 @@ type BlankLogic = {
     selectors?: any
     listeners?: any
     values?: any
+    props?: any
     _isKea?: true
     __selectorTypeHelp?: any
 }
@@ -22,9 +23,15 @@ type ReducerActions<LogicType extends BlankLogic, ReducerType> = {
 }
 type ReducerDefinitions<LogicType extends BlankLogic> = {
     [K in keyof LogicType['reducers']]?:
-        | [ReturnType<LogicType['reducers'][K]>, any, any, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
+        | [
+              ReturnType<LogicType['reducers'][K]>,
+              any,
+              any,
+              ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>,
+          ]
         | [ReturnType<LogicType['reducers'][K]>, any, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
         | [ReturnType<LogicType['reducers'][K]>, ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>]
+        | [ReturnType<LogicType['reducers'][K]>]
         | ReducerActions<LogicType, ReturnType<LogicType['reducers'][K]>>
 }
 type Selector = (state?: any, props?: any) => any
@@ -44,7 +51,19 @@ type SelectorDefinition<Selectors, S extends Selector, SelectorFunction extends 
         | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector]
         | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector]
         | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector]
-        | [Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector, Selector],
+        | [
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+              Selector,
+          ],
     SelectorFunction,
 ]
 
@@ -76,6 +95,10 @@ type LogicInput<LogicType> = {
     selectors?: SelectorDefinitions<LogicType> | ((logic: LogicType) => SelectorDefinitions<LogicType>)
     listeners?: ListenerDefinitions<LogicType> | ((logic: LogicType) => ListenerDefinitions<LogicType>)
     loaders?: any
+
+    urlToAction?: any
+    actionToUrl?: any
+    windowValues?: any
 }
 
 export function kea<LogicType>(input: LogicInput<LogicType>): LogicType {

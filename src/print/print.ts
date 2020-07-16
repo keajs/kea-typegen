@@ -55,6 +55,12 @@ export function printLogicType(parsedLogic: ParsedLogic) {
 
     const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
 
+    const pathString = path
+        .relative(process.cwd(), parsedLogic.fileName)
+        .replace(/^.\//, '')
+        .replace(/\.[jt]sx?$/, '')
+        .replace(/\//g, '.')
+
     return ts.createInterfaceDeclaration(
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -68,7 +74,13 @@ export function printLogicType(parsedLogic: ParsedLogic) {
             // actionKeys
             printProperty('actions', printActions(parsedLogic)),
             // build
-            // cache
+            printProperty(
+                'cache',
+                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
+                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                ]),
+            ),
             // connections
             // constants
             // defaults
@@ -77,10 +89,19 @@ export function printLogicType(parsedLogic: ParsedLogic) {
             // inputs
             // listeners
             // mount
-            // path
-            // pathString
+            printProperty(
+                'path',
+                ts.createTupleTypeNode(pathString.split('.').map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p)))),
+            ),
+            printProperty('pathString', ts.createStringLiteral(pathString)),
             // propTypes
-            // props
+            printProperty(
+                'props',
+                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
+                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                ]),
+            ),
             printProperty('reducer', printReducer(parsedLogic)),
             // reducerOptions
             printProperty('reducers', printReducers(parsedLogic)),
