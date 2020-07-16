@@ -22,6 +22,10 @@ exports[`selectors - as a function returning a object 1`] = `
             payload: { otherName: string; };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: string;
         otherName: any;
@@ -72,6 +76,10 @@ exports[`selectors - as an object 1`] = `
             payload: { otherName: string; };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: string;
         otherName: any;
@@ -122,6 +130,10 @@ exports[`selectors - with a function 1`] = `
             payload: { otherName: string; };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: string;
         otherName: any;

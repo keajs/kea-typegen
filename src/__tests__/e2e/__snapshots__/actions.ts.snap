@@ -22,6 +22,10 @@ exports[`actions - as a function returning a object 1`] = `
             payload: { otherName: string; };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -53,6 +57,10 @@ exports[`actions - as an object 1`] = `
             payload: { otherName: string; };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -84,6 +92,10 @@ exports[`actions - with a function 1`] = `
             payload: { otherName: string; };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -147,6 +159,10 @@ exports[`actions - with random values instead of functions 1`] = `
             };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};

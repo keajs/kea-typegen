@@ -30,6 +30,10 @@ exports[`connect actions and rename 1`] = `
             };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -69,6 +73,10 @@ exports[`connect actions from another logic 1`] = `
             };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -108,6 +116,10 @@ exports[`connect actions from multiple other logics 1`] = `
             };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -121,6 +133,10 @@ exports[`connect props from another logic 1`] = `
 "export interface logicType {
     actionCreators: {};
     actions: {};
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -140,6 +156,10 @@ exports[`connect values and rename 1`] = `
 "export interface logicType {
     actionCreators: {};
     actions: {};
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
@@ -159,6 +179,10 @@ exports[`connect values from another logic 1`] = `
 "export interface logicType {
     actionCreators: {};
     actions: {};
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};

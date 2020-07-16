@@ -46,6 +46,10 @@ exports[`loaders - with a function 1`] = `
             };
         });
     };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         sessions: Session[];
         sessionsLoading: boolean;
