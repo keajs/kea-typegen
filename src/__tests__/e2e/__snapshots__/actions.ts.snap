@@ -27,6 +27,7 @@ exports[`actions - as a function returning a object 1`] = `
     selector: (state: any) => {};
     selectors: {};
     values: {};
+    _isKea: true;
 }"
 `;
 
@@ -57,6 +58,7 @@ exports[`actions - as an object 1`] = `
     selector: (state: any) => {};
     selectors: {};
     values: {};
+    _isKea: true;
 }"
 `;
 
@@ -87,6 +89,7 @@ exports[`actions - with a function 1`] = `
     selector: (state: any) => {};
     selectors: {};
     values: {};
+    _isKea: true;
 }"
 `;
 
@@ -149,5 +152,6 @@ exports[`actions - with random values instead of functions 1`] = `
     selector: (state: any) => {};
     selectors: {};
     values: {};
+    _isKea: true;
 }"
 `;

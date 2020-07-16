@@ -66,5 +66,6 @@ exports[`loaders - with a function 1`] = `
         sessions: Session[];
         sessionsLoading: boolean;
     };
+    _isKea: true;
 }"
 `;

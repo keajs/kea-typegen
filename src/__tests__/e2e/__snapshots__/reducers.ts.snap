@@ -47,6 +47,7 @@ exports[`reducers - as a function returning a object 1`] = `
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
+    _isKea: true;
 }"
 `;
 
@@ -97,6 +98,7 @@ exports[`reducers - as an object 1`] = `
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
+    _isKea: true;
 }"
 `;
 
@@ -147,5 +149,6 @@ exports[`reducers - with a function 1`] = `
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
+    _isKea: true;
 }"
 `;

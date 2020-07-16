@@ -46,6 +46,7 @@ exports[`selectors - as a function returning a object 1`] = `
         upperName: string;
         combinedLength: number;
     };
+    _isKea: true;
 }"
 `;
 
@@ -95,6 +96,7 @@ exports[`selectors - as an object 1`] = `
         upperName: string;
         combinedLength: number;
     };
+    _isKea: true;
 }"
 `;
 
@@ -144,5 +146,6 @@ exports[`selectors - with a function 1`] = `
         upperName: string;
         combinedLength: number;
     };
+    _isKea: true;
 }"
 `;
