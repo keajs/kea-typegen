@@ -14,9 +14,18 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                 const logicReference = value.elements[i]
                 const connectArray = value.elements[i + 1]
 
-                let strings = []
+                let lookup: Record<string, string> = {}
+
                 if (connectArray && ts.isArrayLiteralExpression(connectArray)) {
-                    strings = connectArray.elements.map((e: ts.StringLiteral) => e.text)
+                    const strings = connectArray.elements.map((e: ts.StringLiteral) => e.text)
+                    for (const string of strings) {
+                        if (string.includes(' as ')) {
+                            const parts = string.split(' as ')
+                            lookup[parts[0]] = parts[1]
+                        } else {
+                            lookup[string] = string
+                        }
+                    }
                 }
 
                 const symbol = checker.getSymbolAtLocation(logicReference)
@@ -31,7 +40,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                             const name = actionType.name.getText()
 
                             const functionTypeNode = actionType.type
-                            if (strings.includes(name) && ts.isFunctionTypeNode(functionTypeNode)) {
+                            if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
                                 const parameters = functionTypeNode.parameters.map((param) => getParameterDeclaration(param))
 
                                 let returnType = functionTypeNode.type
@@ -46,7 +55,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                                     ) as ts.PropertySignature
 
                                     parsedLogic.actions.push({
-                                        name: name,
+                                        name: lookup[name],
                                         returnTypeNode: payload.type,
                                         parameters: parameters,
                                     })
@@ -65,7 +74,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                             const name = selectorType.name.getText()
 
                             const functionTypeNode = selectorType.type
-                            if (strings.includes(name) && ts.isFunctionTypeNode(functionTypeNode)) {
+                            if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
                                 let returnType = functionTypeNode.type
 
                                 if (ts.isParenthesizedTypeNode(returnType)) {
@@ -73,7 +82,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                                 }
 
                                 parsedLogic.selectors.push({
-                                    name: name,
+                                    name: lookup[name],
                                     typeNode: returnType,
                                     functionTypes: []
                                 })

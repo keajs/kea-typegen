@@ -1,5 +1,44 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`connect actions and rename 1`] = `
+"export interface logicType {
+    actionCreators: {
+        firstAction: (name: string) => ({
+            type: \\"first action (logic)\\";
+            payload: {
+                name: string;
+            };
+        });
+        secondAction: (otherName: string) => ({
+            type: \\"second action (logic)\\";
+            payload: {
+                otherName: string;
+            };
+        });
+    };
+    actions: {
+        firstAction: (name: string) => ({
+            type: \\"first action (logic)\\";
+            payload: {
+                name: string;
+            };
+        });
+        secondAction: (otherName: string) => ({
+            type: \\"second action (logic)\\";
+            payload: {
+                otherName: string;
+            };
+        });
+    };
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    values: {};
+    _isKea: true;
+}"
+`;
+
 exports[`connect actions from another logic 1`] = `
 "export interface logicType {
     actionCreators: {
@@ -78,45 +117,6 @@ exports[`connect actions from multiple other logics 1`] = `
 }"
 `;
 
-exports[`connect from another logic with a given type 1`] = `
-"export interface logicType {
-    actionCreators: {
-        updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
-            payload: {
-                name: string;
-            };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
-            payload: {
-                otherName: string;
-            };
-        });
-    };
-    actions: {
-        updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
-            payload: {
-                name: string;
-            };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
-            payload: {
-                otherName: string;
-            };
-        });
-    };
-    reducer: (state: any, action: () => any, fullState: any) => {};
-    reducers: {};
-    selector: (state: any) => {};
-    selectors: {};
-    values: {};
-    _isKea: true;
-}"
-`;
-
 exports[`connect props from another logic 1`] = `
 "export interface logicType {
     actionCreators: {};
@@ -131,6 +131,25 @@ exports[`connect props from another logic 1`] = `
     values: {
         name: string;
         yetAnotherNameWithNullDefault: string | null;
+    };
+    _isKea: true;
+}"
+`;
+
+exports[`connect values and rename 1`] = `
+"export interface logicType {
+    actionCreators: {};
+    actions: {};
+    reducer: (state: any, action: () => any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {
+        firstSelector: (state: any, props: any) => string;
+        secondSelector: (state: any, props: any) => string | null;
+    };
+    values: {
+        firstSelector: string;
+        secondSelector: string | null;
     };
     _isKea: true;
 }"
