@@ -39,7 +39,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                 const param = func.parameters[0] as ts.ParameterDeclaration
 
                 const parameters = param ? [getParameterDeclaration(param)] : []
-                const returnTypeNode = param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                 parsedLogic.actions.push({ name: `${name}`, parameters, returnTypeNode })
 
                 const successParameters = [
