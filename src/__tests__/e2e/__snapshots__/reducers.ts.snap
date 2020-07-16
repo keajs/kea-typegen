@@ -164,3 +164,44 @@ exports[`reducers - with a function 1`] = `
     _isKea: true;
 }"
 `;
+
+exports[`reducers - with bool default 1`] = `
+"export interface logicType {
+    actionCreators: {
+        updateName: () => ({
+            type: \\"update name (logic)\\";
+            payload: {
+                value: boolean;
+            };
+        });
+    };
+    actions: {
+        updateName: () => ({
+            type: \\"update name (logic)\\";
+            payload: {
+                value: boolean;
+            };
+        });
+    };
+    cache: Record<string, any>;
+    path: [\\"logic\\"];
+    pathString: \\"logic\\";
+    props: Record<string, any>;
+    reducer: (state: any, action: () => any, fullState: any) => {
+        name: boolean;
+    };
+    reducers: {
+        name: (state: boolean, action: any, fullState: any) => boolean;
+    };
+    selector: (state: any) => {
+        name: boolean;
+    };
+    selectors: {
+        name: (state: any, props: any) => boolean;
+    };
+    values: {
+        name: boolean;
+    };
+    _isKea: true;
+}"
+`;

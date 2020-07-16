@@ -96,3 +96,26 @@ test('reducers - as a function returning a object', () => {
     `
     expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
+
+test('reducers - with bool default', () => {
+    const logicSource = `
+        import { kea } from 'kea'
+        
+        const logic = kea({
+            actions: () => ({
+                updateName: true
+            }),
+            reducers: () => { 
+                return {
+                    name: [
+                        false,
+                        {
+                            updateName: () => true,
+                        },
+                    ]
+                }
+            }
+        })
+    `
+    expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
+})

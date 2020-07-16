@@ -1,6 +1,6 @@
 import * as ts from 'typescript'
-import {visitProgram} from "./visit/visit";
-import {parsedLogicToTypeString} from "./print/print";
+import { visitProgram } from './visit/visit'
+import { parsedLogicToTypeString } from './print/print'
 
 export function logicSourceToLogicType(logicSource: string) {
     const program = programFromSource(logicSource)
@@ -15,7 +15,7 @@ export function sourceToSourceFile(sourceCode: string, filename: string = 'logic
 export function programFromSource(sourceCode: string) {
     const options = {}
     const compilerHost = ts.createCompilerHost(options)
-    compilerHost.getSourceFile = fileName => fileName === 'logic.ts' ? sourceToSourceFile(sourceCode) : undefined
+    compilerHost.getSourceFile = (fileName) => (fileName === 'logic.ts' ? sourceToSourceFile(sourceCode) : undefined)
     return ts.createProgram(['logic.ts'], options, compilerHost)
 }
 
@@ -54,6 +54,11 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
             if (ts.isParenthesizedTypeNode(typeNode)) {
                 typeNode = typeNode.type
             }
+        } else if (
+            defaultValue?.kind === ts.SyntaxKind.TrueKeyword ||
+            defaultValue?.kind === ts.SyntaxKind.FalseKeyword
+        ) {
+            typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)
         } else if (ts.isStringLiteralLike(defaultValue)) {
             typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
         } else if (ts.isNumericLiteral(defaultValue)) {
@@ -76,5 +81,5 @@ export function getParameterDeclaration(param: ts.ParameterDeclaration) {
         param.initializer || param.questionToken ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
         param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
         undefined,
-    );
+    )
 }
