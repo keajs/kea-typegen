@@ -32,33 +32,36 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                 const otherLogicType = checker.getTypeOfSymbolAtLocation(symbol, logicReference)
 
                 if (loaderName === 'actions') {
-                    const actionsForLogic = (otherLogicType as any).properties.find((p) => p.escapedName === 'actions')
-                    const actionTypes = actionsForLogic.valueDeclaration.type.members
+                    const actionsForLogic = (otherLogicType as any).properties?.find((p) => p.escapedName === 'actions')
 
-                    for (const actionType of actionTypes) {
-                        if (ts.isPropertySignature(actionType)) {
-                            const name = actionType.name.getText()
+                    if (actionsForLogic) {
+                        const actionTypes = actionsForLogic.valueDeclaration.type.members
 
-                            const functionTypeNode = actionType.type
-                            if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
-                                const parameters = functionTypeNode.parameters.map((param) => getParameterDeclaration(param))
+                        for (const actionType of actionTypes) {
+                            if (ts.isPropertySignature(actionType)) {
+                                const name = actionType.name.getText()
 
-                                let returnType = functionTypeNode.type
+                                const functionTypeNode = actionType.type
+                                if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
+                                    const parameters = functionTypeNode.parameters.map((param) => getParameterDeclaration(param))
 
-                                if (ts.isParenthesizedTypeNode(returnType)) {
-                                    returnType = returnType.type
-                                }
+                                    let returnType = functionTypeNode.type
 
-                                if (ts.isTypeLiteralNode(returnType)) {
-                                    const payload = returnType.members.find(
-                                        (m) => m.name.getText() === 'payload',
-                                    ) as ts.PropertySignature
+                                    if (ts.isParenthesizedTypeNode(returnType)) {
+                                        returnType = returnType.type
+                                    }
 
-                                    parsedLogic.actions.push({
-                                        name: lookup[name],
-                                        returnTypeNode: payload.type,
-                                        parameters: parameters,
-                                    })
+                                    if (ts.isTypeLiteralNode(returnType)) {
+                                        const payload = returnType.members.find(
+                                            (m) => m.name.getText() === 'payload',
+                                        ) as ts.PropertySignature
+
+                                        parsedLogic.actions.push({
+                                            name: lookup[name],
+                                            returnTypeNode: payload.type,
+                                            parameters: parameters,
+                                        })
+                                    }
                                 }
                             }
                         }
@@ -66,26 +69,29 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                 }
 
                 if (loaderName === 'values' || loaderName === 'props') {
-                    const selectorsForLogic = (otherLogicType as any).properties.find((p) => p.escapedName === 'selectors')
-                    const selectorTypes = selectorsForLogic.valueDeclaration.type.members
+                    const selectorsForLogic = (otherLogicType as any).properties?.find((p) => p.escapedName === 'selectors')
 
-                    for (const selectorType of selectorTypes) {
-                        if (ts.isPropertySignature(selectorType)) {
-                            const name = selectorType.name.getText()
+                    if (selectorsForLogic) {
+                        const selectorTypes = selectorsForLogic.valueDeclaration.type.members
 
-                            const functionTypeNode = selectorType.type
-                            if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
-                                let returnType = functionTypeNode.type
+                        for (const selectorType of selectorTypes) {
+                            if (ts.isPropertySignature(selectorType)) {
+                                const name = selectorType.name.getText()
 
-                                if (ts.isParenthesizedTypeNode(returnType)) {
-                                    returnType = returnType.type
+                                const functionTypeNode = selectorType.type
+                                if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
+                                    let returnType = functionTypeNode.type
+
+                                    if (ts.isParenthesizedTypeNode(returnType)) {
+                                        returnType = returnType.type
+                                    }
+
+                                    parsedLogic.selectors.push({
+                                        name: lookup[name],
+                                        typeNode: returnType,
+                                        functionTypes: []
+                                    })
                                 }
-
-                                parsedLogic.selectors.push({
-                                    name: lookup[name],
-                                    typeNode: returnType,
-                                    functionTypes: []
-                                })
                             }
                         }
                     }
