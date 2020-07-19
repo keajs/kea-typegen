@@ -1,6 +1,7 @@
-// Auto-generated with kea-typegen v0.0.8. DO NOT EDIT!
+// Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface logicType<Session> {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: "update name (samples.logic)";
@@ -27,6 +28,7 @@ export interface logicType<Session> {
             };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: "update name (samples.logic)";
@@ -53,6 +55,15 @@ export interface logicType<Session> {
             };
         });
     };
+    cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
+    path: ["samples", "logic"];
+    pathString: "samples.logic";
+    propTypes: any;
+    props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: string;
         number: number;
@@ -61,6 +72,7 @@ export interface logicType<Session> {
         sessions: Session[];
         sessionsLoading: boolean;
     };
+    reducerOptions: any;
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         number: (state: number, action: any, fullState: any) => number;
@@ -97,8 +109,9 @@ export interface logicType<Session> {
         capitalizedName: string;
         upperCaseName: string;
     };
+    _isKea: true;
     __selectorTypeHelp: {
-        capitalizedName: (arg0: string, arg1: number) => string;
-        upperCaseName: (arg0: string) => string;
+        capitalizedName: (arg1: string, arg2: number) => string;
+        upperCaseName: (arg1: string) => string;
     };
 }
