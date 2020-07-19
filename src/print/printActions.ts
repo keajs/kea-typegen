@@ -3,7 +3,11 @@ import * as ts from 'typescript'
 import * as path from 'path'
 
 export function printActions(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
-    const cwd = appOptions.logicStartPath ? process.cwd() : process.cwd()
+    let cwd = process.cwd()
+
+    if (appOptions?.logicStartPath) {
+        cwd = path.resolve(cwd, appOptions.logicStartPath)
+    }
 
     const pathName = path
         .relative(cwd, parsedLogic.fileName)
