@@ -70,10 +70,12 @@ export function printLogicType(parsedLogic: ParsedLogic) {
         ),
         undefined,
         [
+            // TODO
+            printProperty('key', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             printProperty('actionCreators', printActions(parsedLogic)),
-            // actionKeys
+            // TODO
+            printProperty('actionKeys', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             printProperty('actions', printActions(parsedLogic)),
-            // build
             printProperty(
                 'cache',
                 ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
@@ -81,20 +83,25 @@ export function printLogicType(parsedLogic: ParsedLogic) {
                     ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                 ]),
             ),
-            // connections
-            // constants
-            // defaults
-            // events
-            // extend
+            // TODO
+            printProperty('connections', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+            // TODO
+            printProperty('constants', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+            // TODO
+            printProperty('defaults', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+            // TODO
+            printProperty('events', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             // inputs
             // listeners
-            // mount
             printProperty(
                 'path',
-                ts.createTupleTypeNode(pathString.split('.').map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p)))),
+                ts.createTupleTypeNode(
+                    pathString.split('.').map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p))),
+                ),
             ),
             printProperty('pathString', ts.createStringLiteral(pathString)),
-            // propTypes
+            // TODO
+            printProperty('propTypes', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             printProperty(
                 'props',
                 ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
@@ -103,13 +110,13 @@ export function printLogicType(parsedLogic: ParsedLogic) {
                 ]),
             ),
             printProperty('reducer', printReducer(parsedLogic)),
-            // reducerOptions
+            // TODO
+            printProperty('reducerOptions', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             printProperty('reducers', printReducers(parsedLogic)),
             printProperty('selector', printSelector(parsedLogic)),
             printProperty('selectors', printSelectors(parsedLogic)),
             // sharedListeners
             printProperty('values', printValues(parsedLogic)),
-            // wrap
             printProperty('_isKea', ts.createTrue()),
             // _isKeaWithKey,
             addSelectorTypeHelp ? printProperty('__selectorTypeHelp', printSelectorTypeHelp(parsedLogic)) : null,
