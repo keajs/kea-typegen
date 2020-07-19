@@ -1,9 +1,8 @@
 ---
-name: Bad Generated Type
+name: A Generated Type Is Wrong
 about: kea-typegen generated an incorrect type. Please fix!
 title: ''
 labels: typegen
-
 ---
 
 ## This logic:
