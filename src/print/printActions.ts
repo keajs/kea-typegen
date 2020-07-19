@@ -1,10 +1,12 @@
-import { ParsedLogic } from '../types'
+import {AppOptions, ParsedLogic} from '../types'
 import * as ts from 'typescript'
 import * as path from 'path'
 
-export function printActions(parsedLogic: ParsedLogic) {
+export function printActions(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
+    const cwd = appOptions.logicStartPath ? process.cwd() : process.cwd()
+
     const pathName = path
-        .relative(process.cwd(), parsedLogic.fileName)
+        .relative(cwd, parsedLogic.fileName)
         .replace(/^.\//, '')
         .replace(/\.[jt]sx?$/, '')
         .replace(/\//g, '.')

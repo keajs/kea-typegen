@@ -14,7 +14,7 @@ export interface ReducerTransform {
 export interface SelectorTransform {
     name: string
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
-    functionTypes: { name: string, type: ts.TypeNode }[]
+    functionTypes: { name: string; type: ts.TypeNode }[]
 }
 
 export interface ParsedLogic {
@@ -25,4 +25,12 @@ export interface ParsedLogic {
     actions: ActionTransform[]
     reducers: ReducerTransform[]
     selectors: SelectorTransform[]
+}
+
+export interface AppOptions {
+    tsConfigPath?: string
+    sourceFilePath?: string
+    logicStartPath?: string
+    write?: boolean
+    watch?: boolean
 }

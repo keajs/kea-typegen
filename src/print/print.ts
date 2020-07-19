@@ -1,8 +1,7 @@
 import * as ts from 'typescript'
 import * as fs from 'fs'
 import * as path from 'path'
-import { version } from '../../package.json'
-import { ParsedLogic } from '../types'
+import { AppOptions, ParsedLogic } from '../types'
 import { printActions } from './printActions'
 import { printReducers } from './printReducers'
 import { printReducer } from './printReducer'
@@ -11,7 +10,7 @@ import { printSelectors } from './printSelectors'
 import { printValues } from './printValues'
 import { printSelectorTypeHelp } from './printSelectorTypeHelp'
 
-export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = false) {
+export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[], verbose: boolean = false) {
     const groupedByFile: Record<string, ParsedLogic[]> = {}
     parsedLogics.forEach((parsedLogic) => {
         if (!groupedByFile[parsedLogic.fileName]) {
@@ -20,8 +19,11 @@ export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = fal
         groupedByFile[parsedLogic.fileName].push(parsedLogic)
     })
 
+    let writtenFiles = 0
+    let filesToWrite = 0
+
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
-        const output = parsedLogics.map(parsedLogicToTypeString).join('\n\n')
+        const output = parsedLogics.map((l) => parsedLogicToTypeString(l, appOptions)).join('\n\n')
         fileName = fileName.replace(/\.[tj]sx?$/, '.type.ts')
         const finalOutput = `// Auto-generated with kea-typegen. DO NOT EDIT!\n\n${output}`
 
@@ -32,24 +34,41 @@ export function printToFiles(parsedLogics: ParsedLogic[], verbose: boolean = fal
         } catch (error) {}
 
         if (existingOutput?.toString() !== finalOutput) {
-            fs.writeFileSync(fileName, finalOutput)
-            console.log(`!! Writing: ${path.relative(process.cwd(), fileName)}`)
+            filesToWrite += 1
+            if (appOptions.write) {
+                fs.writeFileSync(fileName, finalOutput)
+                writtenFiles += 1
+                console.log(`!! Writing: ${path.relative(process.cwd(), fileName)}`)
+            } else {
+                console.log(`:${smiles[i++ % smiles.length]} Would write: ${path.relative(process.cwd(), fileName)}`)
+            }
         } else {
             if (verbose) {
-                console.log(`>> Unchanged: ${path.relative(process.cwd(), fileName)}`)
+                console.log(`-- Unchanged: ${path.relative(process.cwd(), fileName)}`)
             }
         }
     })
+
+    console.log('')
+
+    if (writtenFiles === 0) {
+        console.log(`-> Nothing was written to disk`)
+        if (filesToWrite > 0) {
+            console.log(`-> Run with "--write" to save types to disk!`)
+        }
+    } else if (writtenFiles > 0) {
+        console.log(`!> Wrote ${writtenFiles} file${writtenFiles === 1 ? '' : 's'}!`)
+    }
 }
 
-export function parsedLogicToTypeString(parsedLogic: ParsedLogic) {
-    const logicType = printLogicType(parsedLogic)
+export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
+    const logicType = printLogicType(parsedLogic, appOptions)
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
     const sourceFile = ts.createSourceFile('logic.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)
     return printer.printNode(ts.EmitHint.Unspecified, logicType, sourceFile)
 }
 
-export function printLogicType(parsedLogic: ParsedLogic) {
+export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
     const printProperty = (name, typeNode) =>
         ts.createPropertySignature(undefined, ts.createIdentifier(name), undefined, typeNode, undefined)
 
@@ -72,10 +91,10 @@ export function printLogicType(parsedLogic: ParsedLogic) {
         [
             // TODO
             printProperty('key', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
-            printProperty('actionCreators', printActions(parsedLogic)),
+            printProperty('actionCreators', printActions(parsedLogic, appOptions)),
             // TODO
             printProperty('actionKeys', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
-            printProperty('actions', printActions(parsedLogic)),
+            printProperty('actions', printActions(parsedLogic, appOptions)),
             printProperty(
                 'cache',
                 ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
@@ -123,3 +142,7 @@ export function printLogicType(parsedLogic: ParsedLogic) {
         ].filter((a) => a),
     )
 }
+
+// haha
+let i = 0
+const smiles = ['/', ']', '[', ')', '(', '\\', 'D', '|', 'O']

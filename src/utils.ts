@@ -1,11 +1,12 @@
 import * as ts from 'typescript'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
+import { AppOptions } from './types'
 
-export function logicSourceToLogicType(logicSource: string) {
+export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
     const [parsedLogic] = visitProgram(program)
-    return parsedLogicToTypeString(parsedLogic)
+    return parsedLogicToTypeString(parsedLogic, appOptions)
 }
 
 export function sourceToSourceFile(sourceCode: string, filename: string = 'logic.ts') {

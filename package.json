@@ -1,44 +1,54 @@
 {
-  "name": "kea-typegen",
-  "version": "0.0.16",
-  "description": "Generate type definitions for kea logic",
-  "scripts": {
-    "start": "ts-node ./src/cli/typegen.ts",
-    "build": "tsc -p .",
-    "prepublish": "npm run test && npm run build",
-    "run-built-cli": "node dist/cli/typegen.js",
-    "test": "jest",
-    "samples": "ts-node ./src/cli/typegen.ts -c ./samples/tsconfig.json --write",
-    "samples-watch": "ts-node ./src/cli/typegen.ts -c ./samples/tsconfig.json --write --watch"
-  },
-  "author": "",
-  "license": "MIT",
-  "bin": {
-    "kea-typegen": "./dist/src/cli/typegen.js"
-  },
-  "dependencies": {
-    "yargs": "^15.4.0"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.10.4",
-    "@babel/preset-env": "^7.10.4",
-    "@babel/preset-typescript": "^7.10.4",
-    "@types/jest": "^26.0.3",
-    "@types/node": "^14.0.19",
-    "@types/yargs": "^15.0.5",
-    "babel-jest": "^26.1.0",
-    "jest": "^26.1.0",
-    "kea": "^2.1.1",
-    "ts-jest": "^26.1.1",
-    "ts-node": "^8.10.2",
-    "typescript": "^3.9.6"
-  },
-  "peerDependencies": {
-    "typescript": "*"
-  },
-  "jest": {
-    "testPathIgnorePatterns": [
-      "<rootDir>/dist/"
-    ]
-  }
+    "name": "kea-typegen",
+    "version": "0.0.16",
+    "description": "Generate type definitions for kea logic",
+    "scripts": {
+        "start": "ts-node ./src/cli/typegen.ts",
+        "build": "tsc -p .",
+        "prepublish": "npm run test && npm run build",
+        "run-built-cli": "node dist/cli/typegen.js",
+        "test": "jest",
+        "samples": "ts-node ./src/cli/typegen.ts -c ./samples/tsconfig.json --write",
+        "samples-watch": "ts-node ./src/cli/typegen.ts -c ./samples/tsconfig.json --write --watch"
+    },
+    "author": "",
+    "license": "MIT",
+    "bin": {
+        "kea-typegen": "./dist/src/cli/typegen.js"
+    },
+    "dependencies": {
+        "yargs": "^15.4.0"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.10.4",
+        "@babel/preset-env": "^7.10.4",
+        "@babel/preset-typescript": "^7.10.4",
+        "@types/jest": "^26.0.3",
+        "@types/node": "^14.0.19",
+        "@types/yargs": "^15.0.5",
+        "babel-jest": "^26.1.0",
+        "jest": "^26.1.0",
+        "husky": ">=4",
+        "lint-staged": ">=10",
+        "kea": "^2.1.1",
+        "ts-jest": "^26.1.1",
+        "ts-node": "^8.10.2",
+        "typescript": "^3.9.6"
+    },
+    "peerDependencies": {
+        "typescript": "*"
+    },
+    "jest": {
+        "testPathIgnorePatterns": [
+            "<rootDir>/dist/"
+        ]
+    },
+    "husky": {
+        "hooks": {
+            "pre-commit": "lint-staged"
+        }
+    },
+    "lint-staged": {
+        "*.{js,css,scss}": "prettier --write"
+    }
 }

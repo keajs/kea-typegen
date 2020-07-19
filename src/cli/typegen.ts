@@ -5,42 +5,57 @@ import * as yargs from 'yargs'
 import * as path from 'path'
 import { visitProgram } from '../visit/visit'
 import { printToFiles } from '../print/print'
+import { AppOptions } from '../types'
 
+// NB! Sync this with the AppOptions type
 const parser = yargs
     .usage('Use one of:\n - kea-typegen -f logic.ts\n - kea-typegen -c tsconfig.json')
-    .option('f', { alias: 'file', describe: 'Logic file', type: 'string' })
-    .option('c', { alias: 'config', describe: 'Path to tsconfig.json', type: 'string' })
-    .option('write', { describe: 'Write logic.type.ts files', type: 'string' })
-    .option('w', {
-        alias: 'watch',
+    .option('file', { alias: 'f', describe: 'Logic file', type: 'string' })
+    .option('config', { alias: 'c', describe: 'Path to tsconfig.json', type: 'string' })
+    .option('write', { alias: 'W', describe: 'Write logic.type.ts files', type: 'string' })
+    .option('path', {
+        alias: 'p',
+        describe: 'Start logic path autogeneration from here. E.g: ./frontend/src',
+        type: 'string',
+    })
+    .option('watch', {
+        alias: 'w',
         describe: 'Watch for changes (NB! Only works with tsconfig.json files!)',
         type: 'string',
     })
+// Read the NB above
 
-const options = parser.argv
+const parsedOptions = parser.argv
 
 let program
 
-const write = typeof options.write !== 'undefined'
-const watch = typeof options.watch !== 'undefined'
+const appOptions = {
+    logicStartPath: parsedOptions.path,
+    tsConfigPath: parsedOptions.cofig,
+    sourceFilePath: parsedOptions.file,
+    write: typeof parsedOptions.write !== 'undefined',
+    watch: typeof parsedOptions.watch !== 'undefined',
+} as AppOptions
 
-if (options.file) {
-    console.log(`Loading file: ${options.file}`)
-    program = ts.createProgram([options.file as string], {
+if (appOptions.sourceFilePath) {
+    console.log(`Loading file: ${appOptions.sourceFilePath}`)
+    program = ts.createProgram([appOptions.sourceFilePath as string], {
         target: ts.ScriptTarget.ES5,
         module: ts.ModuleKind.CommonJS,
         noEmit: true,
     })
 } else {
-    const configFileName = (options.config || ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
+    const configFileName = (appOptions.tsConfigPath || ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
 
     if (configFileName) {
         console.log(`Using Config: ${configFileName}`)
+        console.log('')
+
         const configFile = ts.readJsonConfigFile(configFileName as string, ts.sys.readFile)
         const rootFolder = path.resolve(configFileName.replace(/tsconfig\.json$/, ''))
         const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
 
-        if (watch) {
+        if (appOptions.watch) {
             const createProgram = ts.createEmitAndSemanticDiagnosticsBuilderProgram
 
             const host = ts.createWatchCompilerHost(
@@ -89,7 +104,7 @@ if (options.file) {
                 program = prog.getProgram()
                 origPostProgramCreate!(prog)
 
-                goThroughAllTheFiles(program, write)
+                goThroughAllTheFiles(program, appOptions)
             }
 
             ts.createWatchProgram(host)
@@ -100,19 +115,18 @@ if (options.file) {
     }
 }
 
-function goThroughAllTheFiles(program, write) {
+function goThroughAllTheFiles(program, appOptions) {
     const parsedLogics = visitProgram(program, true)
+    console.log('')
     console.log(`## ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
-    if (write) {
-        printToFiles(parsedLogics, true)
-    } else {
-        console.log('Run with --write to write logic.type.ts files')
-    }
+    console.log('')
+
+    printToFiles(appOptions, parsedLogics, true)
 }
 
 if (program) {
-    if (!watch && !options.file) {
-        goThroughAllTheFiles(program, write)
+    if (!appOptions.watch && !appOptions.sourceFilePath) {
+        goThroughAllTheFiles(program, appOptions)
     }
 } else {
     parser.showHelp()
