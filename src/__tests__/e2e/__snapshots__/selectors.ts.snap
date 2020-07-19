@@ -2,6 +2,7 @@
 
 exports[`selectors - as a function returning a object 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -12,6 +13,7 @@ exports[`selectors - as a function returning a object 1`] = `
             payload: { otherName: string; };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -23,13 +25,19 @@ exports[`selectors - as a function returning a object 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: string;
         otherName: any;
     };
+    reducerOptions: any;
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherName: (state: any, action: any, fullState: any) => any;
@@ -56,6 +64,7 @@ exports[`selectors - as a function returning a object 1`] = `
 
 exports[`selectors - as an object 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -66,6 +75,7 @@ exports[`selectors - as an object 1`] = `
             payload: { otherName: string; };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -77,13 +87,19 @@ exports[`selectors - as an object 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: string;
         otherName: any;
     };
+    reducerOptions: any;
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherName: (state: any, action: any, fullState: any) => any;
@@ -110,6 +126,7 @@ exports[`selectors - as an object 1`] = `
 
 exports[`selectors - with a function 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -120,6 +137,7 @@ exports[`selectors - with a function 1`] = `
             payload: { otherName: string; };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -131,13 +149,19 @@ exports[`selectors - with a function 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: string;
         otherName: any;
     };
+    reducerOptions: any;
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherName: (state: any, action: any, fullState: any) => any;

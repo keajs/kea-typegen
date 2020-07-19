@@ -2,6 +2,7 @@
 
 exports[`connect actions and rename 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         firstAction: (name: string) => ({
             type: \\"first action (logic)\\";
@@ -16,6 +17,7 @@ exports[`connect actions and rename 1`] = `
             };
         });
     };
+    actionKeys: any;
     actions: {
         firstAction: (name: string) => ({
             type: \\"first action (logic)\\";
@@ -31,10 +33,16 @@ exports[`connect actions and rename 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
+    reducerOptions: any;
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
@@ -45,6 +53,7 @@ exports[`connect actions and rename 1`] = `
 
 exports[`connect actions from another logic 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -59,6 +68,7 @@ exports[`connect actions from another logic 1`] = `
             };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -74,10 +84,16 @@ exports[`connect actions from another logic 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
+    reducerOptions: any;
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
@@ -88,6 +104,7 @@ exports[`connect actions from another logic 1`] = `
 
 exports[`connect actions from multiple other logics 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -102,6 +119,7 @@ exports[`connect actions from multiple other logics 1`] = `
             };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -117,10 +135,16 @@ exports[`connect actions from multiple other logics 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
+    reducerOptions: any;
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
@@ -131,13 +155,21 @@ exports[`connect actions from multiple other logics 1`] = `
 
 exports[`connect props from another logic 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {};
+    actionKeys: any;
     actions: {};
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
+    reducerOptions: any;
     reducers: {};
     selector: (state: any) => {};
     selectors: {
@@ -154,13 +186,21 @@ exports[`connect props from another logic 1`] = `
 
 exports[`connect values and rename 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {};
+    actionKeys: any;
     actions: {};
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
+    reducerOptions: any;
     reducers: {};
     selector: (state: any) => {};
     selectors: {
@@ -177,13 +217,21 @@ exports[`connect values and rename 1`] = `
 
 exports[`connect values from another logic 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {};
+    actionKeys: any;
     actions: {};
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {};
+    reducerOptions: any;
     reducers: {};
     selector: (state: any) => {};
     selectors: {

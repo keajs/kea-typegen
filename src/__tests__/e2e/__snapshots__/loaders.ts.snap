@@ -2,6 +2,7 @@
 
 exports[`loaders - with a function 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -24,6 +25,7 @@ exports[`loaders - with a function 1`] = `
             };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -47,13 +49,19 @@ exports[`loaders - with a function 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         sessions: Session[];
         sessionsLoading: boolean;
     };
+    reducerOptions: any;
     reducers: {
         sessions: (state: Session[], action: any, fullState: any) => Session[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
@@ -76,6 +84,7 @@ exports[`loaders - with a function 1`] = `
 
 exports[`loaders - with an array and default 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -98,6 +107,7 @@ exports[`loaders - with an array and default 1`] = `
             };
         });
     };
+    actionKeys: any;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -121,13 +131,19 @@ exports[`loaders - with an array and default 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         sessions: Session[];
         sessionsLoading: boolean;
     };
+    reducerOptions: any;
     reducers: {
         sessions: (state: Session[], action: any, fullState: any) => Session[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
@@ -150,6 +166,7 @@ exports[`loaders - with an array and default 1`] = `
 
 exports[`loaders - with no param 1`] = `
 "export interface logicType {
+    key: any;
     actionCreators: {
         loadSessions: () => ({
             type: \\"load sessions (logic)\\";
@@ -184,6 +201,7 @@ exports[`loaders - with no param 1`] = `
             };
         });
     };
+    actionKeys: any;
     actions: {
         loadSessions: () => ({
             type: \\"load sessions (logic)\\";
@@ -219,13 +237,19 @@ exports[`loaders - with no param 1`] = `
         });
     };
     cache: Record<string, any>;
+    connections: any;
+    constants: any;
+    defaults: any;
+    events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
+    propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
         sessions: string[];
         sessionsLoading: boolean;
     };
+    reducerOptions: any;
     reducers: {
         sessions: (state: string[], action: any, fullState: any) => string[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
