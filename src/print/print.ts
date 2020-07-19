@@ -51,7 +51,9 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
         }
     })
 
-    log('')
+    if (filesToWrite > 0 || (appOptions.verbose && Object.keys(groupedByFile).length > 0)) {
+        log('')
+    }
 
     if (writtenFiles === 0) {
         log(`-> Nothing was written to disk`)

@@ -9,11 +9,12 @@ import { AppOptions } from '../types'
 
 // NB! Sync this with the AppOptions type
 const parser = yargs
-    .usage('Use one of:\n - kea-typegen -f logic.ts\n - kea-typegen -c tsconfig.json')
-    .option('file', { alias: 'f', describe: 'Logic file', type: 'string' })
+    .usage('Use one of:\n - kea-typegen   # no arguments, searches for tsconfig.json \n - kea-typegen -c tsconfig.json\n - kea-typegen -f logic.ts')
+    .option('file', { alias: 'f', describe: 'Logic file to evaluate (without tsconfig.json)', type: 'string' })
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json', type: 'string' })
-    .option('quiet', { alias: 'q', describe: 'Product no output', type: 'string' })
-    .option('write', { alias: 'W', describe: 'Write logic.type.ts files', type: 'string' })
+    .option('quiet', { alias: 'q', describe: 'Produce no output', type: 'boolean' })
+    .option('verbose', { describe: 'Produce a bit more output', type: 'boolean' })
+    .option('write', { alias: 'W', describe: 'Write logic.type.ts files', type: 'boolean' })
     .option('path', {
         alias: 'p',
         describe: 'Start logic path autogeneration from here. E.g: ./frontend/src',
@@ -22,7 +23,7 @@ const parser = yargs
     .option('watch', {
         alias: 'w',
         describe: 'Watch for changes (NB! Only works with tsconfig.json files!)',
-        type: 'string',
+        type: 'boolean',
     })
 // Read the NB above
 
@@ -34,10 +35,11 @@ const appOptions = {
     logicStartPath: parsedOptions.path,
     tsConfigPath: parsedOptions.cofig,
     sourceFilePath: parsedOptions.file,
-    write: typeof parsedOptions.write !== 'undefined',
-    watch: typeof parsedOptions.watch !== 'undefined',
-    quiet: typeof parsedOptions.quiet !== 'undefined',
-    log: typeof parsedOptions.quiet !== 'undefined' ? () => null : console.log.bind(console)
+    write: parsedOptions.write,
+    watch: parsedOptions.watch,
+    quiet: parsedOptions.quiet,
+    verbose: parsedOptions.verbose,
+    log: parsedOptions.quiet ? () => null : console.log.bind(console)
 } as AppOptions
 
 const { log } = appOptions
@@ -122,7 +124,9 @@ if (appOptions.sourceFilePath) {
 
 function goThroughAllTheFiles(program, appOptions) {
     const parsedLogics = visitProgram(program, appOptions)
-    log('')
+    if (appOptions?.verbose) {
+        log('')
+    }
     log(`## ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
     log('')
 
