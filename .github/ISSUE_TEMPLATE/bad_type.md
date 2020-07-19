@@ -5,6 +5,12 @@ title: ''
 labels: typegen
 ---
 
+## Environment
+
+- `kea-typegen` version:
+- `kea` version:
+- `typescript` version:
+
 ## This logic:
 
 ```typescript

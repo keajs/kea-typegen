@@ -21,7 +21,9 @@ labels: bug
 
 ### Environment
 
-- Relevant software and versions
+- `kea-typegen` version:
+- `kea` version:
+- `typescript` version:
 
 
 ### Additional context
