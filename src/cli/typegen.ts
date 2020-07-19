@@ -12,6 +12,7 @@ const parser = yargs
     .usage('Use one of:\n - kea-typegen -f logic.ts\n - kea-typegen -c tsconfig.json')
     .option('file', { alias: 'f', describe: 'Logic file', type: 'string' })
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json', type: 'string' })
+    .option('quiet', { alias: 'q', describe: 'Product no output', type: 'string' })
     .option('write', { alias: 'W', describe: 'Write logic.type.ts files', type: 'string' })
     .option('path', {
         alias: 'p',
@@ -35,10 +36,14 @@ const appOptions = {
     sourceFilePath: parsedOptions.file,
     write: typeof parsedOptions.write !== 'undefined',
     watch: typeof parsedOptions.watch !== 'undefined',
+    quiet: typeof parsedOptions.quiet !== 'undefined',
+    log: typeof parsedOptions.quiet !== 'undefined' ? () => null : console.log.bind(console)
 } as AppOptions
 
+const { log } = appOptions
+
 if (appOptions.sourceFilePath) {
-    console.log(`Loading file: ${appOptions.sourceFilePath}`)
+    log(`Loading file: ${appOptions.sourceFilePath}`)
     program = ts.createProgram([appOptions.sourceFilePath as string], {
         target: ts.ScriptTarget.ES5,
         module: ts.ModuleKind.CommonJS,
@@ -48,8 +53,8 @@ if (appOptions.sourceFilePath) {
     const configFileName = (appOptions.tsConfigPath || ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
 
     if (configFileName) {
-        console.log(`Using Config: ${configFileName}`)
-        console.log('')
+        log(`Using Config: ${configFileName}`)
+        log('')
 
         const configFile = ts.readJsonConfigFile(configFileName as string, ts.sys.readFile)
         const rootFolder = path.resolve(configFileName.replace(/tsconfig\.json$/, ''))
@@ -116,12 +121,12 @@ if (appOptions.sourceFilePath) {
 }
 
 function goThroughAllTheFiles(program, appOptions) {
-    const parsedLogics = visitProgram(program, true)
-    console.log('')
-    console.log(`## ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
-    console.log('')
+    const parsedLogics = visitProgram(program, appOptions)
+    log('')
+    log(`## ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
+    log('')
 
-    printToFiles(appOptions, parsedLogics, true)
+    printToFiles(appOptions, parsedLogics)
 }
 
 if (program) {

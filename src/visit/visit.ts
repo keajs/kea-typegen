@@ -1,21 +1,22 @@
 import * as ts from 'typescript'
 import * as path from 'path'
-import { ParsedLogic } from '../types'
+import { AppOptions, ParsedLogic } from '../types'
 import { isKeaCall } from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
 import { visitLoaders } from './visitLoaders'
-import {visitConnect} from "./visitConnect";
+import { visitConnect } from './visitConnect'
 
-export function visitProgram(program: ts.Program, verbose: boolean = false): ParsedLogic[] {
+export function visitProgram(program: ts.Program, appOptions?: AppOptions): ParsedLogic[] {
+    const { log } = appOptions
     const checker = program.getTypeChecker()
     const parsedLogics: ParsedLogic[] = []
 
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('.type.ts')) {
-            if (verbose) {
-                console.log(`-> Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
+            if (appOptions?.verbose) {
+                log(`-> Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
             }
             ts.forEachChild(sourceFile, createVisit(checker, parsedLogics, sourceFile))
         }

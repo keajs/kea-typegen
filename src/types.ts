@@ -33,4 +33,8 @@ export interface AppOptions {
     logicStartPath?: string
     write?: boolean
     watch?: boolean
+    quiet?: boolean
+    verbose?: boolean
+
+    log: (message: string) => void
 }

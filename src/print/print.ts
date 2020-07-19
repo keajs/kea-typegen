@@ -10,7 +10,9 @@ import { printSelectors } from './printSelectors'
 import { printValues } from './printValues'
 import { printSelectorTypeHelp } from './printSelectorTypeHelp'
 
-export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[], verbose: boolean = false) {
+export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]) {
+    const { log } = appOptions
+
     const groupedByFile: Record<string, ParsedLogic[]> = {}
     parsedLogics.forEach((parsedLogic) => {
         if (!groupedByFile[parsedLogic.fileName]) {
@@ -38,26 +40,26 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
             if (appOptions.write) {
                 fs.writeFileSync(fileName, finalOutput)
                 writtenFiles += 1
-                console.log(`!! Writing: ${path.relative(process.cwd(), fileName)}`)
+                log(`!! Writing: ${path.relative(process.cwd(), fileName)}`)
             } else {
-                console.log(`:${smiles[i++ % smiles.length]} Would write: ${path.relative(process.cwd(), fileName)}`)
+                log(`:${smiles[i++ % smiles.length]} Would write: ${path.relative(process.cwd(), fileName)}`)
             }
         } else {
-            if (verbose) {
-                console.log(`-- Unchanged: ${path.relative(process.cwd(), fileName)}`)
+            if (appOptions.verbose) {
+                log(`-- Unchanged: ${path.relative(process.cwd(), fileName)}`)
             }
         }
     })
 
-    console.log('')
+    log('')
 
     if (writtenFiles === 0) {
-        console.log(`-> Nothing was written to disk`)
+        log(`-> Nothing was written to disk`)
         if (filesToWrite > 0) {
-            console.log(`-> Run with "--write" to save types to disk!`)
+            log(`-> Run with "--write" to save types to disk!`)
         }
     } else if (writtenFiles > 0) {
-        console.log(`!> Wrote ${writtenFiles} file${writtenFiles === 1 ? '' : 's'}!`)
+        log(`!> Wrote ${writtenFiles} file${writtenFiles === 1 ? '' : 's'}!`)
     }
 }
 
