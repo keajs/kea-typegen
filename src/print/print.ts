@@ -76,8 +76,14 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
 
     const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
 
+    let cwd = process.cwd()
+
+    if (appOptions?.logicStartPath) {
+        cwd = path.resolve(cwd, appOptions.logicStartPath)
+    }
+
     const pathString = path
-        .relative(process.cwd(), parsedLogic.fileName)
+        .relative(cwd, parsedLogic.fileName)
         .replace(/^.\//, '')
         .replace(/\.[jt]sx?$/, '')
         .replace(/\//g, '.')
