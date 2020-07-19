@@ -1,6 +1,6 @@
 ---
-name: Bad Type Generation
-about: `kea-typegen` generated an incorrect type. Please fix!
+name: Bad Generated Type
+about: kea-typegen generated an incorrect type. Please fix!
 title: ''
 labels: typegen
 
