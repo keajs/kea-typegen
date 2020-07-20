@@ -1,17 +1,19 @@
 {
-  "compilerOptions": {
-    "module": "commonjs",
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "target": "esnext",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "baseUrl": ".",
-    "incremental": true,
-    "types": [],
-    "resolveJsonModule": true
-  },
-  "exclude": ['dist']
+    "compilerOptions": {
+        "module": "commonjs",
+        "declaration": true,
+        "removeComments": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "target": "esnext",
+        "sourceMap": true,
+        "outDir": "./dist",
+        "baseUrl": ".",
+        "incremental": true,
+        "types": [],
+        "resolveJsonModule": true,
+        "jsx": "react",
+        "strict": true
+    },
+    "exclude": []
 }

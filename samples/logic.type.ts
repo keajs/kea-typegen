@@ -11,9 +11,9 @@ export interface logicType<Session> {
             type: "update number (samples.logic)";
             payload: { number: number; };
         });
-        loadSessions: (selectedDate: any) => ({
+        loadSessions: (selectedDate: string) => ({
             type: "load sessions (samples.logic)";
-            payload: any;
+            payload: string;
         });
         loadSessionsSuccess: (sessions: Session[]) => ({
             type: "load sessions success (samples.logic)";
@@ -28,7 +28,8 @@ export interface logicType<Session> {
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: "update name (samples.logic)";
@@ -38,9 +39,9 @@ export interface logicType<Session> {
             type: "update number (samples.logic)";
             payload: { number: number; };
         });
-        loadSessions: (selectedDate: any) => ({
+        loadSessions: (selectedDate: string) => ({
             type: "load sessions (samples.logic)";
-            payload: any;
+            payload: string;
         });
         loadSessionsSuccess: (sessions: Session[]) => ({
             type: "load sessions success (samples.logic)";

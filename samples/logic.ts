@@ -1,4 +1,4 @@
-import { kea } from '../kea/kea'
+import { kea, useValues } from 'kea'
 import { logicType } from './logic.type'
 
 interface Session {
@@ -62,10 +62,14 @@ export const logic = kea<logicType<Session>>({
     loaders: ({ actions }) => ({
         sessions: {
             __default: [] as Session[],
-            loadSessions: async (selectedDate): Promise<Session[]> => {
+            loadSessions: async (selectedDate: string): Promise<Session[]> => {
                 const response = { user: 3, type: 'bla' }
                 return [response]
             },
         },
     }),
 })
+
+function MyComponent() {
+    const {} = useValues(logic)
+}
