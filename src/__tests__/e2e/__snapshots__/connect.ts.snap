@@ -17,7 +17,8 @@ exports[`connect actions and rename 1`] = `
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         firstAction: (name: string) => ({
             type: \\"first action (logic)\\";
@@ -68,7 +69,8 @@ exports[`connect actions from another logic 1`] = `
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -119,7 +121,8 @@ exports[`connect actions from multiple other logics 1`] = `
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -157,7 +160,8 @@ exports[`connect props from another logic 1`] = `
 "export interface logicType {
     key: any;
     actionCreators: {};
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {};
     cache: Record<string, any>;
     connections: any;
@@ -188,7 +192,8 @@ exports[`connect values and rename 1`] = `
 "export interface logicType {
     key: any;
     actionCreators: {};
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {};
     cache: Record<string, any>;
     connections: any;
@@ -219,7 +224,8 @@ exports[`connect values from another logic 1`] = `
 "export interface logicType {
     key: any;
     actionCreators: {};
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {};
     cache: Record<string, any>;
     connections: any;

@@ -25,7 +25,8 @@ exports[`loaders - with a function 1`] = `
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -107,7 +108,8 @@ exports[`loaders - with an array and default 1`] = `
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -201,7 +203,8 @@ exports[`loaders - with no param 1`] = `
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         loadSessions: () => ({
             type: \\"load sessions (logic)\\";

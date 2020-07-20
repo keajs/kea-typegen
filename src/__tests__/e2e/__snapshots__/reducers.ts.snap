@@ -13,7 +13,8 @@ exports[`reducers - as a function returning a object 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -76,7 +77,8 @@ exports[`reducers - as an object 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -139,7 +141,8 @@ exports[`reducers - with a function 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -200,7 +203,8 @@ exports[`reducers - with bool default 1`] = `
             };
         });
     };
-    actionKeys: any;
+    actionKeys: Record<string, any>;
+    actionTypes: Record<string, any>;
     actions: {
         updateName: () => ({
             type: \\"update name (logic)\\";
