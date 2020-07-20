@@ -33,7 +33,7 @@ let program
 
 const appOptions = {
     logicStartPath: parsedOptions.path,
-    tsConfigPath: parsedOptions.cofig,
+    tsConfigPath: parsedOptions.config,
     sourceFilePath: parsedOptions.file,
     write: parsedOptions.write,
     watch: parsedOptions.watch,
