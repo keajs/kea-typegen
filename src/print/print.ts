@@ -103,7 +103,21 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty('key', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             printProperty('actionCreators', printActions(parsedLogic, appOptions)),
             // TODO
-            printProperty('actionKeys', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+            printProperty(
+                'actionKeys',
+                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
+                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                ]),
+            ),
+            // TODO
+            printProperty(
+                'actionTypes',
+                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
+                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                ]),
+            ),
             printProperty('actions', printActions(parsedLogic, appOptions)),
             printProperty(
                 'cache',
