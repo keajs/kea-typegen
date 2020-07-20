@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { kea, useActions, useValues } from 'kea'
-import { logicType } from './github.type'
+import { githubLogicType } from './github.type'
 
 const API_URL = 'https://api.github.com'
 
@@ -12,7 +12,7 @@ type Repository = {
     forks: number
 }
 
-const logic = kea<logicType<Repository>>({
+const githubLogic = kea<githubLogicType<Repository>>({
     actions: {
         setUsername: (username: string) => ({ username }),
         setRepositories: (repositories: Repository[]) => ({ repositories }),
@@ -95,8 +95,8 @@ const logic = kea<logicType<Repository>>({
 })
 
 function Github() {
-    const { username, isLoading, sortedRepositories, error } = useValues(logic)
-    const { setUsername } = useActions(logic)
+    const { username, isLoading, sortedRepositories, error } = useValues(githubLogic)
+    const { setUsername } = useActions(githubLogic)
 
     return (
         <div className="example-github-scene">

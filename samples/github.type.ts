@@ -1,6 +1,6 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-export interface logicType<Repository> {
+export interface githubLogicType<Repository> {
     key: any;
     actionCreators: {
         setUsername: (username: string) => ({
