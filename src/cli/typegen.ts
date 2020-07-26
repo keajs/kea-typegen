@@ -8,28 +8,42 @@ import { printToFiles } from '../print/print'
 import { AppOptions } from '../types'
 
 const parser = yargs
-    .command('check', '- check what should be done', (yargs) => {}, (argv) => {
-        runCLI({ ...parsedToAppOptions(argv), write: false, watch: false })
-    })
-    .command('write', '- write logic.type.ts files', (yargs) => {}, (argv) => {
-        runCLI({ ...parsedToAppOptions(argv), write: true, watch: false })
-    })
-    .command('watch', '- watch for changes and write logic.type.ts files', (yargs) => {}, (argv) => {
-        runCLI({ ...parsedToAppOptions(argv), write: true, watch: true })
-    })
+    .command(
+        'check',
+        '- check what should be done',
+        (yargs) => {},
+        (argv) => {
+            runCLI({ ...parsedToAppOptions(argv), write: false, watch: false })
+        },
+    )
+    .command(
+        'write',
+        '- write logic.type.ts files',
+        (yargs) => {},
+        (argv) => {
+            runCLI({ ...parsedToAppOptions(argv), write: true, watch: false })
+        },
+    )
+    .command(
+        'watch',
+        '- watch for changes and write logic.type.ts files',
+        (yargs) => {},
+        (argv) => {
+            runCLI({ ...parsedToAppOptions(argv), write: true, watch: true })
+        },
+    )
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json (otherwise auto-detected)', type: 'string' })
-    .option('file', { alias: 'f', describe: 'Single file to evaluate (can\'t be used with --config)', type: 'string' })
-    .option('quiet', { alias: 'q', describe: 'Produce no output', type: 'boolean' })
-    .option('verbose', { describe: 'Produce a bit more output', type: 'boolean' })
+    .option('file', { alias: 'f', describe: "Single file to evaluate (can't be used with --config)", type: 'string' })
     .option('path', {
         alias: 'p',
-        describe: 'Start paths from this folder. E.g: ./frontend/src',
+        describe: 'Root for logic paths. E.g: ./frontend/src',
         type: 'string',
     })
+    .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
+    .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()
-    .wrap(80)
-    .argv
+    .wrap(80).argv
 
 function parsedToAppOptions(parsedOptions) {
     const appOptions = {
@@ -38,7 +52,7 @@ function parsedToAppOptions(parsedOptions) {
         sourceFilePath: parsedOptions.file,
         quiet: parsedOptions.quiet,
         verbose: parsedOptions.verbose,
-        log: parsedOptions.quiet ? () => null : console.log.bind(console)
+        log: parsedOptions.quiet ? () => null : console.log.bind(console),
     } as AppOptions
 
     return appOptions
@@ -47,7 +61,7 @@ function parsedToAppOptions(parsedOptions) {
 function runCLI(appOptions: AppOptions) {
     let program
 
-    const {log} = appOptions
+    const { log } = appOptions
 
     if (appOptions.sourceFilePath) {
         log(`Loading file: ${appOptions.sourceFilePath}`)
@@ -57,7 +71,8 @@ function runCLI(appOptions: AppOptions) {
             noEmit: true,
         })
     } else {
-        const configFileName = (appOptions.tsConfigPath || ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
+        const configFileName = (appOptions.tsConfigPath ||
+            ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
 
         if (configFileName) {
             log(`Using Config: ${configFileName}`)
