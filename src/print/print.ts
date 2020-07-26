@@ -56,12 +56,13 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
     }
 
     if (writtenFiles === 0) {
-        log(`-> Nothing was written to disk`)
-        if (filesToWrite > 0) {
+        if (appOptions.write) {
+            log(`-> No changes in logic.type.ts files needed`)
+        } else if (filesToWrite > 0) {
             log(`-> Run with "--write" to save types to disk!`)
         }
     } else if (writtenFiles > 0) {
-        log(`!> Wrote ${writtenFiles} file${writtenFiles === 1 ? '' : 's'}!`)
+        log(`-> Wrote ${writtenFiles} file${writtenFiles === 1 ? '' : 's'}!`)
     }
 }
 
