@@ -1,5 +1,5 @@
 import { kea, useValues } from 'kea'
-import { logicType } from './logic.type'
+import { logicType } from './logicType'
 
 interface Session {
     user: number

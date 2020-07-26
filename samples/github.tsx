@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { kea, useActions, useValues } from 'kea'
-import { githubLogicType } from './github.type'
+import { githubLogicType } from './githubType'
 
 const API_URL = 'https://api.github.com'
 

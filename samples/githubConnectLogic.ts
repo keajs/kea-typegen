@@ -1,15 +1,15 @@
 import { kea } from 'kea'
 
 import { githubLogic, Repository } from './github'
-import { githubConnectLogicType } from './githubConnectLogic.type'
+import { githubConnectLogicType } from './githubConnectLogicType'
 
 export const githubConnectLogic = kea<githubConnectLogicType<Repository>>({
     connect: {
         values: [
-            githubLogic, ['repositories']
+            githubLogic, ['repositories', 'this-one-does-not-exist']
         ],
         actions: [
-            githubLogic, ['setRepositories']
+            githubLogic, ['setRepositories', 'will-not-be-imported']
         ]
     }
 })
