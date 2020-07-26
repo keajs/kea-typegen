@@ -2,6 +2,10 @@
 
 Automatically generate types for `kea()` calls.
 
+## Samples
+
+See [the samples folder](https://github.com/keajs/kea-typegen/tree/master/samples) in this repository.
+
 ## Installation
 
 Install globally:
