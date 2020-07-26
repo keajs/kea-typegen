@@ -9,6 +9,8 @@ import { printSelector } from './printSelector'
 import { printSelectors } from './printSelectors'
 import { printValues } from './printValues'
 import { printSelectorTypeHelp } from './printSelectorTypeHelp'
+import {printActionKeys} from "./printActionKeys";
+import {printActionTypes} from "./printActionTypes";
 
 export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]) {
     const { log } = appOptions
@@ -103,22 +105,8 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             // TODO
             printProperty('key', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             printProperty('actionCreators', printActions(parsedLogic, appOptions)),
-            // TODO
-            printProperty(
-                'actionKeys',
-                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                ]),
-            ),
-            // TODO
-            printProperty(
-                'actionTypes',
-                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                ]),
-            ),
+            printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
+            printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
             printProperty('actions', printActions(parsedLogic, appOptions)),
             printProperty(
                 'cache',

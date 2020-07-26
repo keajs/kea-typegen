@@ -28,8 +28,20 @@ export interface logicType<Session> {
             };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        "update name (samples.logic)": "updateName";
+        "update number (samples.logic)": "updateNumber";
+        "load sessions (samples.logic)": "loadSessions";
+        "load sessions success (samples.logic)": "loadSessionsSuccess";
+        "load sessions failure (samples.logic)": "loadSessionsFailure";
+    };
+    actionTypes: {
+        updateName: "update name (samples.logic)";
+        updateNumber: "update number (samples.logic)";
+        loadSessions: "load sessions (samples.logic)";
+        loadSessionsSuccess: "load sessions success (samples.logic)";
+        loadSessionsFailure: "load sessions failure (samples.logic)";
+    };
     actions: {
         updateName: (name: string) => ({
             type: "update name (samples.logic)";

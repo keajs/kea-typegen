@@ -16,8 +16,16 @@ export interface githubLogicType<Repository> {
             payload: { error: string; };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        "set username (samples.github)": "setUsername";
+        "set repositories (samples.github)": "setRepositories";
+        "set fetch error (samples.github)": "setFetchError";
+    };
+    actionTypes: {
+        setUsername: "set username (samples.github)";
+        setRepositories: "set repositories (samples.github)";
+        setFetchError: "set fetch error (samples.github)";
+    };
     actions: {
         setUsername: (username: string) => ({
             type: "set username (samples.github)";

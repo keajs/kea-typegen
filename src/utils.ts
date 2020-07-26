@@ -1,7 +1,8 @@
 import * as ts from 'typescript'
+import * as path from 'path'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
-import { AppOptions } from './types'
+import { AppOptions, ParsedLogic } from './types'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -83,4 +84,28 @@ export function getParameterDeclaration(param: ts.ParameterDeclaration) {
         param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
         undefined,
     )
+}
+
+export function getPathName(cwd: string, parsedLogic: ParsedLogic) {
+    const pathName = path
+        .relative(cwd, parsedLogic.fileName)
+        .replace(/^.\//, '')
+        .replace(/\.[jt]sx?$/, '')
+        .replace(/\//g, '.')
+    return pathName
+}
+
+export const toSpaces = (key) => key.replace(/(?:^|\.?)([A-Z])/g, (x, y) => ' ' + y.toLowerCase()).replace(/^ /, '')
+
+export function getActionTypeCreator(appOptions: AppOptions, parsedLogic: ParsedLogic) {
+    return function (actionName) {
+        let cwd = process.cwd()
+
+        if (appOptions?.logicStartPath) {
+            cwd = path.resolve(cwd, appOptions.logicStartPath)
+        }
+        const pathName = getPathName(cwd, parsedLogic)
+
+        return `${toSpaces(actionName)} (${pathName})`
+    }
 }

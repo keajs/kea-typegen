@@ -1,21 +1,9 @@
-import {AppOptions, ParsedLogic} from '../types'
 import * as ts from 'typescript'
-import * as path from 'path'
+import { AppOptions, ParsedLogic } from '../types'
+import { getActionTypeCreator } from '../utils'
 
 export function printActions(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
-    let cwd = process.cwd()
-
-    if (appOptions?.logicStartPath) {
-        cwd = path.resolve(cwd, appOptions.logicStartPath)
-    }
-
-    const pathName = path
-        .relative(cwd, parsedLogic.fileName)
-        .replace(/^.\//, '')
-        .replace(/\.[jt]sx?$/, '')
-        .replace(/\//g, '.')
-
-    const toSpaces = (key) => key.replace(/(?:^|\.?)([A-Z])/g, (x, y) => ' ' + y.toLowerCase()).replace(/^ /, '')
+    const getActionType = getActionTypeCreator(appOptions, parsedLogic)
 
     return ts.createTypeLiteralNode(
         parsedLogic.actions.map(({ name, parameters, returnTypeNode }) => {
@@ -32,7 +20,7 @@ export function printActions(parsedLogic: ParsedLogic, appOptions?: AppOptions) 
                                 undefined,
                                 ts.createIdentifier('type'),
                                 undefined,
-                                ts.createLiteralTypeNode(ts.createStringLiteral(`${toSpaces(name)} (${pathName})`)),
+                                ts.createLiteralTypeNode(ts.createStringLiteral(getActionType(name))),
                                 undefined,
                             ),
                             ts.createPropertySignature(
