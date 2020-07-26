@@ -28,7 +28,7 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
 
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
         const output = parsedLogics.map((l) => parsedLogicToTypeString(l, appOptions)).join('\n\n')
-        fileName = fileName.replace(/\.[tj]sx?$/, '.type.ts')
+        fileName = fileName.replace(/\.[tj]sx?$/, 'Type.ts')
         const finalOutput = `// Auto-generated with kea-typegen. DO NOT EDIT!\n\n${output}`
 
         let existingOutput
@@ -59,7 +59,7 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
 
     if (writtenFiles === 0) {
         if (appOptions.write) {
-            log(`-> No changes in logic.type.ts files needed`)
+            log(`-> No changes in logicType.ts files needed`)
         } else if (filesToWrite > 0) {
             log(`-> Run with "--write" to save types to disk!`)
         }

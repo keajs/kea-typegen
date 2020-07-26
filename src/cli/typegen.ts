@@ -18,7 +18,7 @@ const parser = yargs
     )
     .command(
         'write',
-        '- write logic.type.ts files',
+        '- write logicType.ts files',
         (yargs) => {},
         (argv) => {
             runCLI({ ...parsedToAppOptions(argv), write: true, watch: false })
@@ -26,7 +26,7 @@ const parser = yargs
     )
     .command(
         'watch',
-        '- watch for changes and write logic.type.ts files',
+        '- watch for changes and write logicType.ts files',
         (yargs) => {},
         (argv) => {
             runCLI({ ...parsedToAppOptions(argv), write: true, watch: true })

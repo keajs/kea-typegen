@@ -31,8 +31,8 @@ kea-typegen <command>
 
 Commands:
   typegen.ts check  - check what should be done
-  typegen.ts write  - write logic.type.ts files
-  typegen.ts watch  - watch for changes and write logic.type.ts files
+  typegen.ts write  - write logicType.ts files
+  typegen.ts watch  - watch for changes and write logicType.ts files
 
 Options:
   --version     Show version number                                    [boolean]

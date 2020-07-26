@@ -13,7 +13,7 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
     const parsedLogics: ParsedLogic[] = []
 
     for (const sourceFile of program.getSourceFiles()) {
-        if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('.type.ts')) {
+        if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
             if (appOptions?.verbose) {
                 appOptions.log(`-> Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
             }
