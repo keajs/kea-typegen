@@ -25,8 +25,18 @@ exports[`loaders - with a function 1`] = `
             };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"load sessions (logic)\\": \\"loadSessions\\";
+        \\"load sessions success (logic)\\": \\"loadSessionsSuccess\\";
+        \\"load sessions failure (logic)\\": \\"loadSessionsFailure\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        loadSessions: \\"load sessions (logic)\\";
+        loadSessionsSuccess: \\"load sessions success (logic)\\";
+        loadSessionsFailure: \\"load sessions failure (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -108,8 +118,18 @@ exports[`loaders - with an array and default 1`] = `
             };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"load sessions (logic)\\": \\"loadSessions\\";
+        \\"load sessions success (logic)\\": \\"loadSessionsSuccess\\";
+        \\"load sessions failure (logic)\\": \\"loadSessionsFailure\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        loadSessions: \\"load sessions (logic)\\";
+        loadSessionsSuccess: \\"load sessions success (logic)\\";
+        loadSessionsFailure: \\"load sessions failure (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -203,8 +223,22 @@ exports[`loaders - with no param 1`] = `
             };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"load sessions (logic)\\": \\"loadSessions\\";
+        \\"load sessions success (logic)\\": \\"loadSessionsSuccess\\";
+        \\"load sessions failure (logic)\\": \\"loadSessionsFailure\\";
+        \\"load results (logic)\\": \\"loadResults\\";
+        \\"load results success (logic)\\": \\"loadResultsSuccess\\";
+        \\"load results failure (logic)\\": \\"loadResultsFailure\\";
+    };
+    actionTypes: {
+        loadSessions: \\"load sessions (logic)\\";
+        loadSessionsSuccess: \\"load sessions success (logic)\\";
+        loadSessionsFailure: \\"load sessions failure (logic)\\";
+        loadResults: \\"load results (logic)\\";
+        loadResultsSuccess: \\"load results success (logic)\\";
+        loadResultsFailure: \\"load results failure (logic)\\";
+    };
     actions: {
         loadSessions: () => ({
             type: \\"load sessions (logic)\\";

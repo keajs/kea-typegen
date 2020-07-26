@@ -13,8 +13,14 @@ exports[`reducers - as a function returning a object 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"update other name (logic)\\": \\"updateOtherName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        updateOtherName: \\"update other name (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -77,8 +83,14 @@ exports[`reducers - as an object 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"update other name (logic)\\": \\"updateOtherName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        updateOtherName: \\"update other name (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -141,8 +153,14 @@ exports[`reducers - with a function 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"update other name (logic)\\": \\"updateOtherName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        updateOtherName: \\"update other name (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -203,8 +221,12 @@ exports[`reducers - with bool default 1`] = `
             };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+    };
     actions: {
         updateName: () => ({
             type: \\"update name (logic)\\";

@@ -13,8 +13,14 @@ exports[`actions - as a function returning a object 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"update other name (logic)\\": \\"updateOtherName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        updateOtherName: \\"update other name (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -57,8 +63,14 @@ exports[`actions - as an object 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"update other name (logic)\\": \\"updateOtherName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        updateOtherName: \\"update other name (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -101,8 +113,14 @@ exports[`actions - with a function 1`] = `
             payload: { otherName: string; };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"update other name (logic)\\": \\"updateOtherName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        updateOtherName: \\"update other name (logic)\\";
+    };
     actions: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -161,8 +179,20 @@ exports[`actions - with random values instead of functions 1`] = `
             };
         });
     };
-    actionKeys: Record<string, any>;
-    actionTypes: Record<string, any>;
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+        \\"with default value (logic)\\": \\"withDefaultValue\\";
+        \\"with default value and type (logic)\\": \\"withDefaultValueAndType\\";
+        \\"with bool (logic)\\": \\"withBool\\";
+        \\"with random payload (logic)\\": \\"withRandomPayload\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+        withDefaultValue: \\"with default value (logic)\\";
+        withDefaultValueAndType: \\"with default value and type (logic)\\";
+        withBool: \\"with bool (logic)\\";
+        withRandomPayload: \\"with random payload (logic)\\";
+    };
     actions: {
         updateName: (name?: string) => ({
             type: \\"update name (logic)\\";

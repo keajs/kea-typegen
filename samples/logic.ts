@@ -13,13 +13,13 @@ export const logic = kea<logicType<Session>>({
         updateName: (name: string) => ({ name }),
         updateNumber: (number: number) => ({ number }),
     }),
-    reducers: ({ actions }) => {
+    reducers: ({ actionTypes }) => {
         return {
             name: [
                 'birdname',
                 {
                     updateName: (_, { name }) => name,
-                    [actions.updateNumber as any]: (state, payload) => payload.name + '',
+                    [actionTypes.updateNumber]: (state, payload) => payload.name + '',
                 },
             ],
             number: [
