@@ -109,12 +109,14 @@ function runCLI(appOptions: AppOptions) {
                 }
 
                 function reportDiagnostic(diagnostic: ts.Diagnostic) {
-                    console.error(
-                        'Error',
-                        diagnostic.code,
-                        ':',
-                        ts.flattenDiagnosticMessageText(diagnostic.messageText, formatHost.getNewLine()),
-                    )
+                    if (appOptions.verbose) {
+                        console.error(
+                            'Error',
+                            diagnostic.code,
+                            ':',
+                            ts.flattenDiagnosticMessageText(diagnostic.messageText, formatHost.getNewLine()),
+                        )
+                    }
                 }
 
                 function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
