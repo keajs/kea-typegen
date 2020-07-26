@@ -4,7 +4,7 @@ import { githubLogicType } from './github.type'
 
 const API_URL = 'https://api.github.com'
 
-type Repository = {
+export type Repository = {
     id: number
     stargazers_count: number
     html_url: string
@@ -12,7 +12,7 @@ type Repository = {
     forks: number
 }
 
-const githubLogic = kea<githubLogicType<Repository>>({
+export const githubLogic = kea<githubLogicType<Repository>>({
     actions: {
         setUsername: (username: string) => ({ username }),
         setRepositories: (repositories: Repository[]) => ({ repositories }),

@@ -32,7 +32,9 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                 const otherLogicType = checker.getTypeOfSymbolAtLocation(symbol, logicReference)
 
                 if (loaderName === 'actions') {
-                    const actionsForLogic = (otherLogicType as any).properties?.find((p) => p.escapedName === 'actions')
+                    const actionsForLogic = (
+                        (otherLogicType as any).properties || (otherLogicType as any).resolvedProperties
+                    )?.find((p) => p.escapedName === 'actions')
 
                     if (actionsForLogic) {
                         const actionTypes = actionsForLogic.valueDeclaration.type.members
@@ -43,7 +45,9 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
 
                                 const functionTypeNode = actionType.type
                                 if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
-                                    const parameters = functionTypeNode.parameters.map((param) => getParameterDeclaration(param))
+                                    const parameters = functionTypeNode.parameters.map((param) =>
+                                        getParameterDeclaration(param),
+                                    )
 
                                     let returnType = functionTypeNode.type
 
@@ -69,7 +73,9 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                 }
 
                 if (loaderName === 'values' || loaderName === 'props') {
-                    const selectorsForLogic = (otherLogicType as any).properties?.find((p) => p.escapedName === 'selectors')
+                    const selectorsForLogic = (
+                        (otherLogicType as any).properties || (otherLogicType as any).resolvedProperties
+                    )?.find((p) => p.escapedName === 'selectors')
 
                     if (selectorsForLogic) {
                         const selectorTypes = selectorsForLogic.valueDeclaration.type.members
@@ -89,7 +95,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                                     parsedLogic.selectors.push({
                                         name: lookup[name],
                                         typeNode: returnType,
-                                        functionTypes: []
+                                        functionTypes: [],
                                     })
                                 }
                             }
