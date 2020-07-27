@@ -10,30 +10,34 @@ function extractImportedActions(actionObjects: ts.Expression | ts.ObjectLiteralE
         // actionObjects =  { [githubLogic.actionTypes.setRepositories]: () => ... }
         for (const property of actionObjects.properties) {
             // property.name ==> [githubLogic.actionTypes.setRepositories]
-            if (ts.isComputedPropertyName(property.name) && ts.isPropertyAccessExpression(property.name.expression)) {
-                const { name, expression } = property.name.expression
-                const actionName = name.escapedText
+            if (ts.isComputedPropertyName(property.name)) {
+                let propertyExpression = property.name.expression
 
-                const nameSymbol = checker.getSymbolAtLocation(property.name)
-                const actionType = nameSymbol.escapedName as string
+                if (ts.isPropertyAccessExpression(propertyExpression)) {
+                    const {name, expression} = propertyExpression
+                    const actionName = name.escapedText
 
-                if (ts.isPropertyAccessExpression(expression)) {
-                    // expression.expression ==> githubLogic.actionTypes
-                    // expression.name ==> setRepositories
+                    const nameSymbol = checker.getSymbolAtLocation(property.name)
+                    const actionType = nameSymbol.escapedName as string
 
-                    const symbol = checker.getSymbolAtLocation(expression.expression)
-                    const symbolType = checker.getTypeOfSymbolAtLocation(symbol, expression.expression)
+                    if (ts.isPropertyAccessExpression(expression)) {
+                        // expression.expression ==> githubLogic.actionTypes
+                        // expression.name ==> setRepositories
 
-                    const actionsProperty = symbolType.getProperties().find((p) => p.escapedName === 'actions')
-                    const actions = actionsProperty?.valueDeclaration
+                        const symbol = checker.getSymbolAtLocation(expression.expression)
+                        const symbolType = checker.getTypeOfSymbolAtLocation(symbol, expression.expression)
 
-                    if (actions && ts.isPropertySignature(actions) && ts.isTypeLiteralNode(actions.type)) {
-                        const action = actions.type.members.find(
-                            (m) => (m.name as ts.Identifier)?.escapedText === actionName,
-                        )
+                        const actionsProperty = symbolType.getProperties().find((p) => p.escapedName === 'actions')
+                        const actions = actionsProperty?.valueDeclaration
 
-                        if (ts.isPropertySignature(action) && ts.isFunctionTypeNode(action.type)) {
-                            extraActions[actionType] = cloneNode(action.type) //payload
+                        if (actions && ts.isPropertySignature(actions) && ts.isTypeLiteralNode(actions.type)) {
+                            const action = actions.type.members.find(
+                                (m) => (m.name as ts.Identifier)?.escapedText === actionName,
+                            )
+
+                            if (ts.isPropertySignature(action) && ts.isFunctionTypeNode(action.type)) {
+                                extraActions[actionType] = cloneNode(action.type) //payload
+                            }
                         }
                     }
                 }
