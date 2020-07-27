@@ -123,8 +123,16 @@ export interface logicType<Session> {
         upperCaseName: string;
     };
     _isKea: true;
-    __selectorTypeHelp: {
+    __keaTypeGenInternalSelectorTypes: {
         capitalizedName: (arg1: string, arg2: number) => string;
         upperCaseName: (arg1: string) => string;
+    };
+    __keaTypeGenInternalReducerActions: {
+        "set username (samples.githubLogic)": (username: string) => ({
+            type: "set username (samples.githubLogic)";
+            payload: {
+                username: string;
+            };
+        });
     };
 }

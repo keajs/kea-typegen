@@ -8,9 +8,11 @@ import { printReducer } from './printReducer'
 import { printSelector } from './printSelector'
 import { printSelectors } from './printSelectors'
 import { printValues } from './printValues'
-import { printSelectorTypeHelp } from './printSelectorTypeHelp'
-import {printActionKeys} from "./printActionKeys";
-import {printActionTypes} from "./printActionTypes";
+import { printInternalSelectorTypes } from './printInternalSelectorTypes'
+import { printActionKeys } from './printActionKeys'
+import { printActionTypes } from './printActionTypes'
+import { printInternalReducerActions } from './printInternalReducerActions'
+import { combineExtraActions } from '../utils'
 
 export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]) {
     const { log } = appOptions
@@ -93,6 +95,8 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         .replace(/\.[jt]sx?$/, '')
         .replace(/\//g, '.')
 
+    const extraActions = combineExtraActions(parsedLogic.reducers)
+
     return ts.createInterfaceDeclaration(
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -151,7 +155,12 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty('values', printValues(parsedLogic)),
             printProperty('_isKea', ts.createTrue()),
             // _isKeaWithKey,
-            addSelectorTypeHelp ? printProperty('__selectorTypeHelp', printSelectorTypeHelp(parsedLogic)) : null,
+            addSelectorTypeHelp
+                ? printProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
+                : null,
+            Object.keys(extraActions).length > 0
+                ? printProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
+                : null,
         ].filter((a) => a),
     )
 }

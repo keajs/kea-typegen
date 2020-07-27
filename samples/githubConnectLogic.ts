@@ -1,6 +1,6 @@
 import { kea } from 'kea'
 
-import { githubLogic, Repository } from './github'
+import { githubLogic, Repository } from './githubLogic'
 import { githubConnectLogicType } from './githubConnectLogicType'
 
 export const githubConnectLogic = kea<githubConnectLogicType<Repository>>({

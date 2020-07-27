@@ -2,7 +2,7 @@ import * as ts from 'typescript'
 import * as path from 'path'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
-import { AppOptions, ParsedLogic } from './types'
+import {AppOptions, ParsedLogic, ReducerTransform} from './types'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -108,4 +108,18 @@ export function getActionTypeCreator(appOptions: AppOptions, parsedLogic: Parsed
 
         return `${toSpaces(actionName)} (${pathName})`
     }
+}
+
+export function combineExtraActions(reducers: ReducerTransform[]) {
+    const extraActions: Record<string, ts.TypeNode> = {}
+
+    if (reducers) {
+        reducers.forEach((reducer) => {
+            if (reducer.extraActions) {
+                Object.entries(reducer.extraActions).forEach(([type, payload]) => extraActions[type] = payload)
+            }
+        })
+    }
+
+    return extraActions
 }

@@ -1,5 +1,6 @@
 import { kea, useValues } from 'kea'
 import { logicType } from './logicType'
+import { githubLogic } from './githubLogic'
 
 interface Session {
     user: number
@@ -13,13 +14,13 @@ export const logic = kea<logicType<Session>>({
         updateName: (name: string) => ({ name }),
         updateNumber: (number: number) => ({ number }),
     }),
-    reducers: ({ actionTypes }) => {
+    reducers: () => {
         return {
             name: [
                 'birdname',
                 {
                     updateName: (_, { name }) => name,
-                    [actionTypes.updateNumber]: (state, payload) => payload.name + '',
+                    [githubLogic.actionTypes.setUsername]: (_, { username }) => username + '',
                 },
             ],
             number: [
@@ -59,7 +60,7 @@ export const logic = kea<logicType<Session>>({
             },
         ],
     }),
-    loaders: ({ actions }) => ({
+    loaders: () => ({
         sessions: {
             __default: [] as Session[],
             loadSessions: async (selectedDate: string): Promise<Session[]> => {

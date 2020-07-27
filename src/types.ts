@@ -6,15 +6,17 @@ export interface ActionTransform {
     returnTypeNode: ts.TypeNode
 }
 
-export interface ReducerTransform {
+export interface NameType {
     name: string
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
-export interface SelectorTransform {
-    name: string
-    typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
-    functionTypes: { name: string; type: ts.TypeNode }[]
+export interface ReducerTransform extends NameType {
+    extraActions?: Record<string, ts.TypeNode>
+}
+
+export interface SelectorTransform extends NameType {
+    functionTypes?: { name: string; type: ts.TypeNode }[]
 }
 
 export interface ParsedLogic {

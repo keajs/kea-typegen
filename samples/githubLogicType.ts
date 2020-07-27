@@ -4,39 +4,39 @@ export interface githubLogicType<Repository> {
     key: any;
     actionCreators: {
         setUsername: (username: string) => ({
-            type: "set username (samples.github)";
+            type: "set username (samples.githubLogic)";
             payload: { username: string; };
         });
         setRepositories: (repositories: Repository[]) => ({
-            type: "set repositories (samples.github)";
+            type: "set repositories (samples.githubLogic)";
             payload: { repositories: Repository[]; };
         });
         setFetchError: (error: string) => ({
-            type: "set fetch error (samples.github)";
+            type: "set fetch error (samples.githubLogic)";
             payload: { error: string; };
         });
     };
     actionKeys: {
-        "set username (samples.github)": "setUsername";
-        "set repositories (samples.github)": "setRepositories";
-        "set fetch error (samples.github)": "setFetchError";
+        "set username (samples.githubLogic)": "setUsername";
+        "set repositories (samples.githubLogic)": "setRepositories";
+        "set fetch error (samples.githubLogic)": "setFetchError";
     };
     actionTypes: {
-        setUsername: "set username (samples.github)";
-        setRepositories: "set repositories (samples.github)";
-        setFetchError: "set fetch error (samples.github)";
+        setUsername: "set username (samples.githubLogic)";
+        setRepositories: "set repositories (samples.githubLogic)";
+        setFetchError: "set fetch error (samples.githubLogic)";
     };
     actions: {
         setUsername: (username: string) => ({
-            type: "set username (samples.github)";
+            type: "set username (samples.githubLogic)";
             payload: { username: string; };
         });
         setRepositories: (repositories: Repository[]) => ({
-            type: "set repositories (samples.github)";
+            type: "set repositories (samples.githubLogic)";
             payload: { repositories: Repository[]; };
         });
         setFetchError: (error: string) => ({
-            type: "set fetch error (samples.github)";
+            type: "set fetch error (samples.githubLogic)";
             payload: { error: string; };
         });
     };
@@ -45,8 +45,8 @@ export interface githubLogicType<Repository> {
     constants: any;
     defaults: any;
     events: any;
-    path: ["samples", "github"];
-    pathString: "samples.github";
+    path: ["samples", "githubLogic"];
+    pathString: "samples.githubLogic";
     propTypes: any;
     props: Record<string, any>;
     reducer: (state: any, action: () => any, fullState: any) => {
@@ -83,7 +83,7 @@ export interface githubLogicType<Repository> {
         sortedRepositories: Repository[];
     };
     _isKea: true;
-    __selectorTypeHelp: {
+    __keaTypeGenInternalSelectorTypes: {
         sortedRepositories: (arg1: Repository[]) => Repository[];
     };
 }

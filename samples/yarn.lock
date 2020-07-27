@@ -39,10 +39,10 @@ hoist-non-react-statics@^3.3.0:
   resolved "https://registry.yarnpkg.com/js-tokens/-/js-tokens-4.0.0.tgz#19203fb59991df98e3a287050d4647cdeaf32499"
   integrity sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==
 
-kea@^2.2.0-beta.2:
-  version "2.2.0-beta.2"
-  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-beta.2.tgz#38bc2b2ff5d215ba0b65aeddcd8d551a68a929e1"
-  integrity sha512-5ggnFROuYUq/3869j73Qvp5j1+OdlzEVe3TbcZQlzH4tBzLukjQMqTvR9DLD98ih2tHnbu9nN7Mq/w2HyaHS5A==
+kea@^2.2.0-beta.3:
+  version "2.2.0-beta.3"
+  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-beta.3.tgz#a7ffddeaf2fd609f92e6c3ee75c3c4b89f071046"
+  integrity sha512-5Q3yNJ8I4olOEDd4weISfJaU4dqz1sNAGSNLdPAzh7JdKZmJzu84vatDdQskk9rASlM1xW3whXYkteGRDpLmwg==
 
 loose-envify@^1.1.0, loose-envify@^1.4.0:
   version "1.4.0"

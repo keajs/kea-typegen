@@ -1176,6 +1176,11 @@
   dependencies:
     "@types/yargs-parser" "*"
 
+"@wessberg/ts-clone-node@^0.3.9":
+  version "0.3.9"
+  resolved "https://registry.yarnpkg.com/@wessberg/ts-clone-node/-/ts-clone-node-0.3.9.tgz#1489406c5ceaa91b5207be6bd788dc457ab8ecc8"
+  integrity sha512-GmYNuF93CASWeSBQW2/yeB7gGY6lVCcmW0xYBvDs9kjYeLYleAfIZjAw3zqWIhhXSpmtuWCg3HCGMCS9XJSDxg==
+
 abab@^2.0.3:
   version "2.0.3"
   resolved "https://registry.yarnpkg.com/abab/-/abab-2.0.3.tgz#623e2075e02eb2d3f2475e49f99c91846467907a"
@@ -3125,10 +3130,10 @@ jsprim@^1.2.2:
     json-schema "0.2.3"
     verror "1.10.0"
 
-kea@^2.2.0-beta.2:
-  version "2.2.0-beta.2"
-  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-beta.2.tgz#38bc2b2ff5d215ba0b65aeddcd8d551a68a929e1"
-  integrity sha512-5ggnFROuYUq/3869j73Qvp5j1+OdlzEVe3TbcZQlzH4tBzLukjQMqTvR9DLD98ih2tHnbu9nN7Mq/w2HyaHS5A==
+kea@^2.2.0-beta.3:
+  version "2.2.0-beta.3"
+  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-beta.3.tgz#a7ffddeaf2fd609f92e6c3ee75c3c4b89f071046"
+  integrity sha512-5Q3yNJ8I4olOEDd4weISfJaU4dqz1sNAGSNLdPAzh7JdKZmJzu84vatDdQskk9rASlM1xW3whXYkteGRDpLmwg==
 
 kind-of@^3.0.2, kind-of@^3.0.3, kind-of@^3.2.0:
   version "3.2.2"

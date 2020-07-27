@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 
-export function printSelectorTypeHelp(parsedLogic: ParsedLogic) {
+export function printInternalSelectorTypes(parsedLogic: ParsedLogic) {
     return ts.createTypeLiteralNode(
         parsedLogic.selectors
             .filter((s) => s.functionTypes.length > 0)
