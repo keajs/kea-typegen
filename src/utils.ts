@@ -2,7 +2,7 @@ import * as ts from 'typescript'
 import * as path from 'path'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
-import {AppOptions, ParsedLogic, ReducerTransform} from './types'
+import {AppOptions, NameType, ParsedLogic, ReducerTransform} from './types'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -26,7 +26,7 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
         return false
     }
 
-    if (!ts.isCallExpression(node.parent)) {
+    if (!node.parent || !ts.isCallExpression(node.parent)) {
         return false
     }
 
@@ -123,3 +123,16 @@ export function combineExtraActions(reducers: ReducerTransform[]) {
 
     return extraActions
 }
+
+export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
+    let newReducers = {}
+
+    for (const reducer of reducers) {
+        if (!newReducers[reducer.name] || ts.SyntaxKind[reducer.typeNode.kind] === '‌AnyKeyword') {
+            newReducers[reducer.name] = reducer
+        }
+    }
+
+    return Object.values(newReducers)
+}
+
