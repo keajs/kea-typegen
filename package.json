@@ -15,7 +15,7 @@
     "author": "",
     "license": "MIT",
     "bin": {
-        "kea-typegen": "./dist/src/cli/typegen.js"
+        "kea-typegen": "./dist/cli/typegen.js"
     },
     "dependencies": {
         "@wessberg/ts-clone-node": "0.3.8",
