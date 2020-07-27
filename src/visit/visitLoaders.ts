@@ -37,12 +37,20 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                 }
                 const func = property.initializer as ts.ArrowFunction
                 const param = func.parameters[0] as ts.ParameterDeclaration
+                const parameters = param ? [getParameterDeclaration(param)] : []
+
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}`)) {
-                    const parameters = param ? [getParameterDeclaration(param)] : []
                     const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                     parsedLogic.actions.push({name: `${loaderActionName}`, parameters, returnTypeNode})
                 }
+
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}Success`)) {
+                    let returnTypeNode = func?.type || typeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+
+                    if (ts.isTypeReferenceNode(returnTypeNode) && returnTypeNode.typeName.getText() === 'Promise') {
+                        returnTypeNode = returnTypeNode.typeArguments?.[0]
+                    }
+
                     const successParameters = [
                         ts.createParameter(
                             undefined,
@@ -50,7 +58,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                             undefined,
                             ts.createIdentifier(loaderName),
                             undefined,
-                            typeNode,
+                            returnTypeNode,
                             undefined,
                         ),
                     ]
@@ -59,7 +67,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                             undefined,
                             ts.createIdentifier(loaderName),
                             undefined,
-                            typeNode,
+                            returnTypeNode,
                             undefined,
                         ),
                     ])
