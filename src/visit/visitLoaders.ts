@@ -31,69 +31,73 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
 
         if (objectLiteral) {
             objectLiteral.properties.forEach((property: ts.PropertyAssignment) => {
-                const name = checker.getSymbolAtLocation(property.name)?.getName()
-                if (name === '__default') {
+                const loaderName = checker.getSymbolAtLocation(property.name)?.getName()
+                if (loaderName === '__default') {
                     return
                 }
                 const func = property.initializer as ts.ArrowFunction
                 const param = func.parameters[0] as ts.ParameterDeclaration
+                if (!parsedLogic.actions.find(({ name }) => name === `${loaderName}`)) {
+                    const parameters = param ? [getParameterDeclaration(param)] : []
+                    const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                    parsedLogic.actions.push({name: `${loaderName}`, parameters, returnTypeNode})
+                }
+                if (!parsedLogic.actions.find(({ name }) => name === `${loaderName}Success`)) {
+                    const successParameters = [
+                        ts.createParameter(
+                            undefined,
+                            undefined,
+                            undefined,
+                            ts.createIdentifier(loaderName),
+                            undefined,
+                            typeNode,
+                            undefined,
+                        ),
+                    ]
+                    const successReturnTypeNode = ts.createTypeLiteralNode([
+                        ts.createPropertySignature(
+                            undefined,
+                            ts.createIdentifier(loaderName),
+                            undefined,
+                            typeNode,
+                            undefined,
+                        ),
+                    ])
+                    parsedLogic.actions.push({
+                        name: `${loaderName}Success`,
+                        parameters: successParameters,
+                        returnTypeNode: successReturnTypeNode,
+                    })
+                }
 
-                const parameters = param ? [getParameterDeclaration(param)] : []
-                const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
-                parsedLogic.actions.push({ name: `${name}`, parameters, returnTypeNode })
+                if (!parsedLogic.actions.find(({ name }) => name === `${loaderName}Failure`)) {
+                    const failureParameters = [
+                        ts.createParameter(
+                            undefined,
+                            undefined,
+                            undefined,
+                            ts.createIdentifier('error'),
+                            undefined,
+                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            undefined,
+                        ),
+                    ]
+                    const failureReturnTypeNode = ts.createTypeLiteralNode([
+                        ts.createPropertySignature(
+                            undefined,
+                            ts.createIdentifier('error'),
+                            undefined,
+                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            undefined,
+                        ),
+                    ])
 
-                const successParameters = [
-                    ts.createParameter(
-                        undefined,
-                        undefined,
-                        undefined,
-                        ts.createIdentifier(loaderName),
-                        undefined,
-                        typeNode,
-                        undefined,
-                    ),
-                ]
-                const successReturnTypeNode = ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
-                        undefined,
-                        ts.createIdentifier(loaderName),
-                        undefined,
-                        typeNode,
-                        undefined,
-                    ),
-                ])
-                parsedLogic.actions.push({
-                    name: `${name}Success`,
-                    parameters: successParameters,
-                    returnTypeNode: successReturnTypeNode,
-                })
-
-                const failureParameters = [
-                    ts.createParameter(
-                        undefined,
-                        undefined,
-                        undefined,
-                        ts.createIdentifier('error'),
-                        undefined,
-                        ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        undefined,
-                    ),
-                ]
-                const failureReturnTypeNode = ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
-                        undefined,
-                        ts.createIdentifier('error'),
-                        undefined,
-                        ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        undefined,
-                    ),
-                ])
-
-                parsedLogic.actions.push({
-                    name: `${name}Failure`,
-                    parameters: failureParameters,
-                    returnTypeNode: failureReturnTypeNode,
-                })
+                    parsedLogic.actions.push({
+                        name: `${loaderName}Failure`,
+                        parameters: failureParameters,
+                        returnTypeNode: failureReturnTypeNode,
+                    })
+                }
             })
         }
     }
