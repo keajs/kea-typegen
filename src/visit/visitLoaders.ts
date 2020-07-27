@@ -31,18 +31,18 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
 
         if (objectLiteral) {
             objectLiteral.properties.forEach((property: ts.PropertyAssignment) => {
-                const loaderName = checker.getSymbolAtLocation(property.name)?.getName()
-                if (loaderName === '__default') {
+                const loaderActionName = checker.getSymbolAtLocation(property.name)?.getName()
+                if (loaderActionName === '__default') {
                     return
                 }
                 const func = property.initializer as ts.ArrowFunction
                 const param = func.parameters[0] as ts.ParameterDeclaration
-                if (!parsedLogic.actions.find(({ name }) => name === `${loaderName}`)) {
+                if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}`)) {
                     const parameters = param ? [getParameterDeclaration(param)] : []
                     const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
-                    parsedLogic.actions.push({name: `${loaderName}`, parameters, returnTypeNode})
+                    parsedLogic.actions.push({name: `${loaderActionName}`, parameters, returnTypeNode})
                 }
-                if (!parsedLogic.actions.find(({ name }) => name === `${loaderName}Success`)) {
+                if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}Success`)) {
                     const successParameters = [
                         ts.createParameter(
                             undefined,
@@ -64,13 +64,13 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                         ),
                     ])
                     parsedLogic.actions.push({
-                        name: `${loaderName}Success`,
+                        name: `${loaderActionName}Success`,
                         parameters: successParameters,
                         returnTypeNode: successReturnTypeNode,
                     })
                 }
 
-                if (!parsedLogic.actions.find(({ name }) => name === `${loaderName}Failure`)) {
+                if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}Failure`)) {
                     const failureParameters = [
                         ts.createParameter(
                             undefined,
@@ -93,7 +93,7 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
                     ])
 
                     parsedLogic.actions.push({
-                        name: `${loaderName}Failure`,
+                        name: `${loaderActionName}Failure`,
                         parameters: failureParameters,
                         returnTypeNode: failureReturnTypeNode,
                     })
