@@ -39,7 +39,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                     if (actionsForLogic) {
                         const actionTypes = actionsForLogic.valueDeclaration.type.members
 
-                        for (const actionType of actionTypes) {
+                        for (const actionType of actionTypes || []) {
                             if (ts.isPropertySignature(actionType)) {
                                 const name = actionType.name.getText()
 
@@ -80,7 +80,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                     if (selectorsForLogic) {
                         const selectorTypes = selectorsForLogic.valueDeclaration.type.members
 
-                        for (const selectorType of selectorTypes) {
+                        for (const selectorType of selectorTypes || []) {
                             if (ts.isPropertySignature(selectorType)) {
                                 const name = selectorType.name.getText()
 
