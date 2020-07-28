@@ -19,7 +19,13 @@ import { combineExtraActions } from '../utils'
 function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
     if (options) {
-        return prettier.format(sourceText, { ...options, filepath: filePath });
+        try {
+            return prettier.format(sourceText, {...options, filepath: filePath});
+        } catch (e) {
+            console.error(`!! Prettier: Error formatting "${filePath}"`)
+            console.error(e.message)
+            return sourceText
+        }
     } else {
         return sourceText
     }
@@ -40,28 +46,28 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
     let filesToWrite = 0
 
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
-        const output = parsedLogics.map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), fileName)).join('\n\n')
-        fileName = fileName.replace(/\.[tj]sx?$/, 'Type.ts')
+        const typeFileName = fileName.replace(/\.[tj]sx?$/, 'Type.ts')
+        const output = parsedLogics.map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), typeFileName)).join('\n\n')
         const finalOutput = `// Auto-generated with kea-typegen. DO NOT EDIT!\n\n${output}`
 
         let existingOutput
 
         try {
-            existingOutput = fs.readFileSync(fileName)
+            existingOutput = fs.readFileSync(typeFileName)
         } catch (error) {}
 
         if (existingOutput?.toString() !== finalOutput) {
             filesToWrite += 1
             if (appOptions.write) {
-                fs.writeFileSync(fileName, finalOutput)
+                fs.writeFileSync(typeFileName, finalOutput)
                 writtenFiles += 1
-                log(`!! Writing: ${path.relative(process.cwd(), fileName)}`)
+                log(`!! Writing: ${path.relative(process.cwd(), typeFileName)}`)
             } else {
-                log(`:${smiles[i++ % smiles.length]} Would write: ${path.relative(process.cwd(), fileName)}`)
+                log(`:${smiles[i++ % smiles.length]} Would write: ${path.relative(process.cwd(), typeFileName)}`)
             }
         } else {
             if (appOptions.verbose) {
-                log(`-- Unchanged: ${path.relative(process.cwd(), fileName)}`)
+                log(`-- Unchanged: ${path.relative(process.cwd(), typeFileName)}`)
             }
         }
     })
