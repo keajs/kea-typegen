@@ -1,5 +1,6 @@
 import * as ts from 'typescript'
 import * as path from 'path'
+import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
 import {AppOptions, NameType, ParsedLogic, ReducerTransform} from './types'
@@ -52,7 +53,7 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
     let typeNode
     if (defaultValue) {
         if (ts.isAsExpression(defaultValue)) {
-            typeNode = defaultValue.type
+            typeNode = cloneNode(defaultValue.type)
             if (ts.isParenthesizedTypeNode(typeNode)) {
                 typeNode = typeNode.type
             }
@@ -66,7 +67,7 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
         } else if (ts.isNumericLiteral(defaultValue)) {
             typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword)
         } else {
-            typeNode = checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue))
+            typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue)))
         }
     } else {
         typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
