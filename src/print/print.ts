@@ -102,7 +102,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
         ts.createIdentifier(`${parsedLogic.logicName}Type`),
         parsedLogic.logicTypeArguments.map((text) =>
-            ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined),
+            ts.createTypeParameterDeclaration(ts.createIdentifier(text.trim()), undefined),
         ),
         undefined,
         [
