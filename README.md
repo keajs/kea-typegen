@@ -1,6 +1,12 @@
 # kea-typegen
 
-Automatically generate types for `kea()` calls.
+Automatically generate types for `kea()` calls for [Kea 2.2+](https://kea.js.org/)
+
+## Demo
+
+See kea-typegen in action in this [12min screencast](https://www.youtube.com/watch?v=jGy-p9UxcBA).
+
+It's the best documentation currently available :).
 
 ## Samples
 
