@@ -1,6 +1,8 @@
 import * as ts from 'typescript'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as prettier from 'prettier'
+
 import { AppOptions, ParsedLogic } from '../types'
 import { printActions } from './printActions'
 import { printReducers } from './printReducers'
@@ -13,6 +15,15 @@ import { printActionKeys } from './printActionKeys'
 import { printActionTypes } from './printActionTypes'
 import { printInternalReducerActions } from './printInternalReducerActions'
 import { combineExtraActions } from '../utils'
+
+function runThroughPrettier(sourceText: string, filePath: string): string {
+    const options = prettier.resolveConfig.sync(filePath)
+    if (options) {
+        return prettier.format(sourceText, { ...options, filepath: filePath });
+    } else {
+        return sourceText
+    }
+}
 
 export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]) {
     const { log } = appOptions
@@ -29,7 +40,7 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
     let filesToWrite = 0
 
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
-        const output = parsedLogics.map((l) => parsedLogicToTypeString(l, appOptions)).join('\n\n')
+        const output = parsedLogics.map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), fileName)).join('\n\n')
         fileName = fileName.replace(/\.[tj]sx?$/, 'Type.ts')
         const finalOutput = `// Auto-generated with kea-typegen. DO NOT EDIT!\n\n${output}`
 
