@@ -35,7 +35,7 @@ function extractImportedActions(actionObjects: ts.Expression | ts.ObjectLiteralE
                                 (m) => (m.name as ts.Identifier)?.escapedText === actionName,
                             )
 
-                            if (ts.isPropertySignature(action) && ts.isFunctionTypeNode(action.type)) {
+                            if (action && ts.isPropertySignature(action) && ts.isFunctionTypeNode(action.type)) {
                                 extraActions[actionType] = cloneNode(action.type) //payload
                             }
                         }
