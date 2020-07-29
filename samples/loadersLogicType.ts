@@ -36,11 +36,11 @@ export interface loadersLogicType<Dashboard> {
             }
         }
         addDashboardNoTypeSuccess: (
-            dashboard: Dashboard | null,
+            dashboard: Dashboard,
         ) => {
             type: 'add dashboard no type success (samples.loadersLogic)'
             payload: {
-                dashboard: Dashboard | null
+                dashboard: Dashboard
             }
         }
         addDashboardNoTypeFailure: (
@@ -102,11 +102,11 @@ export interface loadersLogicType<Dashboard> {
             }
         }
         addDashboardNoTypeSuccess: (
-            dashboard: Dashboard | null,
+            dashboard: Dashboard,
         ) => {
             type: 'add dashboard no type success (samples.loadersLogic)'
             payload: {
-                dashboard: Dashboard | null
+                dashboard: Dashboard
             }
         }
         addDashboardNoTypeFailure: (
