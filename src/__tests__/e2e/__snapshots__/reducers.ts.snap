@@ -22,14 +22,8 @@ exports[`reducers - as a function returning a object 1`] = `
         updateOtherName: \\"update other name (logic)\\";
     };
     actions: {
-        updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
-        });
+        updateName: (name: string) => void;
+        updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
     connections: any;
@@ -92,14 +86,8 @@ exports[`reducers - as an object 1`] = `
         updateOtherName: \\"update other name (logic)\\";
     };
     actions: {
-        updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
-        });
+        updateName: (name: string) => void;
+        updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
     connections: any;
@@ -162,14 +150,8 @@ exports[`reducers - with a function 1`] = `
         updateOtherName: \\"update other name (logic)\\";
     };
     actions: {
-        updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
-            payload: { name: string; };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
-        });
+        updateName: (name: string) => void;
+        updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
     connections: any;
@@ -228,12 +210,7 @@ exports[`reducers - with bool default 1`] = `
         updateName: \\"update name (logic)\\";
     };
     actions: {
-        updateName: () => ({
-            type: \\"update name (logic)\\";
-            payload: {
-                value: boolean;
-            };
-        });
+        updateName: () => void;
     };
     cache: Record<string, any>;
     connections: any;

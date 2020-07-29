@@ -26,18 +26,8 @@ exports[`connect actions and rename 1`] = `
         secondAction: \\"second action (logic)\\";
     };
     actions: {
-        firstAction: (name: string) => ({
-            type: \\"first action (logic)\\";
-            payload: {
-                name: string;
-            };
-        });
-        secondAction: (otherName: string) => ({
-            type: \\"second action (logic)\\";
-            payload: {
-                otherName: string;
-            };
-        });
+        firstAction: (name: string) => void;
+        secondAction: (otherName: string) => void;
     };
     cache: Record<string, any>;
     connections: any;
@@ -84,18 +74,8 @@ exports[`connect actions from another logic 1`] = `
         updateOtherName: \\"update other name (logic)\\";
     };
     actions: {
-        updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
-            payload: {
-                name: string;
-            };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
-            payload: {
-                otherName: string;
-            };
-        });
+        updateName: (name: string) => void;
+        updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
     connections: any;
@@ -142,18 +122,8 @@ exports[`connect actions from multiple other logics 1`] = `
         updateOtherName: \\"update other name (logic)\\";
     };
     actions: {
-        updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
-            payload: {
-                name: string;
-            };
-        });
-        updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
-            payload: {
-                otherName: string;
-            };
-        });
+        updateName: (name: string) => void;
+        updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
     connections: any;
