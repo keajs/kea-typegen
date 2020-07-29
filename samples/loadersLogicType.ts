@@ -69,54 +69,12 @@ export interface loadersLogicType<Dashboard> {
         addDashboardNoTypeFailure: 'add dashboard no type failure (samples.loadersLogic)'
     }
     actions: {
-        addDashboard: (
-            name: string,
-        ) => {
-            type: 'add dashboard (samples.loadersLogic)'
-            payload: { name: string }
-        }
-        addDashboardSuccess: (
-            dashboard: Dashboard,
-        ) => {
-            type: 'add dashboard success (samples.loadersLogic)'
-            payload: {
-                dashboard: Dashboard
-            }
-        }
-        addDashboardFailure: (
-            error: string,
-        ) => {
-            type: 'add dashboard failure (samples.loadersLogic)'
-            payload: {
-                error: string
-            }
-        }
-        addDashboardNoType: ({
-            name,
-        }: {
-            name: string
-        }) => {
-            type: 'add dashboard no type (samples.loadersLogic)'
-            payload: {
-                name: string
-            }
-        }
-        addDashboardNoTypeSuccess: (
-            dashboard: Dashboard,
-        ) => {
-            type: 'add dashboard no type success (samples.loadersLogic)'
-            payload: {
-                dashboard: Dashboard
-            }
-        }
-        addDashboardNoTypeFailure: (
-            error: string,
-        ) => {
-            type: 'add dashboard no type failure (samples.loadersLogic)'
-            payload: {
-                error: string
-            }
-        }
+        addDashboard: (name: string) => void
+        addDashboardSuccess: (dashboard: Dashboard) => void
+        addDashboardFailure: (error: string) => void
+        addDashboardNoType: ({ name }: { name: string }) => void
+        addDashboardNoTypeSuccess: (dashboard: Dashboard) => void
+        addDashboardNoTypeFailure: (error: string) => void
     }
     cache: Record<string, any>
     connections: any

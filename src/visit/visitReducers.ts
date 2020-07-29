@@ -27,16 +27,16 @@ function extractImportedActions(actionObjects: ts.Expression | ts.ObjectLiteralE
                         const symbol = checker.getSymbolAtLocation(expression.expression)
                         const symbolType = checker.getTypeOfSymbolAtLocation(symbol, expression.expression)
 
-                        const actionsProperty = symbolType.getProperties().find((p) => p.escapedName === 'actions')
-                        const actions = actionsProperty?.valueDeclaration
+                        const actionCreatorsProperty = symbolType.getProperties().find((p) => p.escapedName === 'actionCreators')
+                        const actionCreators = actionCreatorsProperty?.valueDeclaration
 
-                        if (actions && ts.isPropertySignature(actions) && ts.isTypeLiteralNode(actions.type)) {
-                            const action = actions.type.members.find(
+                        if (actionCreators && ts.isPropertySignature(actionCreators) && ts.isTypeLiteralNode(actionCreators.type)) {
+                            const actionCreator = actionCreators.type.members.find(
                                 (m) => (m.name as ts.Identifier)?.escapedText === actionName,
                             )
 
-                            if (action && ts.isPropertySignature(action) && ts.isFunctionTypeNode(action.type)) {
-                                extraActions[actionType] = cloneNode(action.type) //payload
+                            if (actionCreator && ts.isPropertySignature(actionCreator) && ts.isFunctionTypeNode(actionCreator.type)) {
+                                extraActions[actionType] = cloneNode(actionCreator.type) //payload
                             }
                         }
                     }

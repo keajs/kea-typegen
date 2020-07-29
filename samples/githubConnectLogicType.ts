@@ -19,14 +19,7 @@ export interface githubConnectLogicType<Repository> {
         setRepositories: 'set repositories (samples.githubConnectLogic)'
     }
     actions: {
-        setRepositories: (
-            repositories: Repository[],
-        ) => {
-            type: 'set repositories (samples.githubConnectLogic)'
-            payload: {
-                repositories: Repository[]
-            }
-        }
+        setRepositories: (repositories: Repository[]) => void
     }
     cache: Record<string, any>
     connections: any

@@ -14,24 +14,9 @@ export function printActions(parsedLogic: ParsedLogic, appOptions?: AppOptions) 
                 ts.createFunctionTypeNode(
                     undefined,
                     parameters,
-                    ts.createParenthesizedType(
-                        ts.createTypeLiteralNode([
-                            ts.createPropertySignature(
-                                undefined,
-                                ts.createIdentifier('type'),
-                                undefined,
-                                ts.createLiteralTypeNode(ts.createStringLiteral(getActionType(name))),
-                                undefined,
-                            ),
-                            ts.createPropertySignature(
-                                undefined,
-                                ts.createIdentifier('payload'),
-                                undefined,
-                                returnTypeNode,
-                                undefined,
-                            ),
-                        ]),
-                    ),
+                    // Please someone tell me what must I do here?
+                    // Just ts.createToken(void), as suggested by ts-ast-viewer.com doesn't work
+                    { ...ts.createToken(ts.SyntaxKind.VoidKeyword), _typeNodeBrand: true }
                 ),
                 undefined,
             )

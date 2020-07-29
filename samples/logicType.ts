@@ -53,40 +53,11 @@ export interface logicType<Session> {
         loadSessionsFailure: 'load sessions failure (samples.logic)'
     }
     actions: {
-        updateName: (
-            name: string,
-        ) => {
-            type: 'update name (samples.logic)'
-            payload: { name: string }
-        }
-        updateNumber: (
-            number: number,
-        ) => {
-            type: 'update number (samples.logic)'
-            payload: { number: number }
-        }
-        loadSessions: (
-            selectedDate: string,
-        ) => {
-            type: 'load sessions (samples.logic)'
-            payload: string
-        }
-        loadSessionsSuccess: (
-            sessions: Session[],
-        ) => {
-            type: 'load sessions success (samples.logic)'
-            payload: {
-                sessions: Session[]
-            }
-        }
-        loadSessionsFailure: (
-            error: string,
-        ) => {
-            type: 'load sessions failure (samples.logic)'
-            payload: {
-                error: string
-            }
-        }
+        updateName: (name: string) => void
+        updateNumber: (number: number) => void
+        loadSessions: (selectedDate: string) => void
+        loadSessionsSuccess: (sessions: Session[]) => void
+        loadSessionsFailure: (error: string) => void
     }
     cache: Record<string, any>
     connections: any

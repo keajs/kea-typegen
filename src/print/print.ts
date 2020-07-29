@@ -15,12 +15,13 @@ import { printActionKeys } from './printActionKeys'
 import { printActionTypes } from './printActionTypes'
 import { printInternalReducerActions } from './printInternalReducerActions'
 import { combineExtraActions } from '../utils'
+import { printActionCreators } from './printActionCreators'
 
 function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
     if (options) {
         try {
-            return prettier.format(sourceText, {...options, filepath: filePath});
+            return prettier.format(sourceText, { ...options, filepath: filePath })
         } catch (e) {
             console.error(`!! Prettier: Error formatting "${filePath}"`)
             console.error(e.message)
@@ -47,7 +48,9 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
 
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
         const typeFileName = fileName.replace(/\.[tj]sx?$/, 'Type.ts')
-        const output = parsedLogics.map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), typeFileName)).join('\n\n')
+        const output = parsedLogics
+            .map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), typeFileName))
+            .join('\n\n')
         const finalOutput = `// Auto-generated with kea-typegen. DO NOT EDIT!\n\n${output}`
 
         let existingOutput
@@ -125,7 +128,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         [
             // TODO
             printProperty('key', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
-            printProperty('actionCreators', printActions(parsedLogic, appOptions)),
+            printProperty('actionCreators', printActionCreators(parsedLogic, appOptions)),
             printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
             printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
             printProperty('actions', printActions(parsedLogic, appOptions)),

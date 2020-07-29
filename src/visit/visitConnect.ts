@@ -34,7 +34,7 @@ export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
                 if (loaderName === 'actions') {
                     const actionsForLogic = (
                         (otherLogicType as any).properties || (otherLogicType as any).resolvedProperties
-                    )?.find((p) => p.escapedName === 'actions')
+                    )?.find((p) => p.escapedName === 'actionCreators')
 
                     if (actionsForLogic) {
                         const actionTypes = actionsForLogic.valueDeclaration.type.members

@@ -33,24 +33,9 @@ export interface githubLogicType<Repository> {
         setFetchError: 'set fetch error (samples.githubLogic)'
     }
     actions: {
-        setUsername: (
-            username: string,
-        ) => {
-            type: 'set username (samples.githubLogic)'
-            payload: { username: string }
-        }
-        setRepositories: (
-            repositories: Repository[],
-        ) => {
-            type: 'set repositories (samples.githubLogic)'
-            payload: { repositories: Repository[] }
-        }
-        setFetchError: (
-            error: string,
-        ) => {
-            type: 'set fetch error (samples.githubLogic)'
-            payload: { error: string }
-        }
+        setUsername: (username: string) => void
+        setRepositories: (repositories: Repository[]) => void
+        setFetchError: (error: string) => void
     }
     cache: Record<string, any>
     connections: any
