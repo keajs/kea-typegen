@@ -30,13 +30,18 @@ export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
         })
 
         if (objectLiteral) {
-            objectLiteral.properties.forEach((property: ts.PropertyAssignment) => {
+            (objectLiteral.properties || []).forEach((property: ts.PropertyAssignment) => {
                 const loaderActionName = checker.getSymbolAtLocation(property.name)?.getName()
                 if (loaderActionName === '__default') {
                     return
                 }
-                const func = property.initializer as ts.ArrowFunction
-                const param = func.parameters[0] as ts.ParameterDeclaration
+
+                const func = property.initializer
+                if (!ts.isFunctionLike(func)) {
+                    return
+                }
+
+                const param = func.parameters ? func.parameters[0] as ts.ParameterDeclaration : null
                 const parameters = param ? [getParameterDeclaration(param)] : []
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}`)) {
