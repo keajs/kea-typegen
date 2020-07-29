@@ -1,5 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
+import {cloneNode} from "@wessberg/ts-clone-node";
 
 export function visitSelectors(type: ts.Type, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -20,7 +21,7 @@ export function visitSelectors(type: ts.Type, parsedLogic: ParsedLogic) {
                     // TODO: figure out the real name of the input
                     name: `arg${index + 1}`,
                     type: ts.isFunctionTypeNode(selectorTypeNode)
-                        ? selectorTypeNode.type
+                        ? cloneNode(selectorTypeNode.type)
                         : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                 }))
             }
