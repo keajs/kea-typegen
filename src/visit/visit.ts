@@ -8,6 +8,7 @@ import { visitSelectors } from './visitSelectors'
 import { visitLoaders } from './visitLoaders'
 import { visitConnect } from './visitConnect'
 import { visitWindowValues } from './visitWindowValues'
+import { visitProps } from './visitProps'
 
 export function visitProgram(program: ts.Program, appOptions?: AppOptions): ParsedLogic[] {
     const checker = program.getTypeChecker()
@@ -61,6 +62,7 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
             actions: [],
             reducers: [],
             selectors: [],
+            propsType: undefined,
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
@@ -90,6 +92,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
                 visitLoaders(type, parsedLogic)
             } else if (name === 'connect') {
                 visitConnect(type, parsedLogic)
+            } else if (name === 'props') {
+                visitProps(type, parsedLogic)
             } else if (name === 'windowValues') {
                 visitWindowValues(type, parsedLogic)
             }

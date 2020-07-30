@@ -27,6 +27,7 @@ export interface ParsedLogic {
     actions: ActionTransform[]
     reducers: ReducerTransform[]
     selectors: SelectorTransform[]
+    propsType?: ts.TypeNode
 }
 
 export interface AppOptions {

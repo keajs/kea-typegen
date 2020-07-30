@@ -16,6 +16,7 @@ import { printActionTypes } from './printActionTypes'
 import { printInternalReducerActions } from './printInternalReducerActions'
 import { combineExtraActions } from '../utils'
 import { printActionCreators } from './printActionCreators'
+import { printProps } from './printProps'
 
 function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -158,13 +159,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty('pathString', ts.createStringLiteral(pathString)),
             // TODO
             printProperty('propTypes', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
-            printProperty(
-                'props',
-                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                ]),
-            ),
+            printProperty('props', printProps(parsedLogic)),
             printProperty('reducer', printReducer(parsedLogic)),
             // TODO
             printProperty('reducerOptions', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
