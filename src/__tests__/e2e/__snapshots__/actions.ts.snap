@@ -33,7 +33,7 @@ exports[`actions - as a function returning a object 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -77,7 +77,7 @@ exports[`actions - as an object 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -121,7 +121,7 @@ exports[`actions - with a function 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -190,7 +190,7 @@ exports[`actions - with random values instead of functions 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};

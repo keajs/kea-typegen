@@ -37,7 +37,7 @@ exports[`connect actions and rename 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -85,7 +85,7 @@ exports[`connect actions from another logic 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -133,7 +133,7 @@ exports[`connect actions from multiple other logics 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -159,7 +159,7 @@ exports[`connect props from another logic 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -191,7 +191,7 @@ exports[`connect values and rename 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
@@ -223,7 +223,7 @@ exports[`connect values from another logic 1`] = `
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     propTypes: any;
-    props: Record<string, any>;
+    props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
     reducerOptions: any;
     reducers: {};
