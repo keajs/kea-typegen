@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface windowValuesLogicType {
-    key: any
+    key: undefined
     actionCreators: {}
     actionKeys: {}
     actionTypes: {}
@@ -13,7 +13,6 @@ export interface windowValuesLogicType {
     events: any
     path: ['samples', 'windowValuesLogic']
     pathString: 'samples.windowValuesLogic'
-    propTypes: any
     props: Record<string, unknown>
     reducer: (
         state: any,

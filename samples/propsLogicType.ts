@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface propsLogicType {
-    key: any
+    key: number
     actionCreators: {
         setPage: (
             page: string,
@@ -35,7 +35,6 @@ export interface propsLogicType {
     events: any
     path: ['samples', 'propsLogic']
     pathString: 'samples.propsLogic'
-    propTypes: any
     props: {
         page: string
         id: number

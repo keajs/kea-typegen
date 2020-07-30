@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface githubConnectLogicType<Repository> {
-    key: any
+    key: undefined
     actionCreators: {
         setRepositories: (
             repositories: Repository[],
@@ -28,7 +28,6 @@ export interface githubConnectLogicType<Repository> {
     events: any
     path: ['samples', 'githubConnectLogic']
     pathString: 'samples.githubConnectLogic'
-    propTypes: any
     props: Record<string, unknown>
     reducer: (state: any, action: () => any, fullState: any) => {}
     reducerOptions: any

@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface logicType<Session> {
-    key: any
+    key: undefined
     actionCreators: {
         updateName: (
             name: string,
@@ -66,7 +66,6 @@ export interface logicType<Session> {
     events: any
     path: ['samples', 'logic']
     pathString: 'samples.logic'
-    propTypes: any
     props: Record<string, unknown>
     reducer: (
         state: any,

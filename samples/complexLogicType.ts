@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData> {
-    key: any
+    key: undefined
     actionCreators: {
         setForm: (
             form: FormInstance,
@@ -126,7 +126,6 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
     events: any
     path: ['samples', 'complexLogic']
     pathString: 'samples.complexLogic'
-    propTypes: any
     props: Record<string, unknown>
     reducer: (
         state: any,

@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface loadersLogicType<Dashboard> {
-    key: any
+    key: undefined
     actionCreators: {
         addDashboard: (
             name: string,
@@ -83,7 +83,6 @@ export interface loadersLogicType<Dashboard> {
     events: any
     path: ['samples', 'loadersLogic']
     pathString: 'samples.loadersLogic'
-    propTypes: any
     props: Record<string, unknown>
     reducer: (
         state: any,

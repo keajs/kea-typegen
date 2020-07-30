@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface githubImportLogicType<Repository> {
-    key: any
+    key: undefined
     actionCreators: {}
     actionKeys: {}
     actionTypes: {}
@@ -13,7 +13,6 @@ export interface githubImportLogicType<Repository> {
     events: any
     path: ['samples', 'githubImportLogic']
     pathString: 'samples.githubImportLogic'
-    propTypes: any
     props: Record<string, unknown>
     reducer: (
         state: any,

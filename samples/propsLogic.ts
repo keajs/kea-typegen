@@ -1,5 +1,5 @@
 import { kea } from 'kea'
-import {propsLogicType} from "./propsLogicType";
+import { propsLogicType } from './propsLogicType'
 
 const propsLogic = kea<propsLogicType>({
     props: {
@@ -8,6 +8,8 @@ const propsLogic = kea<propsLogicType>({
         page: string
         id: number
     },
+
+    key: (props) => props.id,
 
     actions: {
         setPage: (page: string) => ({ page }),

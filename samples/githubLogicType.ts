@@ -1,7 +1,7 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface githubLogicType<Repository> {
-    key: any
+    key: undefined
     actionCreators: {
         setUsername: (
             username: string,
@@ -44,7 +44,6 @@ export interface githubLogicType<Repository> {
     events: any
     path: ['samples', 'githubLogic']
     pathString: 'samples.githubLogic'
-    propTypes: any
     props: Record<string, unknown>
     reducer: (
         state: any,
