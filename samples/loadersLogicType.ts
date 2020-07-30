@@ -84,7 +84,7 @@ export interface loadersLogicType<Dashboard> {
     path: ['samples', 'loadersLogic']
     pathString: 'samples.loadersLogic'
     propTypes: any
-    props: Record<string, any>
+    props: Record<string, unknown>
     reducer: (
         state: any,
         action: () => any,

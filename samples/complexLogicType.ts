@@ -127,7 +127,7 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
     path: ['samples', 'complexLogic']
     pathString: 'samples.complexLogic'
     propTypes: any
-    props: Record<string, any>
+    props: Record<string, unknown>
     reducer: (
         state: any,
         action: () => any,

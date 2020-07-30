@@ -45,7 +45,7 @@ export interface githubLogicType<Repository> {
     path: ['samples', 'githubLogic']
     pathString: 'samples.githubLogic'
     propTypes: any
-    props: Record<string, any>
+    props: Record<string, unknown>
     reducer: (
         state: any,
         action: () => any,

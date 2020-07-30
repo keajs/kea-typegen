@@ -14,7 +14,7 @@ export interface windowValuesLogicType {
     path: ['samples', 'windowValuesLogic']
     pathString: 'samples.windowValuesLogic'
     propTypes: any
-    props: Record<string, any>
+    props: Record<string, unknown>
     reducer: (
         state: any,
         action: () => any,

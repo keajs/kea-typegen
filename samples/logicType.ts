@@ -67,7 +67,7 @@ export interface logicType<Session> {
     path: ['samples', 'logic']
     pathString: 'samples.logic'
     propTypes: any
-    props: Record<string, any>
+    props: Record<string, unknown>
     reducer: (
         state: any,
         action: () => any,

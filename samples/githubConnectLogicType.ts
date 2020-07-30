@@ -29,7 +29,7 @@ export interface githubConnectLogicType<Repository> {
     path: ['samples', 'githubConnectLogic']
     pathString: 'samples.githubConnectLogic'
     propTypes: any
-    props: Record<string, any>
+    props: Record<string, unknown>
     reducer: (state: any, action: () => any, fullState: any) => {}
     reducerOptions: any
     reducers: {}
