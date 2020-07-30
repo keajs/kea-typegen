@@ -31,7 +31,9 @@ export interface propsLogicType {
     cache: Record<string, any>
     connections: any
     constants: any
-    defaults: any
+    defaults: {
+        currentPage: string
+    }
     events: any
     path: ['samples', 'propsLogic']
     pathString: 'samples.propsLogic'

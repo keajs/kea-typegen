@@ -122,7 +122,16 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
     cache: Record<string, any>
     connections: any
     constants: any
-    defaults: any
+    defaults: {
+        buttonActionsVisible: boolean
+        selectedActionId: number | 'new' | null
+        newActionForElement: HTMLElement | null
+        inspectingElement: number | null
+        editingFields: AntdFieldData[] | null
+        form: FormInstance | null
+        counter: number
+        showActionsTooltip: boolean
+    }
     events: any
     path: ['samples', 'complexLogic']
     pathString: 'samples.complexLogic'

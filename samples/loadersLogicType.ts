@@ -79,7 +79,10 @@ export interface loadersLogicType<Dashboard> {
     cache: Record<string, any>
     connections: any
     constants: any
-    defaults: any
+    defaults: {
+        dashboard: Dashboard | null
+        dashboardLoading: boolean
+    }
     events: any
     path: ['samples', 'loadersLogic']
     pathString: 'samples.loadersLogic'

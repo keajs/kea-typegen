@@ -62,7 +62,14 @@ export interface logicType<Session> {
     cache: Record<string, any>
     connections: any
     constants: any
-    defaults: any
+    defaults: {
+        name: string
+        number: number
+        otherNameNoDefault: any
+        yetAnotherNameWithNullDefault: string | null
+        sessions: Session[]
+        sessionsLoading: boolean
+    }
     events: any
     path: ['samples', 'logic']
     pathString: 'samples.logic'

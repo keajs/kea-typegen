@@ -9,7 +9,9 @@ export interface githubImportLogicType<Repository> {
     cache: Record<string, any>
     connections: any
     constants: any
-    defaults: any
+    defaults: {
+        repositoryReducerCopy: Repository[]
+    }
     events: any
     path: ['samples', 'githubImportLogic']
     pathString: 'samples.githubImportLogic'

@@ -18,6 +18,7 @@ import { combineExtraActions } from '../utils'
 import { printActionCreators } from './printActionCreators'
 import { printProps } from './printProps'
 import { printKey } from './printKey'
+import { printDefaults } from './printDefaults'
 
 function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -144,8 +145,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty('connections', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             // TODO
             printProperty('constants', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
-            // TODO
-            printProperty('defaults', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+            printProperty('defaults', printDefaults(parsedLogic)),
             // TODO
             printProperty('events', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             // inputs

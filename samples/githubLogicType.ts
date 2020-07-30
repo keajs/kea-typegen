@@ -40,7 +40,12 @@ export interface githubLogicType<Repository> {
     cache: Record<string, any>
     connections: any
     constants: any
-    defaults: any
+    defaults: {
+        username: string
+        repositories: Repository[]
+        isLoading: boolean
+        error: string | null
+    }
     events: any
     path: ['samples', 'githubLogic']
     pathString: 'samples.githubLogic'

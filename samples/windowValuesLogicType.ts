@@ -9,7 +9,10 @@ export interface windowValuesLogicType {
     cache: Record<string, any>
     connections: any
     constants: any
-    defaults: any
+    defaults: {
+        windowHeight: number
+        windowWidth: number
+    }
     events: any
     path: ['samples', 'windowValuesLogic']
     pathString: 'samples.windowValuesLogic'
