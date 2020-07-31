@@ -53,5 +53,13 @@ export interface githubImportLogicType<Repository> {
                 repositories: Repository[]
             }
         }
+        'set username (samples.githubLogic)': (
+            username: string,
+        ) => {
+            type: 'set username (samples.githubLogic)'
+            payload: {
+                username: string
+            }
+        }
     }
 }

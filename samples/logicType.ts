@@ -1,30 +1,30 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
 export interface logicType<Session> {
-    key: undefined
+    key: number
     actionCreators: {
         updateName: (
             name: string,
         ) => {
-            type: 'update name (samples.logic)'
+            type: 'update name (scenes.homepage.index.*)'
             payload: { name: string }
         }
         updateNumber: (
             number: number,
         ) => {
-            type: 'update number (samples.logic)'
+            type: 'update number (scenes.homepage.index.*)'
             payload: { number: number }
         }
         loadSessions: (
             selectedDate: string,
         ) => {
-            type: 'load sessions (samples.logic)'
+            type: 'load sessions (scenes.homepage.index.*)'
             payload: string
         }
         loadSessionsSuccess: (
             sessions: Session[],
         ) => {
-            type: 'load sessions success (samples.logic)'
+            type: 'load sessions success (scenes.homepage.index.*)'
             payload: {
                 sessions: Session[]
             }
@@ -32,25 +32,25 @@ export interface logicType<Session> {
         loadSessionsFailure: (
             error: string,
         ) => {
-            type: 'load sessions failure (samples.logic)'
+            type: 'load sessions failure (scenes.homepage.index.*)'
             payload: {
                 error: string
             }
         }
     }
     actionKeys: {
-        'update name (samples.logic)': 'updateName'
-        'update number (samples.logic)': 'updateNumber'
-        'load sessions (samples.logic)': 'loadSessions'
-        'load sessions success (samples.logic)': 'loadSessionsSuccess'
-        'load sessions failure (samples.logic)': 'loadSessionsFailure'
+        'update name (scenes.homepage.index.*)': 'updateName'
+        'update number (scenes.homepage.index.*)': 'updateNumber'
+        'load sessions (scenes.homepage.index.*)': 'loadSessions'
+        'load sessions success (scenes.homepage.index.*)': 'loadSessionsSuccess'
+        'load sessions failure (scenes.homepage.index.*)': 'loadSessionsFailure'
     }
     actionTypes: {
-        updateName: 'update name (samples.logic)'
-        updateNumber: 'update number (samples.logic)'
-        loadSessions: 'load sessions (samples.logic)'
-        loadSessionsSuccess: 'load sessions success (samples.logic)'
-        loadSessionsFailure: 'load sessions failure (samples.logic)'
+        updateName: 'update name (scenes.homepage.index.*)'
+        updateNumber: 'update number (scenes.homepage.index.*)'
+        loadSessions: 'load sessions (scenes.homepage.index.*)'
+        loadSessionsSuccess: 'load sessions success (scenes.homepage.index.*)'
+        loadSessionsFailure: 'load sessions failure (scenes.homepage.index.*)'
     }
     actions: {
         updateName: (name: string) => void
@@ -71,9 +71,11 @@ export interface logicType<Session> {
         sessionsLoading: boolean
     }
     events: any
-    path: ['samples', 'logic']
-    pathString: 'samples.logic'
-    props: Record<string, unknown>
+    path: ['scenes', 'homepage', 'index', '*']
+    pathString: 'scenes.homepage.index.*'
+    props: {
+        id: number
+    }
     reducer: (
         state: any,
         action: () => any,

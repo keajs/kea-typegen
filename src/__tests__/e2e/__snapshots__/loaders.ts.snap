@@ -2,7 +2,7 @@
 
 exports[`loaders - with a function 1`] = `
 "export interface logicType {
-    key: any;
+    key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -46,11 +46,13 @@ exports[`loaders - with a function 1`] = `
     cache: Record<string, any>;
     connections: any;
     constants: any;
-    defaults: any;
+    defaults: {
+        sessions: Session[];
+        sessionsLoading: boolean;
+    };
     events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
-    propTypes: any;
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
         sessions: Session[];
@@ -79,7 +81,7 @@ exports[`loaders - with a function 1`] = `
 
 exports[`loaders - with an array and default 1`] = `
 "export interface logicType {
-    key: any;
+    key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -123,11 +125,13 @@ exports[`loaders - with an array and default 1`] = `
     cache: Record<string, any>;
     connections: any;
     constants: any;
-    defaults: any;
+    defaults: {
+        sessions: Session[];
+        sessionsLoading: boolean;
+    };
     events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
-    propTypes: any;
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
         sessions: Session[];
@@ -156,7 +160,7 @@ exports[`loaders - with an array and default 1`] = `
 
 exports[`loaders - with no param 1`] = `
 "export interface logicType {
-    key: any;
+    key: undefined;
     actionCreators: {
         loadSessions: () => ({
             type: \\"load sessions (logic)\\";
@@ -218,11 +222,13 @@ exports[`loaders - with no param 1`] = `
     cache: Record<string, any>;
     connections: any;
     constants: any;
-    defaults: any;
+    defaults: {
+        sessions: string[];
+        sessionsLoading: boolean;
+    };
     events: any;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
-    propTypes: any;
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
         sessions: string[];

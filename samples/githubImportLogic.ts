@@ -16,8 +16,8 @@ export const githubImportLogic = kea<githubImportLogicType<Repository>>({
         repositorySelectorCopy: [() => [githubLogic.selectors.repositories], (repositories) => repositories],
     },
     listeners: () => ({
-        [githubLogic.actionTypes.setRepositories]: ({ repositories }) => {
-            console.log(repositories)
+        [githubLogic.actionTypes.setUsername]: ({ username }) => {
+            console.log(username)
         },
     })
 })
