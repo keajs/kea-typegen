@@ -2,7 +2,7 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { getParameterDeclaration } from '../utils'
 
-export function visitConnect(type: ts.Type, parsedLogic: ParsedLogic) {
+export function visitConnect(type: ts.Type, inputProperty: ts.Node, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {

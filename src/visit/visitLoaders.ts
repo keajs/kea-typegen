@@ -2,7 +2,7 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { getParameterDeclaration, getTypeNodeForDefaultValue } from '../utils'
 
-export function visitLoaders(type: ts.Type, parsedLogic: ParsedLogic) {
+export function visitLoaders(type: ts.Type, inputProperty: ts.Node, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {

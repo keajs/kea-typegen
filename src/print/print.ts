@@ -14,7 +14,6 @@ import { printInternalSelectorTypes } from './printInternalSelectorTypes'
 import { printActionKeys } from './printActionKeys'
 import { printActionTypes } from './printActionTypes'
 import { printInternalReducerActions } from './printInternalReducerActions'
-import { combineExtraActions } from '../utils'
 import { printActionCreators } from './printActionCreators'
 import { printProps } from './printProps'
 import { printKey } from './printKey'
@@ -118,8 +117,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         .replace(/\.[jt]sx?$/, '')
         .replace(/\//g, '.')
 
-    const extraActions = combineExtraActions(parsedLogic.reducers)
-
     return ts.createInterfaceDeclaration(
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -171,7 +168,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             addSelectorTypeHelp
                 ? printProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
                 : null,
-            Object.keys(extraActions).length > 0
+            Object.keys(parsedLogic.extraActions).length > 0
                 ? printProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
                 : null,
         ].filter((a) => a),

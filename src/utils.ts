@@ -111,20 +111,6 @@ export function getActionTypeCreator(appOptions: AppOptions, parsedLogic: Parsed
     }
 }
 
-export function combineExtraActions(reducers: ReducerTransform[]) {
-    const extraActions: Record<string, ts.TypeNode> = {}
-
-    if (reducers) {
-        reducers.forEach((reducer) => {
-            if (reducer.extraActions) {
-                Object.entries(reducer.extraActions).forEach(([type, payload]) => extraActions[type] = payload)
-            }
-        })
-    }
-
-    return extraActions
-}
-
 export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
     let newReducers = {}
 
@@ -137,3 +123,46 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
     return Object.values(newReducers)
 }
 
+export function extractImportedActions(actionObjects: ts.Expression | ts.ObjectLiteralExpression, checker: ts.TypeChecker) {
+    let extraActions = {}
+
+    if (ts.isObjectLiteralExpression(actionObjects)) {
+        // actionObjects =  { [githubLogic.actionTypes.setRepositories]: () => ... }
+        for (const property of actionObjects.properties) {
+            // property.name ==> [githubLogic.actionTypes.setRepositories]
+            if (ts.isComputedPropertyName(property.name)) {
+                let propertyExpression = property.name.expression
+
+                if (ts.isPropertyAccessExpression(propertyExpression)) {
+                    const {name, expression} = propertyExpression
+                    const actionName = name.escapedText
+
+                    const nameSymbol = checker.getSymbolAtLocation(property.name)
+                    const actionType = nameSymbol.escapedName as string
+
+                    if (ts.isPropertyAccessExpression(expression)) {
+                        // expression.expression ==> githubLogic.actionTypes
+                        // expression.name ==> setRepositories
+
+                        const symbol = checker.getSymbolAtLocation(expression.expression)
+                        const symbolType = checker.getTypeOfSymbolAtLocation(symbol, expression.expression)
+
+                        const actionCreatorsProperty = symbolType.getProperties().find((p) => p.escapedName === 'actionCreators')
+                        const actionCreators = actionCreatorsProperty?.valueDeclaration
+
+                        if (actionCreators && ts.isPropertySignature(actionCreators) && ts.isTypeLiteralNode(actionCreators.type)) {
+                            const actionCreator = actionCreators.type.members.find(
+                                (m) => (m.name as ts.Identifier)?.escapedText === actionName,
+                            )
+
+                            if (actionCreator && ts.isPropertySignature(actionCreator) && ts.isFunctionTypeNode(actionCreator.type)) {
+                                extraActions[actionType] = cloneNode(actionCreator.type) //payload
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return extraActions
+}

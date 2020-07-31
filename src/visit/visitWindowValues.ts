@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 
-export function visitWindowValues(type: ts.Type, parsedLogic: ParsedLogic) {
+export function visitWindowValues(type: ts.Type, inputProperty: ts.Node, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {
