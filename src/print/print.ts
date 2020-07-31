@@ -34,7 +34,11 @@ function runThroughPrettier(sourceText: string, filePath: string): string {
     }
 }
 
-export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]) {
+// returns files to write
+export function printToFiles(
+    appOptions: AppOptions,
+    parsedLogics: ParsedLogic[],
+): { filesToWrite: number; writtenFiles: number } {
     const { log } = appOptions
 
     const groupedByFile: Record<string, ParsedLogic[]> = {}
@@ -90,6 +94,8 @@ export function printToFiles(appOptions: AppOptions, parsedLogics: ParsedLogic[]
     } else if (writtenFiles > 0) {
         log(`-> Wrote ${writtenFiles} file${writtenFiles === 1 ? '' : 's'}!`)
     }
+
+    return { filesToWrite, writtenFiles }
 }
 
 export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: AppOptions) {

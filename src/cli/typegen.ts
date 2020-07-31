@@ -152,7 +152,13 @@ function runCLI(appOptions: AppOptions) {
         log(`## ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
         log('')
 
-        printToFiles(appOptions, parsedLogics)
+        const response = printToFiles(appOptions, parsedLogics)
+
+        // running "kea-typegen check" and would write files?
+        // exit with 1
+        if (!appOptions.write && !appOptions.watch && response.filesToWrite > 0) {
+            process.exit(1);
+        }
     }
 
     if (program) {
