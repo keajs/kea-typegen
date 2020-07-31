@@ -18,6 +18,9 @@ export const loadersLogic = kea<loadersLogicType<Dashboard>>({
             addDashboard: ({ name }: { name: string }): Dashboard => ({ id: -1, name, pinned: true }),
             addDashboardNoType: ({ name }: { name: string }): Dashboard => ({ id: -1, name, pinned: true }),
         },
+        shouldNotBeNeverButAny: {
+            __default: []
+        }
     },
     reducers: () => ({
         dashboard: {

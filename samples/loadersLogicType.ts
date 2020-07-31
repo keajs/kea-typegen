@@ -82,6 +82,8 @@ export interface loadersLogicType<Dashboard> {
     defaults: {
         dashboard: Dashboard | null
         dashboardLoading: boolean
+        shouldNotBeNeverButAny: any[]
+        shouldNotBeNeverButAnyLoading: boolean
     }
     events: any
     path: ['samples', 'loadersLogic']
@@ -94,25 +96,35 @@ export interface loadersLogicType<Dashboard> {
     ) => {
         dashboard: Dashboard | null
         dashboardLoading: boolean
+        shouldNotBeNeverButAny: any[]
+        shouldNotBeNeverButAnyLoading: boolean
     }
     reducerOptions: any
     reducers: {
         dashboard: (state: Dashboard | null, action: any, fullState: any) => Dashboard | null
         dashboardLoading: (state: boolean, action: any, fullState: any) => boolean
+        shouldNotBeNeverButAny: (state: any[], action: any, fullState: any) => any[]
+        shouldNotBeNeverButAnyLoading: (state: boolean, action: any, fullState: any) => boolean
     }
     selector: (
         state: any,
     ) => {
         dashboard: Dashboard | null
         dashboardLoading: boolean
+        shouldNotBeNeverButAny: any[]
+        shouldNotBeNeverButAnyLoading: boolean
     }
     selectors: {
         dashboard: (state: any, props: any) => Dashboard | null
         dashboardLoading: (state: any, props: any) => boolean
+        shouldNotBeNeverButAny: (state: any, props: any) => any[]
+        shouldNotBeNeverButAnyLoading: (state: any, props: any) => boolean
     }
     values: {
         dashboard: Dashboard | null
         dashboardLoading: boolean
+        shouldNotBeNeverButAny: any[]
+        shouldNotBeNeverButAnyLoading: boolean
     }
     _isKea: true
 }

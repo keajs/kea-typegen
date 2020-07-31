@@ -66,6 +66,8 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
             typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
         } else if (ts.isNumericLiteral(defaultValue)) {
             typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword)
+        } else if (ts.isArrayLiteralExpression(defaultValue) && defaultValue.elements.length === 0) {
+            typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
         } else {
             typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue)))
         }
