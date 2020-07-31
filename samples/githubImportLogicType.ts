@@ -9,7 +9,6 @@ export interface githubImportLogicType<Repository> extends Logic {
     actionTypes: {}
     actions: {}
     cache: Record<string, any>
-    connections: any
     constants: any
     defaults: {
         repositoryReducerCopy: Repository[]

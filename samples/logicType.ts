@@ -62,7 +62,6 @@ export interface logicType<Session> extends Logic {
         loadSessionsFailure: (error: string) => void
     }
     cache: Record<string, any>
-    connections: any
     constants: any
     defaults: {
         name: string

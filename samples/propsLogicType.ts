@@ -31,7 +31,6 @@ export interface propsLogicType extends Logic {
         setId: (id: number) => void
     }
     cache: Record<string, any>
-    connections: any
     constants: any
     defaults: {
         currentPage: string
