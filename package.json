@@ -1,6 +1,6 @@
 {
     "name": "kea-typegen",
-    "version": "0.0.35",
+    "version": "0.0.36",
     "description": "Generate type definitions for kea logic",
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
