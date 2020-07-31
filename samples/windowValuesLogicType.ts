@@ -1,6 +1,8 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-export interface windowValuesLogicType {
+import { Logic } from 'kea'
+
+export interface windowValuesLogicType extends Logic {
     key: undefined
     actionCreators: {}
     actionKeys: {}

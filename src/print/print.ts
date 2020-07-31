@@ -57,7 +57,11 @@ export function printToFiles(
         const output = parsedLogics
             .map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), typeFileName))
             .join('\n\n')
-        const finalOutput = `// Auto-generated with kea-typegen. DO NOT EDIT!\n\n${output}`
+        const finalOutput = [
+            '// Auto-generated with kea-typegen. DO NOT EDIT!',
+            "import { Logic } from 'kea'",
+            output,
+        ].join('\n\n')
 
         let existingOutput
 
@@ -118,7 +122,11 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         parsedLogic.logicTypeArguments.map((text) =>
             ts.createTypeParameterDeclaration(ts.createIdentifier(text.trim()), undefined),
         ),
-        undefined,
+        [
+            ts.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, [
+                ts.createExpressionWithTypeArguments(undefined, ts.createIdentifier('Logic')),
+            ]),
+        ],
         [
             printProperty('key', printKey(parsedLogic)),
             printProperty('actionCreators', printActionCreators(parsedLogic, appOptions)),

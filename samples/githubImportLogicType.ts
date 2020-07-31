@@ -1,6 +1,8 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-export interface githubImportLogicType<Repository> {
+import { Logic } from 'kea'
+
+export interface githubImportLogicType<Repository> extends Logic {
     key: undefined
     actionCreators: {}
     actionKeys: {}

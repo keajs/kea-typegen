@@ -1,6 +1,8 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData> {
+import { Logic } from 'kea'
+
+export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData> extends Logic {
     key: undefined
     actionCreators: {
         setForm: (

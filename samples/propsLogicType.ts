@@ -1,6 +1,8 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-export interface propsLogicType {
+import { Logic } from 'kea'
+
+export interface propsLogicType extends Logic {
     key: number
     actionCreators: {
         setPage: (

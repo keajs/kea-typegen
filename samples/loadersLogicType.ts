@@ -1,6 +1,8 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-export interface loadersLogicType<Dashboard> {
+import { Logic } from 'kea'
+
+export interface loadersLogicType<Dashboard> extends Logic {
     key: undefined
     actionCreators: {
         addDashboard: (

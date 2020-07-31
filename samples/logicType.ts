@@ -1,6 +1,8 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-export interface logicType<Session> {
+import { Logic } from 'kea'
+
+export interface logicType<Session> extends Logic {
     key: number
     actionCreators: {
         updateName: (
