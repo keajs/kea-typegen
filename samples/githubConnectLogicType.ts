@@ -24,7 +24,7 @@ export interface githubConnectLogicType<Repository> extends Logic {
         setRepositories: (repositories: Repository[]) => void
     }
     cache: Record<string, any>
-    constants: any
+    constants: {}
     defaults: {}
     events: any
     path: ['samples', 'githubConnectLogic']

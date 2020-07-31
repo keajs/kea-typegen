@@ -122,7 +122,7 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         setShowActionsTooltip: (showActionsTooltip: boolean) => void
     }
     cache: Record<string, any>
-    constants: any
+    constants: {}
     defaults: {
         buttonActionsVisible: boolean
         selectedActionId: number | 'new' | null

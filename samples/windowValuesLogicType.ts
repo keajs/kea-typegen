@@ -9,7 +9,7 @@ export interface windowValuesLogicType extends Logic {
     actionTypes: {}
     actions: {}
     cache: Record<string, any>
-    constants: any
+    constants: {}
     defaults: {
         windowHeight: number
         windowWidth: number

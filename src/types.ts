@@ -23,6 +23,7 @@ export interface ParsedLogic {
     path: string[]
     pathString: string
     logicTypeArguments: string[]
+    constants: string[]
     checker: ts.TypeChecker
     actions: ActionTransform[]
     reducers: ReducerTransform[]

@@ -79,7 +79,7 @@ export interface loadersLogicType<Dashboard> extends Logic {
         addDashboardNoTypeFailure: (error: string) => void
     }
     cache: Record<string, any>
-    constants: any
+    constants: {}
     defaults: {
         dashboard: Dashboard | null
         dashboardLoading: boolean

@@ -12,15 +12,16 @@ import { visitProps } from './visitProps'
 import { visitKey } from './visitKey'
 import { visitPath } from './visitPath'
 import { visitListeners } from './visitListeners'
+import { visitConstants } from './visitConstants'
 
 // TODO: defaults
 // TODO: extend
-// TODO: constants
 // TODO: events
 // TODO: sharedlisteners
 const visitFunctions = {
     actions: visitActions,
     connect: visitConnect,
+    constants: visitConstants,
     key: visitKey,
     listeners: visitListeners,
     loaders: visitLoaders,
@@ -90,6 +91,7 @@ export function createVisit(
             actions: [],
             reducers: [],
             selectors: [],
+            constants: [],
             extraActions: {},
             keyType: undefined,
             propsType: undefined,

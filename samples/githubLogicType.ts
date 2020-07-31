@@ -40,7 +40,7 @@ export interface githubLogicType<Repository> extends Logic {
         setFetchError: (error: string) => void
     }
     cache: Record<string, any>
-    constants: any
+    constants: {}
     defaults: {
         username: string
         repositories: Repository[]
