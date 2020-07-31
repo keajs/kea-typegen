@@ -87,27 +87,11 @@ export function getParameterDeclaration(param: ts.ParameterDeclaration) {
     )
 }
 
-export function getPathName(cwd: string, parsedLogic: ParsedLogic) {
-    const pathName = path
-        .relative(cwd, parsedLogic.fileName)
-        .replace(/^.\//, '')
-        .replace(/\.[jt]sx?$/, '')
-        .replace(/\//g, '.')
-    return pathName
-}
-
 export const toSpaces = (key) => key.replace(/(?:^|\.?)([A-Z])/g, (x, y) => ' ' + y.toLowerCase()).replace(/^ /, '')
 
-export function getActionTypeCreator(appOptions: AppOptions, parsedLogic: ParsedLogic) {
+export function getActionTypeCreator(parsedLogic: ParsedLogic) {
     return function (actionName) {
-        let cwd = process.cwd()
-
-        if (appOptions?.logicStartPath) {
-            cwd = path.resolve(cwd, appOptions.logicStartPath)
-        }
-        const pathName = getPathName(cwd, parsedLogic)
-
-        return `${toSpaces(actionName)} (${pathName})`
+        return `${toSpaces(actionName)} (${parsedLogic.pathString})`
     }
 }
 
@@ -165,4 +149,18 @@ export function extractImportedActions(actionObjects: ts.Expression | ts.ObjectL
         }
     }
     return extraActions
+}
+
+export function getLogicPathString(appOptions: AppOptions, fileName: string) {
+    let cwd = process.cwd()
+    if (appOptions?.logicStartPath) {
+        cwd = path.resolve(cwd, appOptions.logicStartPath)
+    }
+    const pathString = path
+        .relative(cwd, fileName)
+        .replace(/^.\//, '')
+        .replace(/\.[jt]sx?$/, '')
+        .replace(/\//g, '.')
+
+    return pathString
 }

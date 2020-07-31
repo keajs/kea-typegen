@@ -105,18 +105,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
 
     const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
 
-    let cwd = process.cwd()
-
-    if (appOptions?.logicStartPath) {
-        cwd = path.resolve(cwd, appOptions.logicStartPath)
-    }
-
-    const pathString = path
-        .relative(cwd, parsedLogic.fileName)
-        .replace(/^.\//, '')
-        .replace(/\.[jt]sx?$/, '')
-        .replace(/\//g, '.')
-
     return ts.createInterfaceDeclaration(
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -150,10 +138,10 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty(
                 'path',
                 ts.createTupleTypeNode(
-                    pathString.split('.').map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p))),
+                    parsedLogic.path.map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p))),
                 ),
             ),
-            printProperty('pathString', ts.createStringLiteral(pathString)),
+            printProperty('pathString', ts.createStringLiteral(parsedLogic.pathString)),
             printProperty('props', printProps(parsedLogic)),
             printProperty('reducer', printReducer(parsedLogic)),
             // TODO

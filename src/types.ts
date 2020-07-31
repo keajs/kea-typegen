@@ -20,6 +20,8 @@ export interface SelectorTransform extends NameType {
 export interface ParsedLogic {
     fileName: string
     logicName: string
+    path: string[]
+    pathString: string
     logicTypeArguments: string[]
     checker: ts.TypeChecker
     actions: ActionTransform[]

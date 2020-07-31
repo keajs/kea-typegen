@@ -1,7 +1,7 @@
 import * as ts from 'typescript'
 import * as path from 'path'
 import { AppOptions, ParsedLogic } from '../types'
-import { isKeaCall } from '../utils'
+import { getLogicPathString, isKeaCall } from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
@@ -40,14 +40,19 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
             if (appOptions?.verbose) {
                 appOptions.log(`-> Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
             }
-            ts.forEachChild(sourceFile, createVisit(checker, parsedLogics, sourceFile))
+            ts.forEachChild(sourceFile, createVisit(checker, parsedLogics, sourceFile, appOptions))
         }
     }
 
     return parsedLogics
 }
 
-export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[], sourceFile: ts.SourceFile) {
+export function createVisit(
+    checker: ts.TypeChecker,
+    parsedLogics: ParsedLogic[],
+    sourceFile: ts.SourceFile,
+    appOptions?: AppOptions,
+) {
     return function visit(node: ts.Node) {
         if (!isKeaCall(node, checker)) {
             ts.forEachChild(node, visit)
@@ -75,6 +80,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
             }
         }
 
+        const pathString = getLogicPathString(appOptions, sourceFile.fileName)
+
         const parsedLogic: ParsedLogic = {
             checker,
             logicName,
@@ -86,6 +93,8 @@ export function createVisit(checker: ts.TypeChecker, parsedLogics: ParsedLogic[]
             extraActions: {},
             keyType: undefined,
             propsType: undefined,
+            path: pathString.split('.'),
+            pathString: pathString,
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression

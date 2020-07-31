@@ -3,7 +3,7 @@ import { AppOptions, ParsedLogic } from '../types'
 import { getActionTypeCreator } from '../utils'
 
 export function printActionKeys(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
-    const getActionType = getActionTypeCreator(appOptions, parsedLogic)
+    const getActionType = getActionTypeCreator(parsedLogic)
 
     return ts.createTypeLiteralNode(
         parsedLogic.actions.map(({ name, parameters, returnTypeNode }) => {
