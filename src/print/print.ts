@@ -141,8 +141,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
                 ]),
             ),
             // TODO
-            printProperty('connections', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
-            // TODO
             printProperty('constants', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
             printProperty('defaults', printDefaults(parsedLogic)),
             // TODO
