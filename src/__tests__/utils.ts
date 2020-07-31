@@ -33,5 +33,5 @@ test('logicSourceToLogicType', () => {
     `
     const string = logicSourceToLogicType(logicSource)
 
-    expect(string).toContain('export interface myRandomLogicType {')
+    expect(string).toContain('export interface myRandomLogicType extends Logic {')
 })

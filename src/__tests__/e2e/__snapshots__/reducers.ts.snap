@@ -1,7 +1,7 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`reducers - as a function returning a object 1`] = `
-"export interface logicType {
+"export interface logicType extends Logic {
     key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
@@ -26,8 +26,7 @@ exports[`reducers - as a function returning a object 1`] = `
         updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
-    connections: any;
-    constants: any;
+    constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -68,7 +67,7 @@ exports[`reducers - as a function returning a object 1`] = `
 `;
 
 exports[`reducers - as an object 1`] = `
-"export interface logicType {
+"export interface logicType extends Logic {
     key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
@@ -93,8 +92,7 @@ exports[`reducers - as an object 1`] = `
         updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
-    connections: any;
-    constants: any;
+    constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -135,7 +133,7 @@ exports[`reducers - as an object 1`] = `
 `;
 
 exports[`reducers - with a function 1`] = `
-"export interface logicType {
+"export interface logicType extends Logic {
     key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
@@ -160,8 +158,7 @@ exports[`reducers - with a function 1`] = `
         updateOtherName: (otherName: string) => void;
     };
     cache: Record<string, any>;
-    connections: any;
-    constants: any;
+    constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -202,7 +199,7 @@ exports[`reducers - with a function 1`] = `
 `;
 
 exports[`reducers - with bool default 1`] = `
-"export interface logicType {
+"export interface logicType extends Logic {
     key: undefined;
     actionCreators: {
         updateName: () => ({
@@ -222,8 +219,7 @@ exports[`reducers - with bool default 1`] = `
         updateName: () => void;
     };
     cache: Record<string, any>;
-    connections: any;
-    constants: any;
+    constants: {};
     defaults: {
         name: boolean;
     };
