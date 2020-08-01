@@ -18,6 +18,6 @@ interface DashboardProps {
 const makeLogicTypeLogic = kea<MakeLogicType<DashboardValues, DashboardActions, DashboardProps>>({})
 
 makeLogicTypeLogic.actions.setName('asd')
-makeLogicTypeLogic.build({  })
+makeLogicTypeLogic.build({ id: 123 })
 
-makeLogicTypeLogic({})
+makeLogicTypeLogic()

@@ -121,7 +121,7 @@ export const complexLogic = kea<complexLogicType<ActionType, ActionForm, FormIns
         hideButtonActions: () => {
             actions.setShowActionsTooltip(false)
         },
-        setShowActionsTooltip: async ({ showActionsTooltip }, breakpoint) => {
+        setShowActionsTooltip: async ({ showActionsTooltip }, breakpoint, action, previousState) => {
             if (showActionsTooltip) {
                 await breakpoint(1000)
                 actions.setShowActionsTooltip(false)

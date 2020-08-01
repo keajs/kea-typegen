@@ -83,6 +83,12 @@ export const logic = kea<logicType<Session>>({
             },
         },
     }),
+    listeners: ({ actions }) => ({
+        updateNumber: ({ number }) => {
+            actions.updateName(number.toString())
+            console.log(number)
+        }
+    }),
     sharedListeners: () => ({}),
     events: { afterMount: () => {} },
 })

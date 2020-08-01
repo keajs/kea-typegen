@@ -24,7 +24,7 @@ export const loadersLogic = kea<loadersLogicType<Dashboard>>({
     },
     reducers: () => ({
         dashboard: {
-            addDashboardSuccess: (state, { dashboard }) => ({ ...state, [dashboard.id]: dashboard }),
+            addDashboardSuccess: (state, { dashboard }) => dashboard,
         },
     }),
 })
