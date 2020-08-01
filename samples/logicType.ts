@@ -67,11 +67,11 @@ export interface logicType<Session> extends Logic {
         SOMETHING_ELSE: 'SOMETHING_ELSE'
     }
     defaults: {
+        yetAnotherNameWithNullDefault: string | null
         name: string
         number: number
         persistedNumber: number
         otherNameNoDefault: any
-        yetAnotherNameWithNullDefault: string | null
         sessions: Session[]
         sessionsLoading: boolean
     }
@@ -88,11 +88,11 @@ export interface logicType<Session> extends Logic {
         action: () => any,
         fullState: any,
     ) => {
+        yetAnotherNameWithNullDefault: string | null
         name: string
         number: number
         persistedNumber: number
         otherNameNoDefault: any
-        yetAnotherNameWithNullDefault: string | null
         sessions: Session[]
         sessionsLoading: boolean
     }
@@ -102,42 +102,42 @@ export interface logicType<Session> extends Logic {
         }
     }
     reducers: {
+        yetAnotherNameWithNullDefault: (state: string | null, action: any, fullState: any) => string | null
         name: (state: string, action: any, fullState: any) => string
         number: (state: number, action: any, fullState: any) => number
         persistedNumber: (state: number, action: any, fullState: any) => number
         otherNameNoDefault: (state: any, action: any, fullState: any) => any
-        yetAnotherNameWithNullDefault: (state: string | null, action: any, fullState: any) => string | null
         sessions: (state: Session[], action: any, fullState: any) => Session[]
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean
     }
     selector: (
         state: any,
     ) => {
+        yetAnotherNameWithNullDefault: string | null
         name: string
         number: number
         persistedNumber: number
         otherNameNoDefault: any
-        yetAnotherNameWithNullDefault: string | null
         sessions: Session[]
         sessionsLoading: boolean
     }
     selectors: {
+        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null
         name: (state: any, props: any) => string
         number: (state: any, props: any) => number
         persistedNumber: (state: any, props: any) => number
         otherNameNoDefault: (state: any, props: any) => any
-        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null
         sessions: (state: any, props: any) => Session[]
         sessionsLoading: (state: any, props: any) => boolean
         capitalizedName: (state: any, props: any) => string
         upperCaseName: (state: any, props: any) => string
     }
     values: {
+        yetAnotherNameWithNullDefault: string | null
         name: string
         number: number
         persistedNumber: number
         otherNameNoDefault: any
-        yetAnotherNameWithNullDefault: string | null
         sessions: Session[]
         sessionsLoading: boolean
         capitalizedName: string

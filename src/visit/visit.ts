@@ -14,15 +14,15 @@ import { visitPath } from './visitPath'
 import { visitListeners } from './visitListeners'
 import { visitConstants } from './visitConstants'
 import { visitEvents } from './visitEvents'
+import { visitDefaults } from './visitDefaults'
 
-// TODO: defaults
 // TODO: extend
-// TODO: events
 // TODO: sharedlisteners
 const visitFunctions = {
     actions: visitActions,
     connect: visitConnect,
     constants: visitConstants,
+    defaults: visitDefaults,
     key: visitKey,
     listeners: visitListeners,
     loaders: visitLoaders,

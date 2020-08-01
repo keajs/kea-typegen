@@ -18,6 +18,9 @@ export const logic = kea<logicType<Session>>({
         updateName: (name: string) => ({ name }),
         updateNumber: (number: number) => ({ number }),
     }),
+    defaults: {
+        yetAnotherNameWithNullDefault: "blue" as string | null
+    },
     reducers: () => {
         return {
             name: [
