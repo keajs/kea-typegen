@@ -13,7 +13,7 @@ export interface githubImportLogicType<Repository> extends Logic {
     defaults: {
         repositoryReducerCopy: Repository[]
     }
-    events: any
+    events: {}
     path: ['samples', 'githubImportLogic']
     pathString: 'samples.githubImportLogic'
     props: Record<string, unknown>

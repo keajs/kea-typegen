@@ -86,7 +86,7 @@ export interface loadersLogicType<Dashboard> extends Logic {
         shouldNotBeNeverButAny: any[]
         shouldNotBeNeverButAnyLoading: boolean
     }
-    events: any
+    events: {}
     path: ['samples', 'loadersLogic']
     pathString: 'samples.loadersLogic'
     props: Record<string, unknown>

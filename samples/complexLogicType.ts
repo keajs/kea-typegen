@@ -133,7 +133,7 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         counter: number
         showActionsTooltip: boolean
     }
-    events: any
+    events: {}
     path: ['samples', 'complexLogic']
     pathString: 'samples.complexLogic'
     props: Record<string, unknown>

@@ -19,5 +19,10 @@ export const githubImportLogic = kea<githubImportLogicType<Repository>>({
         [githubLogic.actionTypes.setUsername]: ({ username }) => {
             console.log(username)
         },
+    }),
+    sharedListeners: ({ }) => ({
+        bla (_, breakpoint, asd) {
+
+    }
     })
 })

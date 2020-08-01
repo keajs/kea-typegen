@@ -75,7 +75,9 @@ export interface logicType<Session> extends Logic {
         sessions: Session[]
         sessionsLoading: boolean
     }
-    events: any
+    events: {
+        afterMount: () => void
+    }
     path: ['scenes', 'homepage', 'index', '*']
     pathString: 'scenes.homepage.index.*'
     props: {

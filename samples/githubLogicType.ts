@@ -47,7 +47,9 @@ export interface githubLogicType<Repository> extends Logic {
         isLoading: boolean
         error: string | null
     }
-    events: any
+    events: {
+        afterMount: () => void
+    }
     path: ['samples', 'githubLogic']
     pathString: 'samples.githubLogic'
     props: Record<string, unknown>

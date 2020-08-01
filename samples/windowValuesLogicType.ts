@@ -14,7 +14,7 @@ export interface windowValuesLogicType extends Logic {
         windowHeight: number
         windowWidth: number
     }
-    events: any
+    events: {}
     path: ['samples', 'windowValuesLogic']
     pathString: 'samples.windowValuesLogic'
     props: Record<string, unknown>

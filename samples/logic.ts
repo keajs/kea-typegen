@@ -11,7 +11,7 @@ export const logic = kea<logicType<Session>>({
     props: {} as {
         id: number
     },
-    key: props => props.id,
+    key: (props) => props.id,
     path: (key) => ['scenes', 'homepage', 'index', key],
     constants: () => ['SOMETHING', 'SOMETHING_ELSE'],
     actions: () => ({
@@ -80,6 +80,8 @@ export const logic = kea<logicType<Session>>({
             },
         },
     }),
+    sharedListeners: () => ({}),
+    events: { afterMount: () => {} },
 })
 
 function MyComponent() {

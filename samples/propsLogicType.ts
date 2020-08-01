@@ -35,7 +35,7 @@ export interface propsLogicType extends Logic {
     defaults: {
         currentPage: string
     }
-    events: any
+    events: {}
     path: ['samples', 'propsLogic']
     pathString: 'samples.propsLogic'
     props: {
