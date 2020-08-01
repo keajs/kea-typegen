@@ -2,7 +2,6 @@
 
 exports[`reducers - as a function returning a object 1`] = `
 "export interface logicType extends Logic {
-    key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -25,14 +24,14 @@ exports[`reducers - as a function returning a object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    cache: Record<string, any>;
     constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    events: any;
+    events: {};
+    key: undefined;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -41,7 +40,7 @@ exports[`reducers - as a function returning a object 1`] = `
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    reducerOptions: any;
+    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherNameNoDefault: (state: any, action: any, fullState: any) => any;
@@ -63,12 +62,12 @@ exports[`reducers - as a function returning a object 1`] = `
         yetAnotherNameWithNullDefault: string | null;
     };
     _isKea: true;
+    _isKeaWithKey: false;
 }"
 `;
 
 exports[`reducers - as an object 1`] = `
 "export interface logicType extends Logic {
-    key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -91,14 +90,14 @@ exports[`reducers - as an object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    cache: Record<string, any>;
     constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    events: any;
+    events: {};
+    key: undefined;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -107,7 +106,7 @@ exports[`reducers - as an object 1`] = `
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    reducerOptions: any;
+    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherNameNoDefault: (state: any, action: any, fullState: any) => any;
@@ -129,12 +128,12 @@ exports[`reducers - as an object 1`] = `
         yetAnotherNameWithNullDefault: string | null;
     };
     _isKea: true;
+    _isKeaWithKey: false;
 }"
 `;
 
 exports[`reducers - with a function 1`] = `
 "export interface logicType extends Logic {
-    key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -157,14 +156,14 @@ exports[`reducers - with a function 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    cache: Record<string, any>;
     constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    events: any;
+    events: {};
+    key: undefined;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -173,7 +172,7 @@ exports[`reducers - with a function 1`] = `
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    reducerOptions: any;
+    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherNameNoDefault: (state: any, action: any, fullState: any) => any;
@@ -195,12 +194,12 @@ exports[`reducers - with a function 1`] = `
         yetAnotherNameWithNullDefault: string | null;
     };
     _isKea: true;
+    _isKeaWithKey: false;
 }"
 `;
 
 exports[`reducers - with bool default 1`] = `
 "export interface logicType extends Logic {
-    key: undefined;
     actionCreators: {
         updateName: () => ({
             type: \\"update name (logic)\\";
@@ -218,19 +217,19 @@ exports[`reducers - with bool default 1`] = `
     actions: {
         updateName: () => void;
     };
-    cache: Record<string, any>;
     constants: {};
     defaults: {
         name: boolean;
     };
-    events: any;
+    events: {};
+    key: undefined;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
         name: boolean;
     };
-    reducerOptions: any;
+    reducerOptions: {};
     reducers: {
         name: (state: boolean, action: any, fullState: any) => boolean;
     };
@@ -244,5 +243,6 @@ exports[`reducers - with bool default 1`] = `
         name: boolean;
     };
     _isKea: true;
+    _isKeaWithKey: false;
 }"
 `;

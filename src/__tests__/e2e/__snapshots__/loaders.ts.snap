@@ -2,7 +2,6 @@
 
 exports[`loaders - with a function 1`] = `
 "export interface logicType extends Logic {
-    key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -43,13 +42,13 @@ exports[`loaders - with a function 1`] = `
         loadSessionsSuccess: (sessions: Session[]) => void;
         loadSessionsFailure: (error: string) => void;
     };
-    cache: Record<string, any>;
     constants: {};
     defaults: {
         sessions: Session[];
         sessionsLoading: boolean;
     };
-    events: any;
+    events: {};
+    key: undefined;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -57,7 +56,7 @@ exports[`loaders - with a function 1`] = `
         sessions: Session[];
         sessionsLoading: boolean;
     };
-    reducerOptions: any;
+    reducerOptions: {};
     reducers: {
         sessions: (state: Session[], action: any, fullState: any) => Session[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
@@ -75,12 +74,12 @@ exports[`loaders - with a function 1`] = `
         sessionsLoading: boolean;
     };
     _isKea: true;
+    _isKeaWithKey: false;
 }"
 `;
 
 exports[`loaders - with an array and default 1`] = `
 "export interface logicType extends Logic {
-    key: undefined;
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -121,13 +120,13 @@ exports[`loaders - with an array and default 1`] = `
         loadSessionsSuccess: (sessions: Session[]) => void;
         loadSessionsFailure: (error: string) => void;
     };
-    cache: Record<string, any>;
     constants: {};
     defaults: {
         sessions: Session[];
         sessionsLoading: boolean;
     };
-    events: any;
+    events: {};
+    key: undefined;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -135,7 +134,7 @@ exports[`loaders - with an array and default 1`] = `
         sessions: Session[];
         sessionsLoading: boolean;
     };
-    reducerOptions: any;
+    reducerOptions: {};
     reducers: {
         sessions: (state: Session[], action: any, fullState: any) => Session[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
@@ -153,12 +152,12 @@ exports[`loaders - with an array and default 1`] = `
         sessionsLoading: boolean;
     };
     _isKea: true;
+    _isKeaWithKey: false;
 }"
 `;
 
 exports[`loaders - with no param 1`] = `
 "export interface logicType extends Logic {
-    key: undefined;
     actionCreators: {
         loadSessions: () => ({
             type: \\"load sessions (logic)\\";
@@ -217,13 +216,13 @@ exports[`loaders - with no param 1`] = `
         loadResultsSuccess: (sessions: string[]) => void;
         loadResultsFailure: (error: string) => void;
     };
-    cache: Record<string, any>;
     constants: {};
     defaults: {
         sessions: string[];
         sessionsLoading: boolean;
     };
-    events: any;
+    events: {};
+    key: undefined;
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -231,7 +230,7 @@ exports[`loaders - with no param 1`] = `
         sessions: string[];
         sessionsLoading: boolean;
     };
-    reducerOptions: any;
+    reducerOptions: {};
     reducers: {
         sessions: (state: string[], action: any, fullState: any) => string[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
@@ -249,5 +248,6 @@ exports[`loaders - with no param 1`] = `
         sessionsLoading: boolean;
     };
     _isKea: true;
+    _isKeaWithKey: false;
 }"
 `;
