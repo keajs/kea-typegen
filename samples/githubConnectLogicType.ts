@@ -31,7 +31,7 @@ export interface githubConnectLogicType<Repository> extends Logic {
     pathString: 'samples.githubConnectLogic'
     props: Record<string, unknown>
     reducer: (state: any, action: () => any, fullState: any) => {}
-    reducerOptions: any
+    reducerOptions: {}
     reducers: {}
     selector: (state: any) => {}
     selectors: {

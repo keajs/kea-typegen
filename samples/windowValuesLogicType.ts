@@ -26,7 +26,7 @@ export interface windowValuesLogicType extends Logic {
         windowHeight: number
         windowWidth: number
     }
-    reducerOptions: any
+    reducerOptions: {}
     reducers: {
         windowHeight: (state: number, action: any, fullState: any) => number
         windowWidth: (state: number, action: any, fullState: any) => number

@@ -24,7 +24,7 @@ export interface githubImportLogicType<Repository> extends Logic {
     ) => {
         repositoryReducerCopy: Repository[]
     }
-    reducerOptions: any
+    reducerOptions: {}
     reducers: {
         repositoryReducerCopy: (state: Repository[], action: any, fullState: any) => Repository[]
     }

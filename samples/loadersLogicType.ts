@@ -100,7 +100,7 @@ export interface loadersLogicType<Dashboard> extends Logic {
         shouldNotBeNeverButAny: any[]
         shouldNotBeNeverButAnyLoading: boolean
     }
-    reducerOptions: any
+    reducerOptions: {}
     reducers: {
         dashboard: (state: Dashboard | null, action: any, fullState: any) => Dashboard | null
         dashboardLoading: (state: boolean, action: any, fullState: any) => boolean

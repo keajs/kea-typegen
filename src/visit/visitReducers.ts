@@ -13,17 +13,25 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
         if (value) {
             let extraActions = {}
             let typeNode
+            let reducerOptions
 
             if (ts.isArrayLiteralExpression(value)) {
                 const defaultValue = value.elements[0]
                 const actionObjects = value.elements[value.elements.length - 1]
                 extraActions = extractImportedActions(actionObjects, checker)
                 typeNode = getTypeNodeForDefaultValue(defaultValue, checker)
+
+                if (value.elements.length > 2) {
+                    const options = value.elements[value.elements.length - 2]
+                    if (ts.isObjectLiteralExpression(options)) {
+                        reducerOptions = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(options)))
+                    }
+                }
             } else if (ts.isObjectLiteralExpression(value)) {
                 typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
             }
 
-            parsedLogic.reducers.push({ name, typeNode })
+            parsedLogic.reducers.push({ name, typeNode, reducerOptions })
 
             if (Object.keys(extraActions).length > 0) {
                 Object.assign(parsedLogic.extraActions, extraActions)

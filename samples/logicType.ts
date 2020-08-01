@@ -69,6 +69,7 @@ export interface logicType<Session> extends Logic {
     defaults: {
         name: string
         number: number
+        persistedNumber: number
         otherNameNoDefault: any
         yetAnotherNameWithNullDefault: string | null
         sessions: Session[]
@@ -87,15 +88,21 @@ export interface logicType<Session> extends Logic {
     ) => {
         name: string
         number: number
+        persistedNumber: number
         otherNameNoDefault: any
         yetAnotherNameWithNullDefault: string | null
         sessions: Session[]
         sessionsLoading: boolean
     }
-    reducerOptions: any
+    reducerOptions: {
+        persistedNumber: {
+            persist: boolean
+        }
+    }
     reducers: {
         name: (state: string, action: any, fullState: any) => string
         number: (state: number, action: any, fullState: any) => number
+        persistedNumber: (state: number, action: any, fullState: any) => number
         otherNameNoDefault: (state: any, action: any, fullState: any) => any
         yetAnotherNameWithNullDefault: (state: string | null, action: any, fullState: any) => string | null
         sessions: (state: Session[], action: any, fullState: any) => Session[]
@@ -106,6 +113,7 @@ export interface logicType<Session> extends Logic {
     ) => {
         name: string
         number: number
+        persistedNumber: number
         otherNameNoDefault: any
         yetAnotherNameWithNullDefault: string | null
         sessions: Session[]
@@ -114,6 +122,7 @@ export interface logicType<Session> extends Logic {
     selectors: {
         name: (state: any, props: any) => string
         number: (state: any, props: any) => number
+        persistedNumber: (state: any, props: any) => number
         otherNameNoDefault: (state: any, props: any) => any
         yetAnotherNameWithNullDefault: (state: any, props: any) => string | null
         sessions: (state: any, props: any) => Session[]
@@ -124,6 +133,7 @@ export interface logicType<Session> extends Logic {
     values: {
         name: string
         number: number
+        persistedNumber: number
         otherNameNoDefault: any
         yetAnotherNameWithNullDefault: string | null
         sessions: Session[]

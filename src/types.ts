@@ -11,7 +11,9 @@ export interface NameType {
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
-export interface ReducerTransform extends NameType {}
+export interface ReducerTransform extends NameType {
+    reducerOptions?: ts.TypeNode | ts.ParenthesizedTypeNode
+}
 
 export interface SelectorTransform extends NameType {
     functionTypes?: { name: string; type: ts.TypeNode }[]

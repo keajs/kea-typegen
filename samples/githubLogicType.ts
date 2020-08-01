@@ -61,7 +61,7 @@ export interface githubLogicType<Repository> extends Logic {
         isLoading: boolean
         error: string | null
     }
-    reducerOptions: any
+    reducerOptions: {}
     reducers: {
         username: (state: string, action: any, fullState: any) => string
         repositories: (state: Repository[], action: any, fullState: any) => Repository[]

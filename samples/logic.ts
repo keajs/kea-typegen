@@ -33,6 +33,13 @@ export const logic = kea<logicType<Session>>({
                     updateNumber: (_, { number }) => number,
                 },
             ],
+            persistedNumber: [
+                1232,
+                { persist: true },
+                {
+                    updateNumber: (_, { number }) => number,
+                },
+            ],
             otherNameNoDefault: {
                 updateName: (_, { name }) => name,
             },

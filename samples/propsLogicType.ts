@@ -49,7 +49,7 @@ export interface propsLogicType extends Logic {
     ) => {
         currentPage: string
     }
-    reducerOptions: any
+    reducerOptions: {}
     reducers: {
         currentPage: (state: string, action: any, fullState: any) => string
     }

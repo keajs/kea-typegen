@@ -151,7 +151,7 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         counter: number
         showActionsTooltip: boolean
     }
-    reducerOptions: any
+    reducerOptions: {}
     reducers: {
         buttonActionsVisible: (state: boolean, action: any, fullState: any) => boolean
         selectedActionId: (state: number | 'new' | null, action: any, fullState: any) => number | 'new' | null
