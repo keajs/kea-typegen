@@ -135,13 +135,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
             printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
             printProperty('actions', printActions(parsedLogic, appOptions)),
-            printProperty(
-                'cache',
-                ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                    ts.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword),
-                ]),
-            ),
             printProperty('constants', printConstants(parsedLogic)),
             printProperty('defaults', printDefaults(parsedLogic)),
             printProperty('events', printEvents(parsedLogic)),
