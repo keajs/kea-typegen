@@ -3,7 +3,6 @@
 import { Logic } from 'kea'
 
 export interface propsLogicType extends Logic {
-    key: number
     actionCreators: {
         setPage: (
             page: string,
@@ -30,12 +29,12 @@ export interface propsLogicType extends Logic {
         setPage: (page: string) => void
         setId: (id: number) => void
     }
-    cache: Record<string, any>
     constants: {}
     defaults: {
         currentPage: string
     }
     events: {}
+    key: number
     path: ['samples', 'propsLogic']
     pathString: 'samples.propsLogic'
     props: {
@@ -65,4 +64,5 @@ export interface propsLogicType extends Logic {
         currentPage: string
     }
     _isKea: true
+    _isKeaWithKey: true
 }

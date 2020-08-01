@@ -3,7 +3,6 @@
 import { Logic } from 'kea'
 
 export interface githubConnectLogicType<Repository> extends Logic {
-    key: undefined
     actionCreators: {
         setRepositories: (
             repositories: Repository[],
@@ -23,10 +22,10 @@ export interface githubConnectLogicType<Repository> extends Logic {
     actions: {
         setRepositories: (repositories: Repository[]) => void
     }
-    cache: Record<string, any>
     constants: {}
     defaults: {}
     events: {}
+    key: undefined
     path: ['samples', 'githubConnectLogic']
     pathString: 'samples.githubConnectLogic'
     props: Record<string, unknown>
@@ -41,4 +40,5 @@ export interface githubConnectLogicType<Repository> extends Logic {
         repositories: Repository[]
     }
     _isKea: true
+    _isKeaWithKey: false
 }

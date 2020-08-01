@@ -3,7 +3,6 @@
 import { Logic } from 'kea'
 
 export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData> extends Logic {
-    key: undefined
     actionCreators: {
         setForm: (
             form: FormInstance,
@@ -121,7 +120,6 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         hideButtonActions: () => void
         setShowActionsTooltip: (showActionsTooltip: boolean) => void
     }
-    cache: Record<string, any>
     constants: {}
     defaults: {
         buttonActionsVisible: boolean
@@ -134,6 +132,7 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         showActionsTooltip: boolean
     }
     events: {}
+    key: undefined
     path: ['samples', 'complexLogic']
     pathString: 'samples.complexLogic'
     props: Record<string, unknown>
@@ -201,6 +200,7 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         selectedEditedAction: ActionForm
     }
     _isKea: true
+    _isKeaWithKey: false
     __keaTypeGenInternalSelectorTypes: {
         selectedAction: (arg1: number | 'new' | null, arg2: HTMLElement | null) => ActionType | null
         initialValuesForForm: (arg1: ActionType | null) => ActionForm

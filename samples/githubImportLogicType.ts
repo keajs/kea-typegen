@@ -3,17 +3,16 @@
 import { Logic } from 'kea'
 
 export interface githubImportLogicType<Repository> extends Logic {
-    key: undefined
     actionCreators: {}
     actionKeys: {}
     actionTypes: {}
     actions: {}
-    cache: Record<string, any>
     constants: {}
     defaults: {
         repositoryReducerCopy: Repository[]
     }
     events: {}
+    key: undefined
     path: ['samples', 'githubImportLogic']
     pathString: 'samples.githubImportLogic'
     props: Record<string, unknown>
@@ -42,6 +41,7 @@ export interface githubImportLogicType<Repository> extends Logic {
         repositorySelectorCopy: Repository[]
     }
     _isKea: true
+    _isKeaWithKey: false
     __keaTypeGenInternalSelectorTypes: {
         repositorySelectorCopy: (arg1: Repository[]) => Repository[]
     }

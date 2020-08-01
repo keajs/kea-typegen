@@ -3,18 +3,17 @@
 import { Logic } from 'kea'
 
 export interface windowValuesLogicType extends Logic {
-    key: undefined
     actionCreators: {}
     actionKeys: {}
     actionTypes: {}
     actions: {}
-    cache: Record<string, any>
     constants: {}
     defaults: {
         windowHeight: number
         windowWidth: number
     }
     events: {}
+    key: undefined
     path: ['samples', 'windowValuesLogic']
     pathString: 'samples.windowValuesLogic'
     props: Record<string, unknown>
@@ -46,4 +45,5 @@ export interface windowValuesLogicType extends Logic {
         windowWidth: number
     }
     _isKea: true
+    _isKeaWithKey: false
 }

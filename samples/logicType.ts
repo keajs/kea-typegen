@@ -3,7 +3,6 @@
 import { Logic } from 'kea'
 
 export interface logicType<Session> extends Logic {
-    key: number
     actionCreators: {
         updateName: (
             name: string,
@@ -61,7 +60,6 @@ export interface logicType<Session> extends Logic {
         loadSessionsSuccess: (sessions: Session[]) => void
         loadSessionsFailure: (error: string) => void
     }
-    cache: Record<string, any>
     constants: {
         SOMETHING: 'SOMETHING'
         SOMETHING_ELSE: 'SOMETHING_ELSE'
@@ -78,6 +76,7 @@ export interface logicType<Session> extends Logic {
     events: {
         afterMount: () => void
     }
+    key: number
     path: ['scenes', 'homepage', 'index', '*']
     pathString: 'scenes.homepage.index.*'
     props: {
@@ -144,6 +143,7 @@ export interface logicType<Session> extends Logic {
         upperCaseName: string
     }
     _isKea: true
+    _isKeaWithKey: true
     __keaTypeGenInternalSelectorTypes: {
         capitalizedName: (arg1: string, arg2: number) => string
         upperCaseName: (arg1: string) => string

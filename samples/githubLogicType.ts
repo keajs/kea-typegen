@@ -3,7 +3,6 @@
 import { Logic } from 'kea'
 
 export interface githubLogicType<Repository> extends Logic {
-    key: undefined
     actionCreators: {
         setUsername: (
             username: string,
@@ -39,7 +38,6 @@ export interface githubLogicType<Repository> extends Logic {
         setRepositories: (repositories: Repository[]) => void
         setFetchError: (error: string) => void
     }
-    cache: Record<string, any>
     constants: {}
     defaults: {
         username: string
@@ -50,6 +48,7 @@ export interface githubLogicType<Repository> extends Logic {
     events: {
         afterMount: () => void
     }
+    key: undefined
     path: ['samples', 'githubLogic']
     pathString: 'samples.githubLogic'
     props: Record<string, unknown>
@@ -93,6 +92,7 @@ export interface githubLogicType<Repository> extends Logic {
         sortedRepositories: Repository[]
     }
     _isKea: true
+    _isKeaWithKey: false
     __keaTypeGenInternalSelectorTypes: {
         sortedRepositories: (arg1: Repository[]) => Repository[]
     }

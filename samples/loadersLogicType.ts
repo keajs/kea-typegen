@@ -3,7 +3,6 @@
 import { Logic } from 'kea'
 
 export interface loadersLogicType<Dashboard> extends Logic {
-    key: undefined
     actionCreators: {
         addDashboard: (
             name: string,
@@ -78,7 +77,6 @@ export interface loadersLogicType<Dashboard> extends Logic {
         addDashboardNoTypeSuccess: (dashboard: Dashboard) => void
         addDashboardNoTypeFailure: (error: string) => void
     }
-    cache: Record<string, any>
     constants: {}
     defaults: {
         dashboard: Dashboard | null
@@ -87,6 +85,7 @@ export interface loadersLogicType<Dashboard> extends Logic {
         shouldNotBeNeverButAnyLoading: boolean
     }
     events: {}
+    key: undefined
     path: ['samples', 'loadersLogic']
     pathString: 'samples.loadersLogic'
     props: Record<string, unknown>
@@ -128,4 +127,5 @@ export interface loadersLogicType<Dashboard> extends Logic {
         shouldNotBeNeverButAnyLoading: boolean
     }
     _isKea: true
+    _isKeaWithKey: false
 }
