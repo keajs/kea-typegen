@@ -32,6 +32,7 @@ exports[`connect actions and rename 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -40,6 +41,7 @@ exports[`connect actions and rename 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
+    sharedListeners: {};
     values: {};
     _isKea: true;
     _isKeaWithKey: false;
@@ -78,6 +80,7 @@ exports[`connect actions from another logic 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -86,6 +89,7 @@ exports[`connect actions from another logic 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
+    sharedListeners: {};
     values: {};
     _isKea: true;
     _isKeaWithKey: false;
@@ -124,6 +128,7 @@ exports[`connect actions from multiple other logics 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -132,6 +137,7 @@ exports[`connect actions from multiple other logics 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
+    sharedListeners: {};
     values: {};
     _isKea: true;
     _isKeaWithKey: false;
@@ -148,6 +154,7 @@ exports[`connect props from another logic 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -159,6 +166,7 @@ exports[`connect props from another logic 1`] = `
         name: (state: any, props: any) => string;
         yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
+    sharedListeners: {};
     values: {
         name: string;
         yetAnotherNameWithNullDefault: string | null;
@@ -178,6 +186,7 @@ exports[`connect values and rename 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -189,6 +198,7 @@ exports[`connect values and rename 1`] = `
         firstSelector: (state: any, props: any) => string;
         secondSelector: (state: any, props: any) => string | null;
     };
+    sharedListeners: {};
     values: {
         firstSelector: string;
         secondSelector: string | null;
@@ -208,6 +218,7 @@ exports[`connect values from another logic 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -219,6 +230,7 @@ exports[`connect values from another logic 1`] = `
         name: (state: any, props: any) => string;
         yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
+    sharedListeners: {};
     values: {
         name: string;
         yetAnotherNameWithNullDefault: string | null;

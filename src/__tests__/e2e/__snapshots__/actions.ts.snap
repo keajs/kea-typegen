@@ -5,11 +5,15 @@ exports[`actions - as a function returning a object 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -28,6 +32,7 @@ exports[`actions - as a function returning a object 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -36,6 +41,7 @@ exports[`actions - as a function returning a object 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
+    sharedListeners: {};
     values: {};
     _isKea: true;
     _isKeaWithKey: false;
@@ -47,11 +53,15 @@ exports[`actions - as an object 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -70,6 +80,7 @@ exports[`actions - as an object 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -78,6 +89,7 @@ exports[`actions - as an object 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
+    sharedListeners: {};
     values: {};
     _isKea: true;
     _isKeaWithKey: false;
@@ -89,11 +101,15 @@ exports[`actions - with a function 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -112,6 +128,7 @@ exports[`actions - with a function 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -120,6 +137,7 @@ exports[`actions - with a function 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
+    sharedListeners: {};
     values: {};
     _isKea: true;
     _isKeaWithKey: false;
@@ -131,15 +149,21 @@ exports[`actions - with random values instead of functions 1`] = `
     actionCreators: {
         updateName: (name?: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         withDefaultValue: (name?: any) => ({
             type: \\"with default value (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         withDefaultValueAndType: (name?: string) => ({
             type: \\"with default value and type (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         withBool: () => ({
             type: \\"with bool (logic)\\";
@@ -179,6 +203,7 @@ exports[`actions - with random values instead of functions 1`] = `
     defaults: {};
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -187,6 +212,7 @@ exports[`actions - with random values instead of functions 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
+    sharedListeners: {};
     values: {};
     _isKea: true;
     _isKeaWithKey: false;

@@ -5,11 +5,15 @@ exports[`reducers - as a function returning a object 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -32,6 +36,7 @@ exports[`reducers - as a function returning a object 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -56,6 +61,7 @@ exports[`reducers - as a function returning a object 1`] = `
         otherNameNoDefault: (state: any, props: any) => any;
         yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
+    sharedListeners: {};
     values: {
         name: string;
         otherNameNoDefault: any;
@@ -71,11 +77,15 @@ exports[`reducers - as an object 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -98,6 +108,7 @@ exports[`reducers - as an object 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -122,6 +133,7 @@ exports[`reducers - as an object 1`] = `
         otherNameNoDefault: (state: any, props: any) => any;
         yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
+    sharedListeners: {};
     values: {
         name: string;
         otherNameNoDefault: any;
@@ -137,11 +149,15 @@ exports[`reducers - with a function 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -164,6 +180,7 @@ exports[`reducers - with a function 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -188,6 +205,7 @@ exports[`reducers - with a function 1`] = `
         otherNameNoDefault: (state: any, props: any) => any;
         yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
     };
+    sharedListeners: {};
     values: {
         name: string;
         otherNameNoDefault: any;
@@ -223,6 +241,7 @@ exports[`reducers - with bool default 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -239,6 +258,7 @@ exports[`reducers - with bool default 1`] = `
     selectors: {
         name: (state: any, props: any) => boolean;
     };
+    sharedListeners: {};
     values: {
         name: boolean;
     };

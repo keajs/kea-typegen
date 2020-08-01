@@ -5,11 +5,15 @@ exports[`selectors - as a function returning a object 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -31,6 +35,7 @@ exports[`selectors - as a function returning a object 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -53,6 +58,7 @@ exports[`selectors - as a function returning a object 1`] = `
         upperName: (state: any, props: any) => string;
         combinedLength: (state: any, props: any) => number;
     };
+    sharedListeners: {};
     values: {
         name: string;
         otherName: any;
@@ -69,11 +75,15 @@ exports[`selectors - as an object 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -95,6 +105,7 @@ exports[`selectors - as an object 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -117,6 +128,7 @@ exports[`selectors - as an object 1`] = `
         upperName: (state: any, props: any) => string;
         combinedLength: (state: any, props: any) => number;
     };
+    sharedListeners: {};
     values: {
         name: string;
         otherName: any;
@@ -133,11 +145,15 @@ exports[`selectors - with a function 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         updateOtherName: (otherName: string) => ({
             type: \\"update other name (logic)\\";
-            payload: { otherName: string; };
+            payload: {
+                otherName: string;
+            };
         });
     };
     actionKeys: {
@@ -159,6 +175,7 @@ exports[`selectors - with a function 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -181,6 +198,7 @@ exports[`selectors - with a function 1`] = `
         upperName: (state: any, props: any) => string;
         combinedLength: (state: any, props: any) => number;
     };
+    sharedListeners: {};
     values: {
         name: string;
         otherName: any;

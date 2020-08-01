@@ -5,7 +5,9 @@ exports[`loaders - with a function 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         loadSessions: (query: string) => ({
             type: \\"load sessions (logic)\\";
@@ -49,6 +51,7 @@ exports[`loaders - with a function 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -69,6 +72,7 @@ exports[`loaders - with a function 1`] = `
         sessions: (state: any, props: any) => Session[];
         sessionsLoading: (state: any, props: any) => boolean;
     };
+    sharedListeners: {};
     values: {
         sessions: Session[];
         sessionsLoading: boolean;
@@ -83,7 +87,9 @@ exports[`loaders - with an array and default 1`] = `
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
-            payload: { name: string; };
+            payload: {
+                name: string;
+            };
         });
         loadSessions: (query: string) => ({
             type: \\"load sessions (logic)\\";
@@ -127,6 +133,7 @@ exports[`loaders - with an array and default 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -147,6 +154,7 @@ exports[`loaders - with an array and default 1`] = `
         sessions: (state: any, props: any) => Session[];
         sessionsLoading: (state: any, props: any) => boolean;
     };
+    sharedListeners: {};
     values: {
         sessions: Session[];
         sessionsLoading: boolean;
@@ -223,6 +231,7 @@ exports[`loaders - with no param 1`] = `
     };
     events: {};
     key: undefined;
+    listeners: {};
     path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
@@ -243,6 +252,7 @@ exports[`loaders - with no param 1`] = `
         sessions: (state: any, props: any) => string[];
         sessionsLoading: (state: any, props: any) => boolean;
     };
+    sharedListeners: {};
     values: {
         sessions: string[];
         sessionsLoading: boolean;
