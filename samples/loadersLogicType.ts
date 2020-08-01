@@ -120,6 +120,7 @@ export interface loadersLogicType<Dashboard> extends Logic {
         shouldNotBeNeverButAny: (state: any, props: any) => any[]
         shouldNotBeNeverButAnyLoading: (state: any, props: any) => boolean
     }
+    sharedListeners: {}
     values: {
         dashboard: Dashboard | null
         dashboardLoading: boolean

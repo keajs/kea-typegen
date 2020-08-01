@@ -15,14 +15,14 @@ import { visitListeners } from './visitListeners'
 import { visitConstants } from './visitConstants'
 import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
+import { visitSharedListeners } from './visitSharedListeners'
 
-// TODO: extend
-// TODO: sharedlisteners
 const visitFunctions = {
     actions: visitActions,
     connect: visitConnect,
     constants: visitConstants,
     defaults: visitDefaults,
+    events: visitEvents,
     key: visitKey,
     listeners: visitListeners,
     loaders: visitLoaders,
@@ -30,7 +30,7 @@ const visitFunctions = {
     props: visitProps,
     reducers: visitReducers,
     selectors: visitSelectors,
-    events: visitEvents,
+    sharedListeners: visitSharedListeners,
     windowValues: visitWindowValues,
 }
 
@@ -94,6 +94,8 @@ export function createVisit(
             reducers: [],
             selectors: [],
             constants: [],
+            listeners: [],
+            sharedListeners: [],
             events: {},
             extraActions: {},
             keyType: undefined,

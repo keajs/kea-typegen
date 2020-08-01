@@ -84,6 +84,7 @@ export interface githubLogicType<Repository> extends Logic {
         error: (state: any, props: any) => string | null
         sortedRepositories: (state: any, props: any) => Repository[]
     }
+    sharedListeners: {}
     values: {
         username: string
         repositories: Repository[]

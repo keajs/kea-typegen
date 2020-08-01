@@ -83,16 +83,22 @@ export const logic = kea<logicType<Session>>({
             },
         },
     }),
-    listeners: ({ actions }) => ({
+    listeners: ({ actions, sharedListeners }) => ({
         updateNumber: ({ number }) => {
             actions.updateName(number.toString())
             console.log(number)
+        },
+        updateName: sharedListeners.someRandomFunction
+    }),
+    sharedListeners: () => ({
+        someRandomFunction: ({ name } : { name: string, id?: number }) => {
+            console.log('haha')
         }
     }),
-    sharedListeners: () => ({}),
     events: { afterMount: () => {} },
 })
 
 function MyComponent() {
     const {} = useValues(logic)
+
 }

@@ -1,6 +1,6 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-import { Logic } from 'kea'
+import { Logic, BreakPointFunction } from 'kea'
 
 export interface logicType<Session> extends Logic {
     actionCreators: {
@@ -130,6 +130,23 @@ export interface logicType<Session> extends Logic {
         sessionsLoading: (state: any, props: any) => boolean
         capitalizedName: (state: any, props: any) => string
         upperCaseName: (state: any, props: any) => string
+    }
+    sharedListeners: {
+        someRandomFunction: (
+            payload: {
+                name: string
+                id?: number | undefined
+            },
+            breakpoint: BreakPointFunction,
+            action: {
+                type: string
+                payload: {
+                    name: string
+                    id?: number | undefined
+                }
+            },
+            previousState: any,
+        ) => void | Promise<void>
     }
     values: {
         yetAnotherNameWithNullDefault: string | null

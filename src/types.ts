@@ -19,6 +19,10 @@ export interface SelectorTransform extends NameType {
     functionTypes?: { name: string; type: ts.TypeNode }[]
 }
 
+export interface ListenerTransform extends NameType {
+
+}
+
 export interface ParsedLogic {
     fileName: string
     logicName: string
@@ -31,6 +35,8 @@ export interface ParsedLogic {
     actions: ActionTransform[]
     reducers: ReducerTransform[]
     selectors: SelectorTransform[]
+    listeners: ListenerTransform[]
+    sharedListeners: ListenerTransform[]
     extraActions: Record<string, ts.TypeNode>
     propsType?: ts.TypeNode
     keyType?: ts.TypeNode

@@ -21,6 +21,7 @@ import { printDefaults } from './printDefaults'
 import { printConstants } from './printConstants'
 import { printReducerOptions } from './printReducerOptions'
 import { printEvents } from './printEvents'
+import { printSharedListeners } from './printSharedListeners'
 
 function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -60,9 +61,15 @@ export function printToFiles(
         const output = parsedLogics
             .map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), typeFileName))
             .join('\n\n')
+
+        const requiredKeys = ['Logic']
+        if (parsedLogics.find(l => l.listeners.length > 0 || l.sharedListeners.length > 0)) {
+            requiredKeys.push('BreakPointFunction')
+        }
+
         const finalOutput = [
             '// Auto-generated with kea-typegen. DO NOT EDIT!',
-            "import { Logic } from 'kea'",
+            `import { ${requiredKeys.join(', ')} } from 'kea'`,
             output,
         ].join('\n\n')
 
@@ -153,7 +160,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty('reducers', printReducers(parsedLogic)),
             printProperty('selector', printSelector(parsedLogic)),
             printProperty('selectors', printSelectors(parsedLogic)),
-            // sharedListeners
+            printProperty('sharedListeners', printSharedListeners(parsedLogic)),
             printProperty('values', printValues(parsedLogic)),
             printProperty('_isKea', ts.createTrue()),
             printProperty('_isKeaWithKey', parsedLogic.keyType ? ts.createTrue() : ts.createFalse()),

@@ -40,6 +40,7 @@ export interface windowValuesLogicType extends Logic {
         windowHeight: (state: any, props: any) => number
         windowWidth: (state: any, props: any) => number
     }
+    sharedListeners: {}
     values: {
         windowHeight: number
         windowWidth: number

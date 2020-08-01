@@ -186,6 +186,7 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         initialValuesForForm: (state: any, props: any) => ActionForm
         selectedEditedAction: (state: any, props: any) => ActionForm
     }
+    sharedListeners: {}
     values: {
         buttonActionsVisible: boolean
         selectedActionId: number | 'new' | null

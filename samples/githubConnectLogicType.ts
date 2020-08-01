@@ -36,6 +36,7 @@ export interface githubConnectLogicType<Repository> extends Logic {
     selectors: {
         repositories: (state: any, props: any) => Repository[]
     }
+    sharedListeners: {}
     values: {
         repositories: Repository[]
     }
