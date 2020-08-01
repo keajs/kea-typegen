@@ -13,6 +13,7 @@ import { visitKey } from './visitKey'
 import { visitPath } from './visitPath'
 import { visitListeners } from './visitListeners'
 import { visitConstants } from './visitConstants'
+import { visitEvents } from './visitEvents'
 
 // TODO: defaults
 // TODO: extend
@@ -29,6 +30,7 @@ const visitFunctions = {
     props: visitProps,
     reducers: visitReducers,
     selectors: visitSelectors,
+    events: visitEvents,
     windowValues: visitWindowValues,
 }
 
@@ -92,6 +94,7 @@ export function createVisit(
             reducers: [],
             selectors: [],
             constants: [],
+            events: {},
             extraActions: {},
             keyType: undefined,
             propsType: undefined,

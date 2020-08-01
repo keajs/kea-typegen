@@ -20,6 +20,7 @@ import { printKey } from './printKey'
 import { printDefaults } from './printDefaults'
 import { printConstants } from './printConstants'
 import { printReducerOptions } from './printReducerOptions'
+import { printEvents } from './printEvents'
 
 function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -144,8 +145,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             ),
             printProperty('constants', printConstants(parsedLogic)),
             printProperty('defaults', printDefaults(parsedLogic)),
-            // TODO
-            printProperty('events', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+            printProperty('events', printEvents(parsedLogic)),
             // inputs
             // listeners
             printProperty(
