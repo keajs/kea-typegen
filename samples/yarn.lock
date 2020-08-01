@@ -39,7 +39,7 @@ hoist-non-react-statics@^3.3.0:
   resolved "https://registry.yarnpkg.com/js-tokens/-/js-tokens-4.0.0.tgz#19203fb59991df98e3a287050d4647cdeaf32499"
   integrity sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==
 
-kea@^2.2.0-beta.6:
+kea@^2.2.0-beta.7:
   version "2.2.0-beta.7"
   resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-beta.7.tgz#98b6a98900354a63d21897f67960ebdd440b78db"
   integrity sha512-EFrWzdx2UJHcHhMlXfD/AX6vPN8VactLm/KcWJKuOfNBzfNYLZqqBDr2dmLhGhtjnS7yA8Ri0ARF/CU8Nu6R0A==
