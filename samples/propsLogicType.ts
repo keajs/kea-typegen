@@ -8,13 +8,17 @@ export interface propsLogicType extends Logic {
             page: string,
         ) => {
             type: 'set page (samples.propsLogic)'
-            payload: { page: string }
+            payload: {
+                page: string
+            }
         }
         setId: (
             id: number,
         ) => {
             type: 'set id (samples.propsLogic)'
-            payload: { id: number }
+            payload: {
+                id: number
+            }
         }
     }
     actionKeys: {
@@ -35,6 +39,7 @@ export interface propsLogicType extends Logic {
     }
     events: {}
     key: number
+    listeners: {}
     path: ['samples', 'propsLogic']
     pathString: 'samples.propsLogic'
     props: {

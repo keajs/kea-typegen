@@ -8,13 +8,17 @@ export interface logicType<Session> extends Logic {
             name: string,
         ) => {
             type: 'update name (scenes.homepage.index.*)'
-            payload: { name: string }
+            payload: {
+                name: string
+            }
         }
         updateNumber: (
             number: number,
         ) => {
             type: 'update number (scenes.homepage.index.*)'
-            payload: { number: number }
+            payload: {
+                number: number
+            }
         }
         loadSessions: (
             selectedDate: string,
@@ -77,6 +81,34 @@ export interface logicType<Session> extends Logic {
         afterMount: () => void
     }
     key: number
+    listeners: {
+        updateNumber: ((
+            payload: {
+                number: number
+            },
+            breakpoint: BreakPointFunction,
+            action: {
+                type: 'update number (scenes.homepage.index.*)'
+                payload: {
+                    number: number
+                }
+            },
+            previousState: any,
+        ) => void | Promise<void>)[]
+        updateName: ((
+            payload: {
+                name: string
+            },
+            breakpoint: BreakPointFunction,
+            action: {
+                type: 'update name (scenes.homepage.index.*)'
+                payload: {
+                    name: string
+                }
+            },
+            previousState: any,
+        ) => void | Promise<void>)[]
+    }
     path: ['scenes', 'homepage', 'index', '*']
     pathString: 'scenes.homepage.index.*'
     props: {

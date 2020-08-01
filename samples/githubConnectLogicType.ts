@@ -26,6 +26,7 @@ export interface githubConnectLogicType<Repository> extends Logic {
     defaults: {}
     events: {}
     key: undefined
+    listeners: {}
     path: ['samples', 'githubConnectLogic']
     pathString: 'samples.githubConnectLogic'
     props: Record<string, unknown>

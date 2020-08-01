@@ -8,7 +8,9 @@ export interface loadersLogicType<Dashboard> extends Logic {
             name: string,
         ) => {
             type: 'add dashboard (samples.loadersLogic)'
-            payload: { name: string }
+            payload: {
+                name: string
+            }
         }
         addDashboardSuccess: (
             dashboard: Dashboard,
@@ -86,6 +88,7 @@ export interface loadersLogicType<Dashboard> extends Logic {
     }
     events: {}
     key: undefined
+    listeners: {}
     path: ['samples', 'loadersLogic']
     pathString: 'samples.loadersLogic'
     props: Record<string, unknown>

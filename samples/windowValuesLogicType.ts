@@ -14,6 +14,7 @@ export interface windowValuesLogicType extends Logic {
     }
     events: {}
     key: undefined
+    listeners: {}
     path: ['samples', 'windowValuesLogic']
     pathString: 'samples.windowValuesLogic'
     props: Record<string, unknown>

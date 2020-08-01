@@ -1,6 +1,6 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-import { Logic } from 'kea'
+import { Logic, BreakPointFunction } from 'kea'
 
 export interface githubLogicType<Repository> extends Logic {
     actionCreators: {
@@ -8,19 +8,25 @@ export interface githubLogicType<Repository> extends Logic {
             username: string,
         ) => {
             type: 'set username (samples.githubLogic)'
-            payload: { username: string }
+            payload: {
+                username: string
+            }
         }
         setRepositories: (
             repositories: Repository[],
         ) => {
             type: 'set repositories (samples.githubLogic)'
-            payload: { repositories: Repository[] }
+            payload: {
+                repositories: Repository[]
+            }
         }
         setFetchError: (
             error: string,
         ) => {
             type: 'set fetch error (samples.githubLogic)'
-            payload: { error: string }
+            payload: {
+                error: string
+            }
         }
     }
     actionKeys: {
@@ -49,6 +55,21 @@ export interface githubLogicType<Repository> extends Logic {
         afterMount: () => void
     }
     key: undefined
+    listeners: {
+        setUsername: ((
+            payload: {
+                username: string
+            },
+            breakpoint: BreakPointFunction,
+            action: {
+                type: 'set username (samples.githubLogic)'
+                payload: {
+                    username: string
+                }
+            },
+            previousState: any,
+        ) => void | Promise<void>)[]
+    }
     path: ['samples', 'githubLogic']
     pathString: 'samples.githubLogic'
     props: Record<string, unknown>

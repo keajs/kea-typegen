@@ -1,6 +1,6 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-import { Logic } from 'kea'
+import { Logic, BreakPointFunction } from 'kea'
 
 export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData> extends Logic {
     actionCreators: {
@@ -8,38 +8,51 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
             form: FormInstance,
         ) => {
             type: 'set form (samples.complexLogic)'
-            payload: { form: FormInstance }
+            payload: {
+                form: FormInstance
+            }
         }
         selectAction: (
             id: string | null,
         ) => {
             type: 'select action (samples.complexLogic)'
-            payload: { id: string | null }
+            payload: {
+                id: string | null
+            }
         }
         newAction: (
             element?: HTMLElement,
         ) => {
             type: 'new action (samples.complexLogic)'
-            payload: { element: HTMLElement | undefined }
+            payload: {
+                element: HTMLElement | undefined
+            }
         }
         inspectForElementWithIndex: (
             index: number | null,
         ) => {
             type: 'inspect for element with index (samples.complexLogic)'
-            payload: { index: number | null }
+            payload: {
+                index: number | null
+            }
         }
         inspectElementSelected: (
             element: HTMLElement,
             index: number | null,
         ) => {
             type: 'inspect element selected (samples.complexLogic)'
-            payload: { element: HTMLElement; index: number | null }
+            payload: {
+                element: HTMLElement
+                index: number | null
+            }
         }
         setEditingFields: (
             editingFields: AntdFieldData[],
         ) => {
             type: 'set editing fields (samples.complexLogic)'
-            payload: { editingFields: AntdFieldData[] }
+            payload: {
+                editingFields: AntdFieldData[]
+            }
         }
         incrementCounter: () => {
             type: 'increment counter (samples.complexLogic)'
@@ -51,7 +64,9 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
             formValues: ActionForm,
         ) => {
             type: 'save action (samples.complexLogic)'
-            payload: { formValues: ActionForm }
+            payload: {
+                formValues: ActionForm
+            }
         }
         deleteAction: () => {
             type: 'delete action (samples.complexLogic)'
@@ -75,7 +90,9 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
             showActionsTooltip: boolean,
         ) => {
             type: 'set show actions tooltip (samples.complexLogic)'
-            payload: { showActionsTooltip: boolean }
+            payload: {
+                showActionsTooltip: boolean
+            }
         }
     }
     actionKeys: {
@@ -133,6 +150,34 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
     }
     events: {}
     key: undefined
+    listeners: {
+        hideButtonActions: ((
+            payload: {
+                value: boolean
+            },
+            breakpoint: BreakPointFunction,
+            action: {
+                type: 'hide button actions (samples.complexLogic)'
+                payload: {
+                    value: boolean
+                }
+            },
+            previousState: any,
+        ) => void | Promise<void>)[]
+        setShowActionsTooltip: ((
+            payload: {
+                showActionsTooltip: boolean
+            },
+            breakpoint: BreakPointFunction,
+            action: {
+                type: 'set show actions tooltip (samples.complexLogic)'
+                payload: {
+                    showActionsTooltip: boolean
+                }
+            },
+            previousState: any,
+        ) => void | Promise<void>)[]
+    }
     path: ['samples', 'complexLogic']
     pathString: 'samples.complexLogic'
     props: Record<string, unknown>
