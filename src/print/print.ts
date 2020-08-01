@@ -22,6 +22,7 @@ import { printConstants } from './printConstants'
 import { printReducerOptions } from './printReducerOptions'
 import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
+import { printListeners } from './printListeners'
 
 function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -63,7 +64,7 @@ export function printToFiles(
             .join('\n\n')
 
         const requiredKeys = ['Logic']
-        if (parsedLogics.find(l => l.listeners.length > 0 || l.sharedListeners.length > 0)) {
+        if (parsedLogics.find((l) => l.listeners.length > 0 || l.sharedListeners.length > 0)) {
             requiredKeys.push('BreakPointFunction')
         }
 
@@ -146,7 +147,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             printProperty('defaults', printDefaults(parsedLogic)),
             printProperty('events', printEvents(parsedLogic)),
             printProperty('key', printKey(parsedLogic)),
-            // listeners
+            printProperty('listeners', printListeners(parsedLogic)),
             printProperty(
                 'path',
                 ts.createTupleTypeNode(

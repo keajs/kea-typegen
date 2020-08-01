@@ -19,8 +19,10 @@ export interface SelectorTransform extends NameType {
     functionTypes?: { name: string; type: ts.TypeNode }[]
 }
 
-export interface ListenerTransform extends NameType {
-
+export interface ListenerTransform {
+    name: string
+    action: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
+    payload: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
 export interface ParsedLogic {

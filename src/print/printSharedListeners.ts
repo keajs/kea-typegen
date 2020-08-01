@@ -3,10 +3,10 @@ import { ParsedLogic } from '../types'
 
 export function printSharedListeners(parsedLogic: ParsedLogic) {
     return ts.createTypeLiteralNode(
-        parsedLogic.sharedListeners.map(({ name, typeNode }) =>
+        parsedLogic.sharedListeners.map(({ name, payload, action }) =>
             ts.createPropertySignature(
                 undefined,
-                ts.createIdentifier(name),
+                ts.createStringLiteral(name),
                 undefined,
                 ts.createFunctionTypeNode(
                     undefined,
@@ -17,7 +17,7 @@ export function printSharedListeners(parsedLogic: ParsedLogic) {
                             undefined,
                             ts.createIdentifier('payload'),
                             undefined,
-                            typeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            payload || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                         ts.createParameter(
@@ -35,24 +35,7 @@ export function printSharedListeners(parsedLogic: ParsedLogic) {
                             undefined,
                             ts.createIdentifier('action'),
                             undefined,
-                            ts.createTypeLiteralNode([
-                                ts.createPropertySignature(
-                                    undefined,
-                                    ts.createIdentifier("type"),
-                                    undefined,
-                                    ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                                    undefined
-                                ),
-                                ts.createPropertySignature(
-                                    undefined,
-                                    ts.createIdentifier("payload"),
-                                    undefined,
-                                    typeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                                    // ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                                    undefined
-                                )
-                            ])
-                            ,
+                            action,
                             undefined,
                         ),
                         ts.createParameter(
