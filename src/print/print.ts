@@ -131,7 +131,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             ]),
         ],
         [
-            printProperty('key', printKey(parsedLogic)),
             printProperty('actionCreators', printActionCreators(parsedLogic, appOptions)),
             printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
             printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
@@ -140,13 +139,13 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
                 'cache',
                 ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
                     ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    ts.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword),
                 ]),
             ),
             printProperty('constants', printConstants(parsedLogic)),
             printProperty('defaults', printDefaults(parsedLogic)),
             printProperty('events', printEvents(parsedLogic)),
-            // inputs
+            printProperty('key', printKey(parsedLogic)),
             // listeners
             printProperty(
                 'path',
@@ -164,7 +163,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             // sharedListeners
             printProperty('values', printValues(parsedLogic)),
             printProperty('_isKea', ts.createTrue()),
-            // _isKeaWithKey,
+            printProperty('_isKeaWithKey', parsedLogic.keyType ? ts.createTrue() : ts.createFalse()),
             addSelectorTypeHelp
                 ? printProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
                 : null,
