@@ -1,4 +1,4 @@
-import {kea, useActions, useValues} from 'kea'
+import { kea } from 'kea'
 import { githubLogicType } from './githubLogicType'
 
 const API_URL = 'https://api.github.com'
