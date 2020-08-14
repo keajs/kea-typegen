@@ -63,38 +63,45 @@ function findKeaConfig(): string {
     return ts.findConfigFile('./', ts.sys.fileExists, '.kearc')
 }
 
-function includeKeaConfig (appOptions: AppOptions): AppOptions {
+// mutates appOptions and returns it as well
+function includeKeaConfig(appOptions: AppOptions): AppOptions {
     const configFilePath = findKeaConfig()
     const configDirPath = path.dirname(configFilePath)
 
     let rawData, keaConfig
 
     if (configFilePath) {
+        // has .kearc
         try {
-            rawData = fs.readFileSync(configFilePath);
+            rawData = fs.readFileSync(configFilePath)
         } catch (e) {
             console.error(`Error reading Kea config file: ${configFilePath}`)
             return appOptions
         }
         try {
-            keaConfig = JSON.parse(rawData);
+            keaConfig = JSON.parse(rawData)
         } catch (e) {
             console.error(`Error parsing Kea config JSON: ${configFilePath}`)
             return appOptions
         }
 
+        // set all paths relative from `configDirPath`
         const newOptions: AppOptions = {} as AppOptions
         for (const key of Object.keys(appOptions)) {
-            newOptions[key] = appOptions[key] || keaConfig[key]
-            if (key.endsWith('Path') && newOptions[key]) {
-                newOptions[key] = path.resolve(process.cwd(), configDirPath, newOptions[key])
+            if (key.endsWith('Path')) {
+                newOptions[key] =
+                    (appOptions[key] ?? path.resolve(process.cwd(), appOptions[key])) ||
+                    (keaConfig[key] ?? path.resolve(process.cwd(), configDirPath, newOptions[key]))
+            } else {
+                newOptions[key] = appOptions[key] || keaConfig[key]
             }
         }
 
         return newOptions
     } else {
+        // no .kearc, set all paths relative from process.cwd()
         for (const key of Object.keys(appOptions)) {
-            if (key.endsWith('Path') && appOptions[key] ) {
+            if (key.endsWith('Path') && appOptions[key]) {
                 appOptions[key] = path.resolve(process.cwd(), appOptions[key])
             }
         }
@@ -184,12 +191,12 @@ function runCLI(appOptions: AppOptions) {
 
                     if (!appOptions.watch && writtenFiles === 0) {
                         log(`Finished writing files! Exiting.`)
-                        process.exit(0);
+                        process.exit(0)
                     }
 
                     if (!appOptions.watch && round > 50) {
                         log(`We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
-                        process.exit(1);
+                        process.exit(1)
                     }
                 }
 
@@ -214,7 +221,7 @@ function runCLI(appOptions: AppOptions) {
         // running "kea-typegen check" and would write files?
         // exit with 1
         if (!appOptions.write && !appOptions.watch && response.filesToWrite > 0) {
-            process.exit(1);
+            process.exit(1)
         }
 
         return response
