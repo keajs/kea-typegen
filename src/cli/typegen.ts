@@ -3,6 +3,7 @@
 import * as ts from 'typescript'
 import * as yargs from 'yargs'
 import * as path from 'path'
+import * as fs from 'fs'
 import { visitProgram } from '../visit/visit'
 import { printToFiles } from '../print/print'
 import { AppOptions } from '../types'
@@ -13,7 +14,7 @@ const parser = yargs
         '- check what should be done',
         (yargs) => {},
         (argv) => {
-            runCLI({ ...parsedToAppOptions(argv), write: false, watch: false })
+            runCLI({ ...includeKeaConfig(parsedToAppOptions(argv)), write: false, watch: false })
         },
     )
     .command(
@@ -21,7 +22,7 @@ const parser = yargs
         '- write logicType.ts files',
         (yargs) => {},
         (argv) => {
-            runCLI({ ...parsedToAppOptions(argv), write: true, watch: false })
+            runCLI({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: false })
         },
     )
     .command(
@@ -29,7 +30,7 @@ const parser = yargs
         '- watch for changes and write logicType.ts files',
         (yargs) => {},
         (argv) => {
-            runCLI({ ...parsedToAppOptions(argv), write: true, watch: true })
+            runCLI({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: true })
         },
     )
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json (otherwise auto-detected)', type: 'string' })
@@ -58,6 +59,50 @@ function parsedToAppOptions(parsedOptions) {
     return appOptions
 }
 
+function findKeaConfig(): string {
+    return ts.findConfigFile('./', ts.sys.fileExists, '.kearc')
+}
+
+function includeKeaConfig (appOptions: AppOptions): AppOptions {
+    const configFilePath = findKeaConfig()
+    const configDirPath = path.dirname(configFilePath)
+
+    let rawData, keaConfig
+
+    if (configFilePath) {
+        try {
+            rawData = fs.readFileSync(configFilePath);
+        } catch (e) {
+            console.error(`Error reading Kea config file: ${configFilePath}`)
+            return appOptions
+        }
+        try {
+            keaConfig = JSON.parse(rawData);
+        } catch (e) {
+            console.error(`Error parsing Kea config JSON: ${configFilePath}`)
+            return appOptions
+        }
+
+        const newOptions: AppOptions = {} as AppOptions
+        for (const key of Object.keys(appOptions)) {
+            newOptions[key] = appOptions[key] || keaConfig[key]
+            if (key.endsWith('Path') && newOptions[key]) {
+                newOptions[key] = path.resolve(process.cwd(), configDirPath, newOptions[key])
+            }
+        }
+
+        return newOptions
+    } else {
+        for (const key of Object.keys(appOptions)) {
+            if (key.endsWith('Path') && appOptions[key] ) {
+                appOptions[key] = path.resolve(process.cwd(), appOptions[key])
+            }
+        }
+    }
+
+    return appOptions
+}
+
 function runCLI(appOptions: AppOptions) {
     let program
 
@@ -75,14 +120,14 @@ function runCLI(appOptions: AppOptions) {
             ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
 
         if (configFileName) {
-            log(`Using Config: ${configFileName}`)
+            log(`Using TypeScript Config: ${configFileName}`)
             log('')
 
             const configFile = ts.readJsonConfigFile(configFileName as string, ts.sys.readFile)
             const rootFolder = path.resolve(configFileName.replace(/tsconfig\.json$/, ''))
             const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
 
-            if (appOptions.watch) {
+            if (appOptions.watch || appOptions.write) {
                 const createProgram = ts.createEmitAndSemanticDiagnosticsBuilderProgram
 
                 const host = ts.createWatchCompilerHost(
@@ -128,12 +173,24 @@ function runCLI(appOptions: AppOptions) {
                     return origCreateProgram(rootNames, options, host, oldProgram)
                 }
                 const origPostProgramCreate = host.afterProgramCreate
+                let round = 0
 
                 host.afterProgramCreate = (prog) => {
+                    round += 1
                     program = prog.getProgram()
                     origPostProgramCreate!(prog)
 
-                    goThroughAllTheFiles(program, appOptions)
+                    const { writtenFiles } = goThroughAllTheFiles(program, appOptions)
+
+                    if (!appOptions.watch && writtenFiles === 0) {
+                        log(`Finished writing files! Exiting.`)
+                        process.exit(0);
+                    }
+
+                    if (!appOptions.watch && round > 50) {
+                        log(`We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
+                        process.exit(1);
+                    }
                 }
 
                 ts.createWatchProgram(host)
@@ -144,7 +201,7 @@ function runCLI(appOptions: AppOptions) {
         }
     }
 
-    function goThroughAllTheFiles(program, appOptions) {
+    function goThroughAllTheFiles(program, appOptions): { filesToWrite: number; writtenFiles: number } {
         const parsedLogics = visitProgram(program, appOptions)
         if (appOptions?.verbose) {
             log('')
@@ -159,10 +216,12 @@ function runCLI(appOptions: AppOptions) {
         if (!appOptions.write && !appOptions.watch && response.filesToWrite > 0) {
             process.exit(1);
         }
+
+        return response
     }
 
     if (program) {
-        if (!appOptions.watch && !appOptions.sourceFilePath) {
+        if (!appOptions.watch && !appOptions.write && !appOptions.sourceFilePath) {
             goThroughAllTheFiles(program, appOptions)
         }
     }

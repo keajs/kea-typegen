@@ -1,0 +1,4 @@
+{
+  "tsConfigPath": "./samples/tsconfig.json",
+  "logicStartPath": "./"
+}
