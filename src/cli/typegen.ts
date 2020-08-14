@@ -69,17 +69,17 @@ function findKeaConfig(): string {
     return ts.findConfigFile('./', ts.sys.fileExists, '.kearc')
 }
 
-// mutates appOptions and returns it as well
 function includeKeaConfig(appOptions: AppOptions): AppOptions {
     const configFilePath = findKeaConfig()
     const configDirPath = path.dirname(configFilePath)
+    const newOptions = { ...appOptions } as AppOptions
 
     let rawData, keaConfig
 
     // first, set all CLI paths relative from process.cwd()
     for (const key of Object.keys(appOptions)) {
         if (key.endsWith('Path') && appOptions[key]) {
-            appOptions[key] = path.resolve(process.cwd(), appOptions[key])
+            newOptions[key] = path.resolve(process.cwd(), appOptions[key])
         }
     }
 
@@ -89,29 +89,39 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
             rawData = fs.readFileSync(configFilePath)
         } catch (e) {
             console.error(`Error reading Kea config file: ${configFilePath}`)
-            return appOptions
+            return newOptions
         }
         try {
             keaConfig = JSON.parse(rawData)
         } catch (e) {
             console.error(`Error parsing Kea config JSON: ${configFilePath}`)
-            return appOptions
+            return newOptions
         }
 
-        // set all paths relative from `configDirPath`
-        const newOptions: AppOptions = {} as AppOptions
-        Object.keys(appOptions)
+        Object.keys(newOptions)
             .filter((key) => keaConfig[key])
             .forEach((key) => {
                 if (key.endsWith('Path')) {
-                    appOptions[key] = path.resolve(process.cwd(), configDirPath, keaConfig[key])
+                    newOptions[key] = path.resolve(process.cwd(), configDirPath, keaConfig[key])
                 } else {
-                    appOptions[key] = keaConfig[key]
+                    newOptions[key] = keaConfig[key]
                 }
             })
     }
 
-    return appOptions
+    if (!newOptions.tsConfigPath) {
+        newOptions.tsConfigPath = ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')
+    }
+
+    if (!newOptions.rootPath) {
+        newOptions.rootPath = newOptions.tsConfigPath ? path.dirname(newOptions.tsConfigPath) : process.cwd()
+    }
+
+    if (!newOptions.typesPath) {
+        newOptions.typesPath = newOptions.rootPath
+    }
+
+    return newOptions
 }
 
 function runCLI(appOptions: AppOptions) {
@@ -126,90 +136,75 @@ function runCLI(appOptions: AppOptions) {
             module: ts.ModuleKind.CommonJS,
             noEmit: true,
         })
-    } else {
-        const configFileName = (appOptions.tsConfigPath ||
-            ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')) as string
+    } else if (appOptions.tsConfigPath) {
+        log(`Using TypeScript Config: ${appOptions.tsConfigPath}`)
+        log('')
 
-        if (configFileName) {
-            log(`Using TypeScript Config: ${configFileName}`)
-            log('')
+        const configFile = ts.readJsonConfigFile(appOptions.tsConfigPath, ts.sys.readFile)
+        const rootFolder = path.dirname(appOptions.tsConfigPath)
+        const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
 
-            const configFile = ts.readJsonConfigFile(configFileName as string, ts.sys.readFile)
-            const rootFolder = path.resolve(configFileName.replace(/tsconfig\.json$/, ''))
-            const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
+        if (appOptions.watch) {
+            const createProgram = ts.createEmitAndSemanticDiagnosticsBuilderProgram
 
-            if (appOptions.watch || appOptions.write) {
-                const createProgram = ts.createEmitAndSemanticDiagnosticsBuilderProgram
-
-                const host = ts.createWatchCompilerHost(
-                    configFileName,
-                    compilerOptions.options,
-                    {
-                        ...ts.sys,
-                        writeFile(path: string, data: string, writeByteOrderMark?: boolean) {
-                            // skip emit
-                            // https://github.com/microsoft/TypeScript/issues/32385
-                            // https://github.com/microsoft/TypeScript/issues/36917
-                            return null
-                        },
+            const host = ts.createWatchCompilerHost(
+                appOptions.tsConfigPath,
+                compilerOptions.options,
+                {
+                    ...ts.sys,
+                    writeFile(path: string, data: string, writeByteOrderMark?: boolean) {
+                        // skip emit
+                        // https://github.com/microsoft/TypeScript/issues/32385
+                        // https://github.com/microsoft/TypeScript/issues/36917
+                        return null
                     },
-                    createProgram,
-                    reportDiagnostic,
-                    reportWatchStatusChanged,
-                )
+                },
+                createProgram,
+                reportDiagnostic,
+                reportWatchStatusChanged,
+            )
 
-                const formatHost: ts.FormatDiagnosticsHost = {
-                    getCanonicalFileName: (path) => path,
-                    getCurrentDirectory: ts.sys.getCurrentDirectory,
-                    getNewLine: () => ts.sys.newLine,
-                }
-
-                function reportDiagnostic(diagnostic: ts.Diagnostic) {
-                    if (appOptions.verbose) {
-                        console.error(
-                            'Error',
-                            diagnostic.code,
-                            ':',
-                            ts.flattenDiagnosticMessageText(diagnostic.messageText, formatHost.getNewLine()),
-                        )
-                    }
-                }
-
-                function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
-                    console.info(ts.formatDiagnostic(diagnostic, formatHost))
-                }
-
-                const origCreateProgram = host.createProgram
-                host.createProgram = (rootNames: ReadonlyArray<string>, options, host, oldProgram) => {
-                    return origCreateProgram(rootNames, options, host, oldProgram)
-                }
-                const origPostProgramCreate = host.afterProgramCreate
-                let round = 0
-
-                host.afterProgramCreate = (prog) => {
-                    round += 1
-                    program = prog.getProgram()
-                    origPostProgramCreate!(prog)
-
-                    const { writtenFiles } = goThroughAllTheFiles(program, appOptions)
-
-                    if (!appOptions.watch && writtenFiles === 0) {
-                        log(`Finished writing files! Exiting.`)
-                        process.exit(0)
-                    }
-
-                    if (!appOptions.watch && round > 50) {
-                        log(`We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
-                        process.exit(1)
-                    }
-                }
-
-                ts.createWatchProgram(host)
-            } else {
-                const host = ts.createCompilerHost(compilerOptions.options)
-                program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
+            const formatHost: ts.FormatDiagnosticsHost = {
+                getCanonicalFileName: (path) => path,
+                getCurrentDirectory: ts.sys.getCurrentDirectory,
+                getNewLine: () => ts.sys.newLine,
             }
+
+            function reportDiagnostic(diagnostic: ts.Diagnostic) {
+                if (appOptions.verbose) {
+                    console.error(
+                        'Error',
+                        diagnostic.code,
+                        ':',
+                        ts.flattenDiagnosticMessageText(diagnostic.messageText, formatHost.getNewLine()),
+                    )
+                }
+            }
+
+            function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
+                console.info(ts.formatDiagnostic(diagnostic, formatHost))
+            }
+
+            const origCreateProgram = host.createProgram
+            host.createProgram = (rootNames: ReadonlyArray<string>, options, host, oldProgram) => {
+                return origCreateProgram(rootNames, options, host, oldProgram)
+            }
+            const origPostProgramCreate = host.afterProgramCreate
+
+            host.afterProgramCreate = (prog) => {
+                program = prog.getProgram()
+                origPostProgramCreate!(prog)
+
+                goThroughAllTheFiles(program, appOptions)
+            }
+
+            ts.createWatchProgram(host)
+        } else {
+            const host = ts.createCompilerHost(compilerOptions.options)
+            program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
         }
+    } else {
+        log(`No tsconfig.json found! No source file specified.`)
     }
 
     function goThroughAllTheFiles(program, appOptions): { filesToWrite: number; writtenFiles: number } {
@@ -231,8 +226,24 @@ function runCLI(appOptions: AppOptions) {
         return response
     }
 
-    if (program) {
-        if (!appOptions.watch && !appOptions.write && !appOptions.sourceFilePath) {
+    if (program && !appOptions.watch && !appOptions.sourceFilePath) {
+        if (appOptions.write) {
+            let round = 0
+            while (round += 1) {
+                const { writtenFiles } = goThroughAllTheFiles(program, appOptions)
+
+                if (writtenFiles === 0) {
+                    log(`Finished writing files! Exiting.`)
+                    process.exit(0)
+                }
+
+                if (round > 50) {
+                    log(`We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
+                    process.exit(1)
+                }
+            }
+        } else {
+            // check them once
             goThroughAllTheFiles(program, appOptions)
         }
     }
