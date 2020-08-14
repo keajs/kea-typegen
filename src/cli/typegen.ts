@@ -35,9 +35,14 @@ const parser = yargs
     )
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json (otherwise auto-detected)', type: 'string' })
     .option('file', { alias: 'f', describe: "Single file to evaluate (can't be used with --config)", type: 'string' })
-    .option('path', {
-        alias: 'p',
+    .option('root', {
+        alias: 'r',
         describe: 'Root for logic paths. E.g: ./frontend/src',
+        type: 'string',
+    })
+    .option('types', {
+        alias: 't',
+        describe: 'Folder to write logicType.ts files to.\nWrites alongside logic.ts files by default.',
         type: 'string',
     })
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
@@ -48,7 +53,8 @@ const parser = yargs
 
 function parsedToAppOptions(parsedOptions) {
     const appOptions = {
-        logicStartPath: parsedOptions.path,
+        rootPath: parsedOptions.root,
+        typesPath: parsedOptions.types,
         tsConfigPath: parsedOptions.config,
         sourceFilePath: parsedOptions.file,
         quiet: parsedOptions.quiet,
@@ -70,8 +76,15 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
 
     let rawData, keaConfig
 
+    // first, set all CLI paths relative from process.cwd()
+    for (const key of Object.keys(appOptions)) {
+        if (key.endsWith('Path') && appOptions[key]) {
+            appOptions[key] = path.resolve(process.cwd(), appOptions[key])
+        }
+    }
+
+    // has .kearc
     if (configFilePath) {
-        // has .kearc
         try {
             rawData = fs.readFileSync(configFilePath)
         } catch (e) {
@@ -87,24 +100,15 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
 
         // set all paths relative from `configDirPath`
         const newOptions: AppOptions = {} as AppOptions
-        for (const key of Object.keys(appOptions)) {
-            if (key.endsWith('Path')) {
-                newOptions[key] =
-                    (appOptions[key] ?? path.resolve(process.cwd(), appOptions[key])) ||
-                    (keaConfig[key] ?? path.resolve(process.cwd(), configDirPath, newOptions[key]))
-            } else {
-                newOptions[key] = appOptions[key] || keaConfig[key]
-            }
-        }
-
-        return newOptions
-    } else {
-        // no .kearc, set all paths relative from process.cwd()
-        for (const key of Object.keys(appOptions)) {
-            if (key.endsWith('Path') && appOptions[key]) {
-                appOptions[key] = path.resolve(process.cwd(), appOptions[key])
-            }
-        }
+        Object.keys(appOptions)
+            .filter((key) => keaConfig[key])
+            .forEach((key) => {
+                if (key.endsWith('Path')) {
+                    appOptions[key] = path.resolve(process.cwd(), configDirPath, keaConfig[key])
+                } else {
+                    appOptions[key] = keaConfig[key]
+                }
+            })
     }
 
     return appOptions

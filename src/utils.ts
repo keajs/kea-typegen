@@ -155,8 +155,8 @@ export function extractImportedActions(actionObjects: ts.Expression | ts.ObjectL
 
 export function getLogicPathString(appOptions: AppOptions, fileName: string) {
     let cwd = process.cwd()
-    if (appOptions?.logicStartPath) {
-        cwd = path.resolve(cwd, appOptions.logicStartPath)
+    if (appOptions?.rootPath) {
+        cwd = path.resolve(cwd, appOptions.rootPath)
     }
     const pathString = path
         .relative(cwd, fileName)

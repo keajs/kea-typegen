@@ -47,7 +47,8 @@ export interface ParsedLogic {
 export interface AppOptions {
     tsConfigPath?: string
     sourceFilePath?: string
-    logicStartPath?: string
+    rootPath?: string
+    typesPath?: string
     write?: boolean
     watch?: boolean
     quiet?: boolean

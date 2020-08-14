@@ -1,4 +1,5 @@
 {
   "tsConfigPath": "./samples/tsconfig.json",
-  "logicStartPath": "./"
+  "rootPath": "./",
+  "typesPath": "./types"
 }
