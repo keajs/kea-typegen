@@ -89,13 +89,13 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
             rawData = fs.readFileSync(configFilePath)
         } catch (e) {
             console.error(`Error reading Kea config file: ${configFilePath}`)
-            return newOptions
+            process.exit(1)
         }
         try {
             keaConfig = JSON.parse(rawData)
         } catch (e) {
             console.error(`Error parsing Kea config JSON: ${configFilePath}`)
-            return newOptions
+            process.exit(1)
         }
 
         Object.keys(newOptions)
@@ -229,7 +229,7 @@ function runCLI(appOptions: AppOptions) {
     if (program && !appOptions.watch && !appOptions.sourceFilePath) {
         if (appOptions.write) {
             let round = 0
-            while (round += 1) {
+            while ((round += 1)) {
                 const { writtenFiles } = goThroughAllTheFiles(program, appOptions)
 
                 if (writtenFiles === 0) {
