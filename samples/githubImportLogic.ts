@@ -20,9 +20,7 @@ export const githubImportLogic = kea<githubImportLogicType<Repository>>({
             console.log(username)
         },
     }),
-    sharedListeners: ({ }) => ({
-        bla (_, breakpoint, asd) {
-
-    }
-    })
+    sharedListeners: ({}) => ({
+        bla(_, breakpoint, asd) {},
+    }),
 })

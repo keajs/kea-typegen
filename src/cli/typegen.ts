@@ -76,7 +76,7 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
 
     let rawData, keaConfig
 
-    // first, set all CLI paths relative from process.cwd()
+    // first, set all CLI argument paths relative from process.cwd()
     for (const key of Object.keys(appOptions)) {
         if (key.endsWith('Path') && appOptions[key]) {
             newOptions[key] = path.resolve(process.cwd(), appOptions[key])
@@ -101,6 +101,7 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
         Object.keys(newOptions)
             .filter((key) => keaConfig[key])
             .forEach((key) => {
+                // set all paths in .kearc to be relative from where the file is located
                 if (key.endsWith('Path')) {
                     newOptions[key] = path.resolve(process.cwd(), configDirPath, keaConfig[key])
                 } else {
@@ -131,7 +132,7 @@ function runCLI(appOptions: AppOptions) {
 
     if (appOptions.sourceFilePath) {
         log(`Loading file: ${appOptions.sourceFilePath}`)
-        program = ts.createProgram([appOptions.sourceFilePath as string], {
+        program = ts.createProgram([appOptions.sourceFilePath], {
             target: ts.ScriptTarget.ES5,
             module: ts.ModuleKind.CommonJS,
             noEmit: true,
