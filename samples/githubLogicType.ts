@@ -1,6 +1,6 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-import { Logic, BreakPointFunction } from 'kea'
+import { Logic } from 'kea'
 
 export interface githubLogicType<Repository> extends Logic {
     actionCreators: {
@@ -57,10 +57,6 @@ export interface githubLogicType<Repository> extends Logic {
     key: undefined
     listeners: {
         setUsername: ((
-            payload: {
-                username: string
-            },
-            breakpoint: BreakPointFunction,
             action: {
                 type: 'set username (samples.githubLogic)'
                 payload: {

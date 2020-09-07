@@ -3130,10 +3130,10 @@ jsprim@^1.2.2:
     json-schema "0.2.3"
     verror "1.10.0"
 
-kea@^2.2.0-beta.11:
-  version "2.2.0-beta.11"
-  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-beta.11.tgz#ad30865a067ceec6663d04490299b8161e0dd5e1"
-  integrity sha512-bRSCjM7+CiL+P+XeCXyBLXTkCyr1xEmbESUd47Rv1lup5GHqHawC3RBgOkWy7j63yHqZoemCh4hLb6SxapTWuA==
+kea@^2.2.0-rc.6:
+  version "2.2.0-rc.6"
+  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-rc.6.tgz#210edc166577d547e51362ea5b8a29ffb671e495"
+  integrity sha512-5Of1Y3tnSaxdieaLy5rV/oCA9mzBZyK3P1VasM1CPTV8ygmJw+QM/YupTa8gQSSeJR18rUT+HauQ3w5N555P3Q==
 
 kind-of@^3.0.2, kind-of@^3.0.3, kind-of@^3.2.0:
   version "3.2.2"

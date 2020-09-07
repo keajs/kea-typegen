@@ -83,10 +83,6 @@ export interface logicType<Session> extends Logic {
     key: number
     listeners: {
         updateNumber: ((
-            payload: {
-                number: number
-            },
-            breakpoint: BreakPointFunction,
             action: {
                 type: 'update number (scenes.homepage.index.*)'
                 payload: {
@@ -96,10 +92,6 @@ export interface logicType<Session> extends Logic {
             previousState: any,
         ) => void | Promise<void>)[]
         updateName: ((
-            payload: {
-                name: string
-            },
-            breakpoint: BreakPointFunction,
             action: {
                 type: 'update name (scenes.homepage.index.*)'
                 payload: {

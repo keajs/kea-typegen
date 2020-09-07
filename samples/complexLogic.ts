@@ -40,14 +40,14 @@ export const complexLogic = kea<complexLogicType<ActionType, ActionForm, FormIns
         selectedActionId: [
             null as number | 'new' | null,
             {
-                selectAction: (_, { id }) => id,
+                selectAction: (_, { id }) => id ? parseInt(id) : null,
                 newAction: () => 'new',
             },
         ],
         newActionForElement: [
             null as HTMLElement | null,
             {
-                newAction: (_, { element }) => element,
+                newAction: (_, { element }) => element || null,
                 selectAction: () => null,
             },
         ],
@@ -121,7 +121,7 @@ export const complexLogic = kea<complexLogicType<ActionType, ActionForm, FormIns
         hideButtonActions: () => {
             actions.setShowActionsTooltip(false)
         },
-        setShowActionsTooltip: async ({ showActionsTooltip }, breakpoint, action, previousState) => {
+        setShowActionsTooltip: async ({ showActionsTooltip }, breakpoint, action) => {
             if (showActionsTooltip) {
                 await breakpoint(1000)
                 actions.setShowActionsTooltip(false)

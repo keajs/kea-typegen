@@ -125,10 +125,10 @@ kea-typegen@^0.1.0:
     prettier "^2.0.5"
     yargs "^15.4.0"
 
-kea@^2.2.0-beta.11:
-  version "2.2.0-rc.1"
-  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-rc.1.tgz#bf6fcbd46f4154b67c1dfacc0f6c10e283ecb087"
-  integrity sha512-utyuh/QX084ESSiXkk2eAidw+KJYAWn0R/4VdQy1APru70pwOIpuMw7Rw0UE/lAwLVKNxlXUrFzFqCrz13ZxTg==
+kea@^2.2.0-rc.6:
+  version "2.2.0-rc.6"
+  resolved "https://registry.yarnpkg.com/kea/-/kea-2.2.0-rc.6.tgz#210edc166577d547e51362ea5b8a29ffb671e495"
+  integrity sha512-5Of1Y3tnSaxdieaLy5rV/oCA9mzBZyK3P1VasM1CPTV8ygmJw+QM/YupTa8gQSSeJR18rUT+HauQ3w5N555P3Q==
 
 locate-path@^5.0.0:
   version "5.0.0"

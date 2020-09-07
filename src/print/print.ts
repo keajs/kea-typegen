@@ -70,7 +70,7 @@ export function printToFiles(
             .join('\n\n')
 
         const requiredKeys = ['Logic']
-        if (parsedLogics.find((l) => l.listeners.length > 0 || l.sharedListeners.length > 0)) {
+        if (parsedLogics.find((l) => l.sharedListeners.length > 0)) {
             requiredKeys.push('BreakPointFunction')
         }
 

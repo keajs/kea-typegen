@@ -1,6 +1,6 @@
 // Auto-generated with kea-typegen. DO NOT EDIT!
 
-import { Logic, BreakPointFunction } from 'kea'
+import { Logic } from 'kea'
 
 export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData> extends Logic {
     actionCreators: {
@@ -152,10 +152,6 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
     key: undefined
     listeners: {
         hideButtonActions: ((
-            payload: {
-                value: boolean
-            },
-            breakpoint: BreakPointFunction,
             action: {
                 type: 'hide button actions (samples.complexLogic)'
                 payload: {
@@ -165,10 +161,6 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
             previousState: any,
         ) => void | Promise<void>)[]
         setShowActionsTooltip: ((
-            payload: {
-                showActionsTooltip: boolean
-            },
-            breakpoint: BreakPointFunction,
             action: {
                 type: 'set show actions tooltip (samples.complexLogic)'
                 payload: {
