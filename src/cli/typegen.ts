@@ -71,7 +71,6 @@ function findKeaConfig(): string {
 
 function includeKeaConfig(appOptions: AppOptions): AppOptions {
     const configFilePath = findKeaConfig()
-    const configDirPath = path.dirname(configFilePath)
     const newOptions = { ...appOptions } as AppOptions
 
     let rawData, keaConfig
@@ -85,6 +84,7 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
 
     // has .kearc
     if (configFilePath) {
+        const configDirPath = path.dirname(configFilePath)
         try {
             rawData = fs.readFileSync(configFilePath)
         } catch (e) {
