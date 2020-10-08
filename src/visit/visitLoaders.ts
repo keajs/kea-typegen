@@ -30,7 +30,7 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
         })
 
         if (objectLiteral) {
-            (objectLiteral.properties || []).forEach((property: ts.PropertyAssignment) => {
+            ;(objectLiteral.properties || []).forEach((property: ts.PropertyAssignment) => {
                 const loaderActionName = checker.getSymbolAtLocation(property.name)?.getName()
                 if (loaderActionName === '__default') {
                     return
@@ -41,18 +41,22 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                     return
                 }
 
-                const param = func.parameters ? func.parameters[0] as ts.ParameterDeclaration : null
+                const param = func.parameters ? (func.parameters[0] as ts.ParameterDeclaration) : null
                 const parameters = param ? [getParameterDeclaration(param)] : []
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}`)) {
                     const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
-                    parsedLogic.actions.push({name: `${loaderActionName}`, parameters, returnTypeNode})
+                    parsedLogic.actions.push({ name: `${loaderActionName}`, parameters, returnTypeNode })
                 }
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}Success`)) {
                     let returnTypeNode = func?.type || typeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
 
-                    if (ts.isTypeReferenceNode(returnTypeNode) && returnTypeNode.typeName.getText() === 'Promise') {
+                    if (
+                        ts.isTypeReferenceNode(returnTypeNode) &&
+                        returnTypeNode.getSourceFile() /* checking this avoids a bug within the .getText() function */ &&
+                        returnTypeNode.typeName.getText() === 'Promise'
+                    ) {
                         returnTypeNode = returnTypeNode.typeArguments?.[0]
                     }
 

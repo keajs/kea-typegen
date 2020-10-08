@@ -20,7 +20,13 @@ export const loadersLogic = kea<loadersLogicType<Dashboard>>({
         },
         shouldNotBeNeverButAny: {
             __default: []
-        }
+        },
+        misc: [
+            {} as Record<string, any>,
+            {
+                loadIt: () => ({id: -1, name, pinned: true}),
+            }
+        ],
     },
     reducers: () => ({
         dashboard: {

@@ -54,6 +54,26 @@ export interface loadersLogicType<Dashboard> extends Logic {
                 error: string
             }
         }
+        loadIt: () => {
+            type: 'load it (samples.loadersLogic)'
+            payload: any
+        }
+        loadItSuccess: (
+            misc: Record<string, any>,
+        ) => {
+            type: 'load it success (samples.loadersLogic)'
+            payload: {
+                misc: Record<string, any>
+            }
+        }
+        loadItFailure: (
+            error: string,
+        ) => {
+            type: 'load it failure (samples.loadersLogic)'
+            payload: {
+                error: string
+            }
+        }
     }
     actionKeys: {
         'add dashboard (samples.loadersLogic)': 'addDashboard'
@@ -62,6 +82,9 @@ export interface loadersLogicType<Dashboard> extends Logic {
         'add dashboard no type (samples.loadersLogic)': 'addDashboardNoType'
         'add dashboard no type success (samples.loadersLogic)': 'addDashboardNoTypeSuccess'
         'add dashboard no type failure (samples.loadersLogic)': 'addDashboardNoTypeFailure'
+        'load it (samples.loadersLogic)': 'loadIt'
+        'load it success (samples.loadersLogic)': 'loadItSuccess'
+        'load it failure (samples.loadersLogic)': 'loadItFailure'
     }
     actionTypes: {
         addDashboard: 'add dashboard (samples.loadersLogic)'
@@ -70,6 +93,9 @@ export interface loadersLogicType<Dashboard> extends Logic {
         addDashboardNoType: 'add dashboard no type (samples.loadersLogic)'
         addDashboardNoTypeSuccess: 'add dashboard no type success (samples.loadersLogic)'
         addDashboardNoTypeFailure: 'add dashboard no type failure (samples.loadersLogic)'
+        loadIt: 'load it (samples.loadersLogic)'
+        loadItSuccess: 'load it success (samples.loadersLogic)'
+        loadItFailure: 'load it failure (samples.loadersLogic)'
     }
     actions: {
         addDashboard: (name: string) => void
@@ -78,6 +104,9 @@ export interface loadersLogicType<Dashboard> extends Logic {
         addDashboardNoType: ({ name }: { name: string }) => void
         addDashboardNoTypeSuccess: (dashboard: Dashboard) => void
         addDashboardNoTypeFailure: (error: string) => void
+        loadIt: () => void
+        loadItSuccess: (misc: Record<string, any>) => void
+        loadItFailure: (error: string) => void
     }
     constants: {}
     defaults: {
@@ -85,6 +114,8 @@ export interface loadersLogicType<Dashboard> extends Logic {
         dashboardLoading: boolean
         shouldNotBeNeverButAny: any[]
         shouldNotBeNeverButAnyLoading: boolean
+        misc: Record<string, any>
+        miscLoading: boolean
     }
     events: {}
     key: undefined
@@ -101,6 +132,8 @@ export interface loadersLogicType<Dashboard> extends Logic {
         dashboardLoading: boolean
         shouldNotBeNeverButAny: any[]
         shouldNotBeNeverButAnyLoading: boolean
+        misc: Record<string, any>
+        miscLoading: boolean
     }
     reducerOptions: {}
     reducers: {
@@ -108,6 +141,8 @@ export interface loadersLogicType<Dashboard> extends Logic {
         dashboardLoading: (state: boolean, action: any, fullState: any) => boolean
         shouldNotBeNeverButAny: (state: any[], action: any, fullState: any) => any[]
         shouldNotBeNeverButAnyLoading: (state: boolean, action: any, fullState: any) => boolean
+        misc: (state: Record<string, any>, action: any, fullState: any) => Record<string, any>
+        miscLoading: (state: boolean, action: any, fullState: any) => boolean
     }
     selector: (
         state: any,
@@ -116,12 +151,16 @@ export interface loadersLogicType<Dashboard> extends Logic {
         dashboardLoading: boolean
         shouldNotBeNeverButAny: any[]
         shouldNotBeNeverButAnyLoading: boolean
+        misc: Record<string, any>
+        miscLoading: boolean
     }
     selectors: {
         dashboard: (state: any, props: any) => Dashboard | null
         dashboardLoading: (state: any, props: any) => boolean
         shouldNotBeNeverButAny: (state: any, props: any) => any[]
         shouldNotBeNeverButAnyLoading: (state: any, props: any) => boolean
+        misc: (state: any, props: any) => Record<string, any>
+        miscLoading: (state: any, props: any) => boolean
     }
     sharedListeners: {}
     values: {
@@ -129,6 +168,8 @@ export interface loadersLogicType<Dashboard> extends Logic {
         dashboardLoading: boolean
         shouldNotBeNeverButAny: any[]
         shouldNotBeNeverButAnyLoading: boolean
+        misc: Record<string, any>
+        miscLoading: boolean
     }
     _isKea: true
     _isKeaWithKey: false
