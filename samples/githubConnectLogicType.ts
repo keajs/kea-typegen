@@ -36,10 +36,12 @@ export interface githubConnectLogicType<Repository> extends Logic {
     selector: (state: any) => {}
     selectors: {
         repositories: (state: any, props: any) => Repository[]
+        isLoading: (state: any, props: any) => boolean
     }
     sharedListeners: {}
     values: {
         repositories: Repository[]
+        isLoading: boolean
     }
     _isKea: true
     _isKeaWithKey: false

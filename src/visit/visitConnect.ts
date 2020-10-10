@@ -11,7 +11,12 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
 
         if (value && ts.isArrayLiteralExpression(value)) {
             for (let i = 0; i < value.elements.length; i += 2) {
-                const logicReference = value.elements[i]
+                let logicReference = value.elements[i]
+
+                if (ts.isCallExpression(logicReference)) {
+                    logicReference = logicReference.expression
+                }
+
                 const connectArray = value.elements[i + 1]
 
                 let lookup: Record<string, string> = {}
