@@ -16,6 +16,7 @@ export const logic = kea<logicType<Session>>({
     constants: () => ['SOMETHING', 'SOMETHING_ELSE'],
     actions: () => ({
         updateName: (name: string) => ({ name }),
+        updateConst: (name: 'John' | 'Bill') => ({ name }),
         updateNumber: (number: number) => ({ number }),
     }),
     defaults: {

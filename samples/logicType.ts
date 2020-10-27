@@ -12,6 +12,14 @@ export interface logicType<Session> extends Logic {
                 name: string
             }
         }
+        updateConst: (
+            name: 'John' | 'Bill',
+        ) => {
+            type: 'update const (scenes.homepage.index.*)'
+            payload: {
+                name: 'John' | 'Bill'
+            }
+        }
         updateNumber: (
             number: number,
         ) => {
@@ -45,6 +53,7 @@ export interface logicType<Session> extends Logic {
     }
     actionKeys: {
         'update name (scenes.homepage.index.*)': 'updateName'
+        'update const (scenes.homepage.index.*)': 'updateConst'
         'update number (scenes.homepage.index.*)': 'updateNumber'
         'load sessions (scenes.homepage.index.*)': 'loadSessions'
         'load sessions success (scenes.homepage.index.*)': 'loadSessionsSuccess'
@@ -52,6 +61,7 @@ export interface logicType<Session> extends Logic {
     }
     actionTypes: {
         updateName: 'update name (scenes.homepage.index.*)'
+        updateConst: 'update const (scenes.homepage.index.*)'
         updateNumber: 'update number (scenes.homepage.index.*)'
         loadSessions: 'load sessions (scenes.homepage.index.*)'
         loadSessionsSuccess: 'load sessions success (scenes.homepage.index.*)'
@@ -59,6 +69,7 @@ export interface logicType<Session> extends Logic {
     }
     actions: {
         updateName: (name: string) => void
+        updateConst: (name: 'John' | 'Bill') => void
         updateNumber: (number: number) => void
         loadSessions: (selectedDate: string) => void
         loadSessionsSuccess: (sessions: Session[]) => void

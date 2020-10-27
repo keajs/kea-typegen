@@ -23,7 +23,7 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
                     undefined,
                     ts.createIdentifier(param.name.getText()),
                     param.initializer || param.questionToken ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
-                    param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    param.type ? cloneNode(param.type) : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                     undefined,
                 )
             })
