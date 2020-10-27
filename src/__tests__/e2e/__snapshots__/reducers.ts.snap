@@ -57,9 +57,9 @@ exports[`reducers - as a function returning a object 1`] = `
         yetAnotherNameWithNullDefault: string | null;
     };
     selectors: {
-        name: (state: any, props: any) => string;
-        otherNameNoDefault: (state: any, props: any) => any;
-        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+        name: (state: any, props?: any) => string;
+        otherNameNoDefault: (state: any, props?: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props?: any) => string | null;
     };
     sharedListeners: {};
     values: {
@@ -129,9 +129,9 @@ exports[`reducers - as an object 1`] = `
         yetAnotherNameWithNullDefault: string | null;
     };
     selectors: {
-        name: (state: any, props: any) => string;
-        otherNameNoDefault: (state: any, props: any) => any;
-        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+        name: (state: any, props?: any) => string;
+        otherNameNoDefault: (state: any, props?: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props?: any) => string | null;
     };
     sharedListeners: {};
     values: {
@@ -201,9 +201,9 @@ exports[`reducers - with a function 1`] = `
         yetAnotherNameWithNullDefault: string | null;
     };
     selectors: {
-        name: (state: any, props: any) => string;
-        otherNameNoDefault: (state: any, props: any) => any;
-        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+        name: (state: any, props?: any) => string;
+        otherNameNoDefault: (state: any, props?: any) => any;
+        yetAnotherNameWithNullDefault: (state: any, props?: any) => string | null;
     };
     sharedListeners: {};
     values: {
@@ -256,7 +256,7 @@ exports[`reducers - with bool default 1`] = `
         name: boolean;
     };
     selectors: {
-        name: (state: any, props: any) => boolean;
+        name: (state: any, props?: any) => boolean;
     };
     sharedListeners: {};
     values: {

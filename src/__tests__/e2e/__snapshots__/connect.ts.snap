@@ -163,8 +163,8 @@ exports[`connect props from another logic 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {
-        name: (state: any, props: any) => string;
-        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+        name: (state: any, props?: any) => string;
+        yetAnotherNameWithNullDefault: (state: any, props?: any) => string | null;
     };
     sharedListeners: {};
     values: {
@@ -195,8 +195,8 @@ exports[`connect values and rename 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {
-        firstSelector: (state: any, props: any) => string;
-        secondSelector: (state: any, props: any) => string | null;
+        firstSelector: (state: any, props?: any) => string;
+        secondSelector: (state: any, props?: any) => string | null;
     };
     sharedListeners: {};
     values: {
@@ -227,8 +227,8 @@ exports[`connect values from another logic 1`] = `
     reducers: {};
     selector: (state: any) => {};
     selectors: {
-        name: (state: any, props: any) => string;
-        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null;
+        name: (state: any, props?: any) => string;
+        yetAnotherNameWithNullDefault: (state: any, props?: any) => string | null;
     };
     sharedListeners: {};
     values: {

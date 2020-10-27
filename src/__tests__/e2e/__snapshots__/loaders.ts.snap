@@ -69,8 +69,8 @@ exports[`loaders - with a function 1`] = `
         sessionsLoading: boolean;
     };
     selectors: {
-        sessions: (state: any, props: any) => Session[];
-        sessionsLoading: (state: any, props: any) => boolean;
+        sessions: (state: any, props?: any) => Session[];
+        sessionsLoading: (state: any, props?: any) => boolean;
     };
     sharedListeners: {};
     values: {
@@ -151,8 +151,8 @@ exports[`loaders - with an array and default 1`] = `
         sessionsLoading: boolean;
     };
     selectors: {
-        sessions: (state: any, props: any) => Session[];
-        sessionsLoading: (state: any, props: any) => boolean;
+        sessions: (state: any, props?: any) => Session[];
+        sessionsLoading: (state: any, props?: any) => boolean;
     };
     sharedListeners: {};
     values: {
@@ -249,8 +249,8 @@ exports[`loaders - with no param 1`] = `
         sessionsLoading: boolean;
     };
     selectors: {
-        sessions: (state: any, props: any) => string[];
-        sessionsLoading: (state: any, props: any) => boolean;
+        sessions: (state: any, props?: any) => string[];
+        sessionsLoading: (state: any, props?: any) => boolean;
     };
     sharedListeners: {};
     values: {
