@@ -26,7 +26,7 @@ export function printSelectors(parsedLogic: ParsedLogic) {
                             undefined,
                             undefined,
                             ts.createIdentifier('props'),
-                            undefined,
+                            ts.createToken(ts.SyntaxKind.QuestionToken),
                             ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                             undefined,
                         ),

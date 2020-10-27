@@ -63,7 +63,7 @@ export interface propsLogicType extends Logic {
         currentPage: string
     }
     selectors: {
-        currentPage: (state: any, props: any) => string
+        currentPage: (state: any, props?: any) => string
     }
     sharedListeners: {}
     values: {

@@ -211,17 +211,17 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
         showActionsTooltip: boolean
     }
     selectors: {
-        buttonActionsVisible: (state: any, props: any) => boolean
-        selectedActionId: (state: any, props: any) => number | 'new' | null
-        newActionForElement: (state: any, props: any) => HTMLElement | null
-        inspectingElement: (state: any, props: any) => number | null
-        editingFields: (state: any, props: any) => AntdFieldData[] | null
-        form: (state: any, props: any) => FormInstance | null
-        counter: (state: any, props: any) => number
-        showActionsTooltip: (state: any, props: any) => boolean
-        selectedAction: (state: any, props: any) => ActionType | null
-        initialValuesForForm: (state: any, props: any) => ActionForm
-        selectedEditedAction: (state: any, props: any) => ActionForm
+        buttonActionsVisible: (state: any, props?: any) => boolean
+        selectedActionId: (state: any, props?: any) => number | 'new' | null
+        newActionForElement: (state: any, props?: any) => HTMLElement | null
+        inspectingElement: (state: any, props?: any) => number | null
+        editingFields: (state: any, props?: any) => AntdFieldData[] | null
+        form: (state: any, props?: any) => FormInstance | null
+        counter: (state: any, props?: any) => number
+        showActionsTooltip: (state: any, props?: any) => boolean
+        selectedAction: (state: any, props?: any) => ActionType | null
+        initialValuesForForm: (state: any, props?: any) => ActionForm
+        selectedEditedAction: (state: any, props?: any) => ActionForm
     }
     sharedListeners: {}
     values: {

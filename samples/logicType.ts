@@ -156,15 +156,15 @@ export interface logicType<Session> extends Logic {
         sessionsLoading: boolean
     }
     selectors: {
-        yetAnotherNameWithNullDefault: (state: any, props: any) => string | null
-        name: (state: any, props: any) => string
-        number: (state: any, props: any) => number
-        persistedNumber: (state: any, props: any) => number
-        otherNameNoDefault: (state: any, props: any) => any
-        sessions: (state: any, props: any) => Session[]
-        sessionsLoading: (state: any, props: any) => boolean
-        capitalizedName: (state: any, props: any) => string
-        upperCaseName: (state: any, props: any) => string
+        yetAnotherNameWithNullDefault: (state: any, props?: any) => string | null
+        name: (state: any, props?: any) => string
+        number: (state: any, props?: any) => number
+        persistedNumber: (state: any, props?: any) => number
+        otherNameNoDefault: (state: any, props?: any) => any
+        sessions: (state: any, props?: any) => Session[]
+        sessionsLoading: (state: any, props?: any) => boolean
+        capitalizedName: (state: any, props?: any) => string
+        upperCaseName: (state: any, props?: any) => string
     }
     sharedListeners: {
         someRandomFunction: (

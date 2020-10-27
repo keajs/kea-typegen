@@ -44,8 +44,8 @@ export interface githubImportLogicType<Repository> extends Logic {
         repositoryReducerCopy: Repository[]
     }
     selectors: {
-        repositoryReducerCopy: (state: any, props: any) => Repository[]
-        repositorySelectorCopy: (state: any, props: any) => Repository[]
+        repositoryReducerCopy: (state: any, props?: any) => Repository[]
+        repositorySelectorCopy: (state: any, props?: any) => Repository[]
     }
     sharedListeners: {}
     values: {

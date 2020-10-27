@@ -155,12 +155,12 @@ export interface loadersLogicType<Dashboard> extends Logic {
         miscLoading: boolean
     }
     selectors: {
-        dashboard: (state: any, props: any) => Dashboard | null
-        dashboardLoading: (state: any, props: any) => boolean
-        shouldNotBeNeverButAny: (state: any, props: any) => any[]
-        shouldNotBeNeverButAnyLoading: (state: any, props: any) => boolean
-        misc: (state: any, props: any) => Record<string, any>
-        miscLoading: (state: any, props: any) => boolean
+        dashboard: (state: any, props?: any) => Dashboard | null
+        dashboardLoading: (state: any, props?: any) => boolean
+        shouldNotBeNeverButAny: (state: any, props?: any) => any[]
+        shouldNotBeNeverButAnyLoading: (state: any, props?: any) => boolean
+        misc: (state: any, props?: any) => Record<string, any>
+        miscLoading: (state: any, props?: any) => boolean
     }
     sharedListeners: {}
     values: {

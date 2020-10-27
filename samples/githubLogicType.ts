@@ -95,11 +95,11 @@ export interface githubLogicType<Repository> extends Logic {
         error: string | null
     }
     selectors: {
-        username: (state: any, props: any) => string
-        repositories: (state: any, props: any) => Repository[]
-        isLoading: (state: any, props: any) => boolean
-        error: (state: any, props: any) => string | null
-        sortedRepositories: (state: any, props: any) => Repository[]
+        username: (state: any, props?: any) => string
+        repositories: (state: any, props?: any) => Repository[]
+        isLoading: (state: any, props?: any) => boolean
+        error: (state: any, props?: any) => string | null
+        sortedRepositories: (state: any, props?: any) => Repository[]
     }
     sharedListeners: {}
     values: {
