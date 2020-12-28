@@ -115,7 +115,7 @@ export function createVisit(
 
             const name = symbol.getName()
             let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
-            let typeNode = type ? checker.typeToTypeNode(type) : null
+            let typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
 
             if (typeNode && ts.isFunctionTypeNode(typeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()

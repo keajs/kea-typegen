@@ -24,7 +24,9 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
                 if (value.elements.length > 2) {
                     const options = value.elements[value.elements.length - 2]
                     if (ts.isObjectLiteralExpression(options)) {
-                        reducerOptions = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(options)))
+                        reducerOptions = cloneNode(
+                            checker.typeToTypeNode(checker.getTypeAtLocation(options), undefined, undefined),
+                        )
                     }
                 }
             } else if (ts.isObjectLiteralExpression(value)) {

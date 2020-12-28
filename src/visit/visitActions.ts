@@ -9,7 +9,7 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
     for (const property of properties) {
         const name = property.getName()
         const type = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration!)
-        const typeNode = checker.typeToTypeNode(type)
+        const typeNode = checker.typeToTypeNode(type, undefined, undefined)
         const signature = type.getCallSignatures()[0]
 
         let returnTypeNode
@@ -27,7 +27,7 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
                     undefined,
                 )
             })
-            returnTypeNode = cloneNode(checker.typeToTypeNode(signature.getReturnType()))
+            returnTypeNode = cloneNode(checker.typeToTypeNode(signature.getReturnType(), undefined, undefined))
         } else {
             returnTypeNode = ts.createTypeLiteralNode([
                 ts.createPropertySignature(undefined, ts.createIdentifier('value'), undefined, typeNode, undefined),
