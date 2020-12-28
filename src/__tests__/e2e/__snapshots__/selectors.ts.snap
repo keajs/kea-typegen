@@ -36,7 +36,9 @@ exports[`selectors - as a function returning a object 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [\\"logic\\"];
+    path: [
+        \\"logic\\"
+    ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
@@ -106,7 +108,9 @@ exports[`selectors - as an object 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [\\"logic\\"];
+    path: [
+        \\"logic\\"
+    ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
@@ -176,7 +180,9 @@ exports[`selectors - with a function 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [\\"logic\\"];
+    path: [
+        \\"logic\\"
+    ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
