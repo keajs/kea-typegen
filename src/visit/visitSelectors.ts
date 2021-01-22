@@ -18,13 +18,30 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
                 ? checker.typeToTypeNode(selectorInputFunctionType, inputFunction, NodeBuilderFlags.NoTruncation)
                 : null
 
+            let functionNames = []
+            if (ts.isArrayLiteralExpression(inputFunction.body)) {
+                functionNames = inputFunction.body.elements.map((element) => {
+                    if (ts.isPropertyAccessExpression(element)) {
+                        return element.name.getText()
+                    } else {
+                        return null
+                    }
+                })
+            }
+
             let functionTypes = []
 
             if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
+                let takenNames: Record<string, number> = {}
                 functionTypes = selectorInputTypeNode.elementTypes.map((selectorTypeNode, index) => {
+                    let name = functionNames[index] || 'arg'
+                    takenNames[name] = (takenNames[name] || 0) + 1
+                    if (takenNames[name] > 1) {
+                        name = `${name}${takenNames[name]}`
+                    }
+
                     return {
-                        // TODO: figure out the real name of the input
-                        name: `arg${index + 1}`,
+                        name,
                         type: ts.isFunctionTypeNode(selectorTypeNode)
                             ? cloneNode(selectorTypeNode.type)
                             : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),

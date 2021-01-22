@@ -201,16 +201,16 @@ export interface logicType<Session> extends Logic {
     _isKea: true
     _isKeaWithKey: true
     __keaTypeGenInternalSelectorTypes: {
-        capitalizedName: (arg1: string, arg2: number) => string
-        upperCaseName: (arg1: string) => string
-        randomSelector: (arg1: string) => Record<string, any>
+        capitalizedName: (name: string, number: number) => string
+        upperCaseName: (capitalizedName: string) => string
+        randomSelector: (capitalizedName: string) => Record<string, any>
         longSelector: (
-            arg1: string,
-            arg2: number,
-            arg3: string,
-            arg4: string,
-            arg5: Record<string, any>,
-            arg6: Record<string, any>,
+            name: string,
+            number: number,
+            capitalizedName: string,
+            upperCaseName: string,
+            randomSelector: Record<string, any>,
+            randomSelector2: Record<string, any>,
         ) => false
     }
     __keaTypeGenInternalReducerActions: {
