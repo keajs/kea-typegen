@@ -69,7 +69,7 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
         } else if (ts.isArrayLiteralExpression(defaultValue) && defaultValue.elements.length === 0) {
             typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
         } else {
-            typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue)))
+            typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue), undefined, undefined))
         }
     } else {
         typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)

@@ -13,7 +13,9 @@ export function visitSharedListeners(type: ts.Type, inputProperty: ts.PropertyAs
             let typeNode
             const firstParameter = value.parameters[0]
             if (firstParameter) {
-                typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(firstParameter)))
+                typeNode = cloneNode(
+                    checker.typeToTypeNode(checker.getTypeAtLocation(firstParameter), undefined, undefined),
+                )
             }
 
             parsedLogic.sharedListeners.push({
