@@ -56,9 +56,7 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
 
             parsedLogic.selectors.push({
                 name,
-                typeNode: type
-                    ? checker.typeToTypeNode(type, value, NodeBuilderFlags.NoTruncation)
-                    : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                typeNode: type ? checker.typeToTypeNode(type) : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                 functionTypes,
             })
         }

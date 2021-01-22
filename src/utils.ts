@@ -4,7 +4,6 @@ import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
 import { AppOptions, NameType, ParsedLogic } from './types'
-import { NodeBuilderFlags } from 'typescript'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -70,13 +69,7 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
         } else if (ts.isArrayLiteralExpression(defaultValue) && defaultValue.elements.length === 0) {
             typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
         } else {
-            typeNode = cloneNode(
-                checker.typeToTypeNode(
-                    checker.getTypeAtLocation(defaultValue),
-                    defaultValue,
-                    NodeBuilderFlags.NoTruncation,
-                ),
-            )
+            typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue)))
         }
     } else {
         typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)

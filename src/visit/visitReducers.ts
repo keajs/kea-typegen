@@ -2,7 +2,6 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { extractImportedActions, getTypeNodeForDefaultValue } from '../utils'
 import { cloneNode } from '@wessberg/ts-clone-node'
-import { NodeBuilderFlags } from 'typescript'
 
 export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -25,13 +24,7 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
                 if (value.elements.length > 2) {
                     const options = value.elements[value.elements.length - 2]
                     if (ts.isObjectLiteralExpression(options)) {
-                        reducerOptions = cloneNode(
-                            checker.typeToTypeNode(
-                                checker.getTypeAtLocation(options),
-                                value,
-                                NodeBuilderFlags.NoTruncation,
-                            ),
-                        )
+                        reducerOptions = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(options)))
                     }
                 }
             } else if (ts.isObjectLiteralExpression(value)) {
