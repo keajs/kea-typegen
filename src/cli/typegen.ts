@@ -7,6 +7,7 @@ import * as fs from 'fs'
 import { visitProgram } from '../visit/visit'
 import { printToFiles } from '../print/print'
 import { AppOptions } from '../types'
+import { Program } from 'typescript'
 
 const parser = yargs
     .command(
@@ -126,17 +127,21 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
 }
 
 function runCLI(appOptions: AppOptions) {
-    let program
+    let program: Program
+    let resetProgram: () => void
 
     const { log } = appOptions
 
     if (appOptions.sourceFilePath) {
         log(`Loading file: ${appOptions.sourceFilePath}`)
-        program = ts.createProgram([appOptions.sourceFilePath], {
-            target: ts.ScriptTarget.ES5,
-            module: ts.ModuleKind.CommonJS,
-            noEmit: true,
-        })
+        resetProgram = () => {
+            program = ts.createProgram([appOptions.sourceFilePath], {
+                target: ts.ScriptTarget.ES5,
+                module: ts.ModuleKind.CommonJS,
+                noEmit: true,
+            })
+        }
+        resetProgram()
     } else if (appOptions.tsConfigPath) {
         log(`Using TypeScript Config: ${appOptions.tsConfigPath}`)
         log('')
@@ -201,8 +206,11 @@ function runCLI(appOptions: AppOptions) {
 
             ts.createWatchProgram(host)
         } else {
-            const host = ts.createCompilerHost(compilerOptions.options)
-            program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
+            resetProgram = () => {
+                const host = ts.createCompilerHost(compilerOptions.options)
+                program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
+            }
+            resetProgram()
         }
     } else {
         log(`No tsconfig.json found! No source file specified.`)
@@ -242,6 +250,8 @@ function runCLI(appOptions: AppOptions) {
                     log(`We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
                     process.exit(1)
                 }
+
+                resetProgram()
             }
         } else {
             // check them once
