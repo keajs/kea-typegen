@@ -1,6 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import {cloneNode} from "@wessberg/ts-clone-node";
+import { cloneNode } from '@wessberg/ts-clone-node'
+import { NodeBuilderFlags } from 'typescript'
 
 export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -13,17 +14,22 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
             const inputFunctionTypeNode = checker.getTypeAtLocation(inputFunction)
 
             const selectorInputFunctionType = inputFunctionTypeNode.getCallSignatures()[0]?.getReturnType() as ts.Type
-            const selectorInputTypeNode = selectorInputFunctionType ? checker.typeToTypeNode(selectorInputFunctionType) : null
+            const selectorInputTypeNode = selectorInputFunctionType
+                ? checker.typeToTypeNode(selectorInputFunctionType, inputFunction, NodeBuilderFlags.NoTruncation)
+                : null
 
             let functionTypes = []
+
             if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
-                functionTypes = selectorInputTypeNode.elementTypes.map((selectorTypeNode, index) => ({
-                    // TODO: figure out the real name of the input
-                    name: `arg${index + 1}`,
-                    type: ts.isFunctionTypeNode(selectorTypeNode)
-                        ? cloneNode(selectorTypeNode.type)
-                        : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                }))
+                functionTypes = selectorInputTypeNode.elementTypes.map((selectorTypeNode, index) => {
+                    return {
+                        // TODO: figure out the real name of the input
+                        name: `arg${index + 1}`,
+                        type: ts.isFunctionTypeNode(selectorTypeNode)
+                            ? cloneNode(selectorTypeNode.type)
+                            : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    }
+                })
             }
 
             // return type
@@ -33,7 +39,9 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
 
             parsedLogic.selectors.push({
                 name,
-                typeNode: type ? checker.typeToTypeNode(type) : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                typeNode: type
+                    ? checker.typeToTypeNode(type, value, NodeBuilderFlags.NoTruncation)
+                    : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                 functionTypes,
             })
         }

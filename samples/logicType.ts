@@ -165,6 +165,8 @@ export interface logicType<Session> extends Logic {
         sessionsLoading: (state: any, props?: any) => boolean
         capitalizedName: (state: any, props?: any) => string
         upperCaseName: (state: any, props?: any) => string
+        randomSelector: (state: any, props?: any) => Record<string, any>
+        longSelector: (state: any, props?: any) => false
     }
     sharedListeners: {
         someRandomFunction: (
@@ -193,12 +195,23 @@ export interface logicType<Session> extends Logic {
         sessionsLoading: boolean
         capitalizedName: string
         upperCaseName: string
+        randomSelector: Record<string, any>
+        longSelector: false
     }
     _isKea: true
     _isKeaWithKey: true
     __keaTypeGenInternalSelectorTypes: {
         capitalizedName: (arg1: string, arg2: number) => string
         upperCaseName: (arg1: string) => string
+        randomSelector: (arg1: string) => Record<string, any>
+        longSelector: (
+            arg1: string,
+            arg2: number,
+            arg3: string,
+            arg4: string,
+            arg5: Record<string, any>,
+            arg6: Record<string, any>,
+        ) => false
     }
     __keaTypeGenInternalReducerActions: {
         'set username (samples.githubLogic)': (

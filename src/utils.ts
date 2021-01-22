@@ -3,7 +3,8 @@ import * as path from 'path'
 import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
-import {AppOptions, NameType, ParsedLogic, ReducerTransform} from './types'
+import { AppOptions, NameType, ParsedLogic } from './types'
+import { NodeBuilderFlags } from 'typescript'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -69,7 +70,13 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
         } else if (ts.isArrayLiteralExpression(defaultValue) && defaultValue.elements.length === 0) {
             typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
         } else {
-            typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue)))
+            typeNode = cloneNode(
+                checker.typeToTypeNode(
+                    checker.getTypeAtLocation(defaultValue),
+                    defaultValue,
+                    NodeBuilderFlags.NoTruncation,
+                ),
+            )
         }
     } else {
         typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
@@ -109,7 +116,10 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
     return Object.values(newReducers)
 }
 
-export function extractImportedActions(actionObjects: ts.Expression | ts.ObjectLiteralExpression, checker: ts.TypeChecker) {
+export function extractImportedActions(
+    actionObjects: ts.Expression | ts.ObjectLiteralExpression,
+    checker: ts.TypeChecker,
+) {
     let extraActions = {}
 
     if (ts.isObjectLiteralExpression(actionObjects)) {
@@ -120,7 +130,7 @@ export function extractImportedActions(actionObjects: ts.Expression | ts.ObjectL
                 let propertyExpression = property.name.expression
 
                 if (ts.isPropertyAccessExpression(propertyExpression)) {
-                    const {name, expression} = propertyExpression
+                    const { name, expression } = propertyExpression
                     const actionName = name.escapedText
 
                     const nameSymbol = checker.getSymbolAtLocation(property.name)
@@ -133,15 +143,25 @@ export function extractImportedActions(actionObjects: ts.Expression | ts.ObjectL
                         const symbol = checker.getSymbolAtLocation(expression.expression)
                         const symbolType = checker.getTypeOfSymbolAtLocation(symbol, expression.expression)
 
-                        const actionCreatorsProperty = symbolType.getProperties().find((p) => p.escapedName === 'actionCreators')
+                        const actionCreatorsProperty = symbolType
+                            .getProperties()
+                            .find((p) => p.escapedName === 'actionCreators')
                         const actionCreators = actionCreatorsProperty?.valueDeclaration
 
-                        if (actionCreators && ts.isPropertySignature(actionCreators) && ts.isTypeLiteralNode(actionCreators.type)) {
+                        if (
+                            actionCreators &&
+                            ts.isPropertySignature(actionCreators) &&
+                            ts.isTypeLiteralNode(actionCreators.type)
+                        ) {
                             const actionCreator = actionCreators.type.members.find(
                                 (m) => (m.name as ts.Identifier)?.escapedText === actionName,
                             )
 
-                            if (actionCreator && ts.isPropertySignature(actionCreator) && ts.isFunctionTypeNode(actionCreator.type)) {
+                            if (
+                                actionCreator &&
+                                ts.isPropertySignature(actionCreator) &&
+                                ts.isFunctionTypeNode(actionCreator.type)
+                            ) {
                                 extraActions[actionType] = cloneNode(actionCreator.type) //payload
                             }
                         }
