@@ -12,7 +12,7 @@ export function visitWindowValues(type: ts.Type, inputProperty: ts.PropertyAssig
             if (value && ts.isFunctionLike(value)) {
                 const type = checker.getTypeOfSymbolAtLocation(property, value)
                 const signature = type.getCallSignatures()[0]
-                const typeNode = checker.typeToTypeNode(signature.getReturnType())
+                const typeNode = checker.typeToTypeNode(signature.getReturnType(), undefined, undefined)
 
                 parsedLogic.reducers.push({ name, typeNode })
             }
