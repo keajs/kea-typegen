@@ -52,9 +52,7 @@ exports[`loaders - with a function 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
@@ -136,9 +134,7 @@ exports[`loaders - with an array and default 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {
@@ -236,9 +232,7 @@ exports[`loaders - with no param 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {

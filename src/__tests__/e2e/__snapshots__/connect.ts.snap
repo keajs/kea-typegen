@@ -33,9 +33,7 @@ exports[`connect actions and rename 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
@@ -83,9 +81,7 @@ exports[`connect actions from another logic 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
@@ -133,9 +129,7 @@ exports[`connect actions from multiple other logics 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
@@ -161,9 +155,7 @@ exports[`connect props from another logic 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
@@ -195,9 +187,7 @@ exports[`connect values and rename 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
@@ -229,9 +219,7 @@ exports[`connect values from another logic 1`] = `
     events: {};
     key: undefined;
     listeners: {};
-    path: [
-        \\"logic\\"
-    ];
+    path: [\\"logic\\"];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
     reducer: (state: any, action: () => any, fullState: any) => {};
