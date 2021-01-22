@@ -3,7 +3,7 @@ import * as path from 'path'
 import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
-import { AppOptions, NameType, ParsedLogic, ReducerTransform } from './types'
+import { AppOptions, NameType, ParsedLogic } from './types'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)

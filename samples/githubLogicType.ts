@@ -112,6 +112,6 @@ export interface githubLogicType<Repository> extends Logic {
     _isKea: true
     _isKeaWithKey: false
     __keaTypeGenInternalSelectorTypes: {
-        sortedRepositories: (arg1: Repository[]) => Repository[]
+        sortedRepositories: (repositories: Repository[]) => Repository[]
     }
 }

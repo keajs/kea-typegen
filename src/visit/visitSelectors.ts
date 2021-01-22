@@ -1,6 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
+import { NodeBuilderFlags } from 'typescript'
 
 export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -14,18 +15,38 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
 
             const selectorInputFunctionType = inputFunctionTypeNode.getCallSignatures()[0]?.getReturnType() as ts.Type
             const selectorInputTypeNode = selectorInputFunctionType
-                ? checker.typeToTypeNode(selectorInputFunctionType, undefined, undefined)
+                ? checker.typeToTypeNode(selectorInputFunctionType, inputFunction, NodeBuilderFlags.NoTruncation)
                 : null
 
+            let functionNames = []
+            if (ts.isArrayLiteralExpression(inputFunction.body)) {
+                functionNames = inputFunction.body.elements.map((element) => {
+                    if (ts.isPropertyAccessExpression(element)) {
+                        return element.name.getText()
+                    } else {
+                        return null
+                    }
+                })
+            }
+
             let functionTypes = []
+
             if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
-                functionTypes = selectorInputTypeNode.elements.map((selectorTypeNode, index) => ({
-                    // TODO: figure out the real name of the input
-                    name: `arg${index + 1}`,
-                    type: ts.isFunctionTypeNode(selectorTypeNode)
-                        ? cloneNode(selectorTypeNode.type)
-                        : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                }))
+                let takenNames: Record<string, number> = {}
+                functionTypes = selectorInputTypeNode.elementTypes.map((selectorTypeNode, index) => {
+                    let name = functionNames[index] || 'arg'
+                    takenNames[name] = (takenNames[name] || 0) + 1
+                    if (takenNames[name] > 1) {
+                        name = `${name}${takenNames[name]}`
+                    }
+
+                    return {
+                        name,
+                        type: ts.isFunctionTypeNode(selectorTypeNode)
+                            ? cloneNode(selectorTypeNode.type)
+                            : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    }
+                })
             }
 
             // return type

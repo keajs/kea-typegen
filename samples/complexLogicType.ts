@@ -240,15 +240,18 @@ export interface complexLogicType<ActionType, ActionForm, FormInstance, AntdFiel
     _isKea: true
     _isKeaWithKey: false
     __keaTypeGenInternalSelectorTypes: {
-        selectedAction: (arg1: number | 'new' | null, arg2: HTMLElement | null) => ActionType | null
-        initialValuesForForm: (arg1: ActionType | null) => ActionForm
+        selectedAction: (
+            selectedActionId: number | 'new' | null,
+            newActionForElement: HTMLElement | null,
+        ) => ActionType | null
+        initialValuesForForm: (selectedAction: ActionType | null) => ActionForm
         selectedEditedAction: (
-            arg1: ActionType | null,
-            arg2: ActionForm,
-            arg3: FormInstance | null,
-            arg4: AntdFieldData[] | null,
-            arg5: number | null,
-            arg6: number,
+            selectedAction: ActionType | null,
+            initialValuesForForm: ActionForm,
+            form: FormInstance | null,
+            editingFields: AntdFieldData[] | null,
+            inspectingElement: number | null,
+            counter: number,
         ) => ActionForm
     }
 }

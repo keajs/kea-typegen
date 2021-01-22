@@ -55,7 +55,7 @@ export interface githubImportLogicType<Repository> extends Logic {
     _isKea: true
     _isKeaWithKey: false
     __keaTypeGenInternalSelectorTypes: {
-        repositorySelectorCopy: (arg1: Repository[]) => Repository[]
+        repositorySelectorCopy: (repositories: Repository[]) => Repository[]
     }
     __keaTypeGenInternalReducerActions: {
         'set repositories (samples.githubLogic)': (

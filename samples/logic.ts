@@ -74,6 +74,16 @@ export const logic = kea<logicType<Session>>({
                 return capitalizedName.toUpperCase()
             },
         ],
+        randomSelector: [
+            () => [selectors.capitalizedName],
+            (capitalizedName) => ({
+                name: capitalizedName
+            }) as Record<string, any>,
+        ],
+        longSelector: [
+            (s) => [s.name, s.number, s.capitalizedName, s.upperCaseName, s.randomSelector, s.randomSelector],
+            (a1, a2, a3, a4, a5, a6) => false
+        ]
     }),
     loaders: () => ({
         sessions: {
