@@ -163,7 +163,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             ),
             printProperty('pathString', ts.createStringLiteral(parsedLogic.pathString)),
             printProperty('props', printProps(parsedLogic)),
-            printProperty('reducer', printReducer(parsedLogic),
+            printProperty('reducer', printReducer(parsedLogic)),
             printProperty('reducerOptions', printReducerOptions(parsedLogic)),
             printProperty('reducers', printReducers(parsedLogic)),
             printProperty('selector', printSelector(parsedLogic)),
