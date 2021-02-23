@@ -33,20 +33,22 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
 
             if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
                 let takenNames: Record<string, number> = {}
-                functionTypes = selectorInputTypeNode.elementTypes.map((selectorTypeNode, index) => {
-                    let name = functionNames[index] || 'arg'
-                    takenNames[name] = (takenNames[name] || 0) + 1
-                    if (takenNames[name] > 1) {
-                        name = `${name}${takenNames[name]}`
-                    }
+                functionTypes = selectorInputTypeNode.elements
+                    .filter((e) => ts.isTypeNode(e))
+                    .map((selectorTypeNode, index) => {
+                        let name = functionNames[index] || 'arg'
+                        takenNames[name] = (takenNames[name] || 0) + 1
+                        if (takenNames[name] > 1) {
+                            name = `${name}${takenNames[name]}`
+                        }
 
-                    return {
-                        name,
-                        type: ts.isFunctionTypeNode(selectorTypeNode)
-                            ? cloneNode(selectorTypeNode.type)
-                            : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                    }
-                })
+                        return {
+                            name,
+                            type: ts.isFunctionTypeNode(selectorTypeNode)
+                                ? cloneNode(selectorTypeNode.type)
+                                : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        }
+                    })
             }
 
             // return type
