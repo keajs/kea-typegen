@@ -83,10 +83,13 @@ export function printToFiles(
         let existingOutput
 
         try {
-            existingOutput = fs.readFileSync(typeFileName)
+            existingOutput = fs.readFileSync(typeFileName)?.toString()
         } catch (error) {}
 
-        if (existingOutput?.toString() !== finalOutput) {
+        if (
+            existingOutput &&
+            existingOutput.split('\n').slice(1).join('\n') !== finalOutput.split('\n').slice(1).join('\n')
+        ) {
             filesToWrite += 1
             if (appOptions.write) {
                 fs.mkdirSync(path.dirname(typeFileName), { recursive: true })
