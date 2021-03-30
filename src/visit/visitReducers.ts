@@ -16,10 +16,14 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
             let reducerOptions
 
             if (ts.isArrayLiteralExpression(value)) {
-                const defaultValue = value.elements[0]
+                let defaultValue = value.elements[0]
+                typeNode = getTypeNodeForDefaultValue(defaultValue, checker)
+                if (ts.isFunctionTypeNode(typeNode)) {
+                    typeNode = typeNode.type
+                }
+
                 const actionObjects = value.elements[value.elements.length - 1]
                 extraActions = extractImportedActions(actionObjects, checker)
-                typeNode = getTypeNodeForDefaultValue(defaultValue, checker)
 
                 if (value.elements.length > 2) {
                     const options = value.elements[value.elements.length - 2]

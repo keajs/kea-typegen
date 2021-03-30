@@ -1,3 +1,6 @@
+## 0.5.3 - 2021-03-30
+- Support reducers with selectors as defaults
+
 ## 0.5.1 - 2021-01-22
 - Fix `kea-typegen write` recursive updates
 
