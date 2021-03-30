@@ -1,5 +1,13 @@
-## 0.5.3 - 2021-03-30
+## 0.5.4 - 2021-03-30
 - Support reducers with selectors as defaults
+
+## 0.5.3 - 2021-02-23
+- Fix type bug with selectors
+- Skip first comment line in generated types when comparing for overwrites
+- Update deps
+
+## 0.5.2 - 2021-02-23
+- Update and clean up copy
 
 ## 0.5.1 - 2021-01-22
 - Fix `kea-typegen write` recursive updates
