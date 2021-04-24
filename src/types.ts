@@ -57,6 +57,7 @@ export interface AppOptions {
     watch?: boolean
     quiet?: boolean
     verbose?: boolean
+    noImport?: boolean
 
     log: (message: string) => void
 }

@@ -109,7 +109,7 @@ export function printToFiles(
             (pl) => pl.logicTypeImported === false && pl.fileName.match(/\.tsx?$/),
         )
         if (logicsNeedingImports.length > 0) {
-            if (appOptions.write) {
+            if (appOptions.write && !appOptions.noImport) {
                 writeLogicTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
             } else {
                 log(`❌ Will not write logic type imports`)

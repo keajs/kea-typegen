@@ -48,6 +48,7 @@ const parser = yargs
         type: 'string',
     })
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
+    .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()
@@ -61,6 +62,7 @@ function parsedToAppOptions(parsedOptions) {
         sourceFilePath: parsedOptions.file,
         quiet: parsedOptions.quiet,
         verbose: parsedOptions.verbose,
+        noImport: parsedOptions.noImport,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),
     } as AppOptions
 
