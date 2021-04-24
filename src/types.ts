@@ -26,8 +26,12 @@ export interface ListenerTransform {
 }
 
 export interface ParsedLogic {
+    node: ts.Node,
     fileName: string
+    typeFileName: string
     logicName: string
+    logicTypeName: string
+    logicTypeImported: boolean
     path: string[]
     pathString: string
     logicTypeArguments: string[]
@@ -53,6 +57,7 @@ export interface AppOptions {
     watch?: boolean
     quiet?: boolean
     verbose?: boolean
+    noImport?: boolean
 
     log: (message: string) => void
 }

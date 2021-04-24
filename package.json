@@ -1,12 +1,13 @@
 {
     "name": "kea-typegen",
-    "version": "0.5.4",
+    "version": "0.6.2",
     "description": "Generate type definitions for kea logic",
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
+        "clean": "rimraf dist/*",
         "build": "tsc -p .",
-        "prepublish": "npm run test && npm run build",
-        "run-built-cli": "node dist/cli/typegen.js",
+        "prepublishOnly": "npm run test && npm run clean && npm run build",
+        "run-built-cli": "node dist/src/cli/typegen.js",
         "test": "jest",
         "samples-check": "ts-node ./src/cli/typegen.ts check",
         "samples-write": "ts-node ./src/cli/typegen.ts write",
@@ -16,10 +17,11 @@
     "author": "Marius Andra <marius.andra@gmail.com>",
     "license": "MIT",
     "bin": {
-        "kea-typegen": "dist/cli/typegen.js"
+        "kea-typegen": "dist/src/cli/typegen.js"
     },
     "dependencies": {
         "@wessberg/ts-clone-node": "0.3.18",
+        "diff": "^5.0.0",
         "prettier": "^2.2.1",
         "yargs": "^16.2.0"
     },
@@ -36,6 +38,7 @@
         "kea": "^2.3.2",
         "lint-staged": ">=10.5.4",
         "react": "^16.13.1",
+        "rimraf": "^3.0.2",
         "ts-jest": "^26.5.1",
         "ts-node": "^9.1.1",
         "typescript": "^4.1.5"

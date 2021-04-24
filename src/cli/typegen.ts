@@ -8,6 +8,7 @@ import { visitProgram } from '../visit/visit'
 import { printToFiles } from '../print/print'
 import { AppOptions } from '../types'
 import { Program } from 'typescript'
+import { version } from '../../package.json'
 
 const parser = yargs
     .command(
@@ -47,6 +48,7 @@ const parser = yargs
         type: 'string',
     })
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
+    .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()
@@ -60,6 +62,7 @@ function parsedToAppOptions(parsedOptions) {
         sourceFilePath: parsedOptions.file,
         quiet: parsedOptions.quiet,
         verbose: parsedOptions.verbose,
+        noImport: parsedOptions.noImport,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),
     } as AppOptions
 
@@ -131,9 +134,10 @@ function runCLI(appOptions: AppOptions) {
     let resetProgram: () => void
 
     const { log } = appOptions
+    log(`🦜 Kea-TypeGen v${version}`)
 
     if (appOptions.sourceFilePath) {
-        log(`Loading file: ${appOptions.sourceFilePath}`)
+        log(`❇️ Loading file: ${appOptions.sourceFilePath}`)
         resetProgram = () => {
             program = ts.createProgram([appOptions.sourceFilePath], {
                 target: ts.ScriptTarget.ES5,
@@ -143,8 +147,7 @@ function runCLI(appOptions: AppOptions) {
         }
         resetProgram()
     } else if (appOptions.tsConfigPath) {
-        log(`Using TypeScript Config: ${appOptions.tsConfigPath}`)
-        log('')
+        log(`🥚 TypeScript Config: ${appOptions.tsConfigPath}`)
 
         const configFile = ts.readJsonConfigFile(appOptions.tsConfigPath, ts.sys.readFile)
         const rootFolder = path.dirname(appOptions.tsConfigPath)
@@ -170,6 +173,8 @@ function runCLI(appOptions: AppOptions) {
                 reportWatchStatusChanged,
             )
 
+            console.info(`🥚 TypeScript Compiler API v${ts.version}`)
+
             const formatHost: ts.FormatDiagnosticsHost = {
                 getCanonicalFileName: (path) => path,
                 getCurrentDirectory: ts.sys.getCurrentDirectory,
@@ -188,7 +193,7 @@ function runCLI(appOptions: AppOptions) {
             }
 
             function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
-                console.info(ts.formatDiagnostic(diagnostic, formatHost))
+                console.info(`🥚 ${ts.formatDiagnostic(diagnostic, formatHost).trim()}`)
             }
 
             const origCreateProgram = host.createProgram
@@ -213,18 +218,14 @@ function runCLI(appOptions: AppOptions) {
             resetProgram()
         }
     } else {
-        log(`No tsconfig.json found! No source file specified.`)
+        log(`⛔ No tsconfig.json found! No source file specified.`)
     }
 
     function goThroughAllTheFiles(program, appOptions): { filesToWrite: number; writtenFiles: number } {
         const parsedLogics = visitProgram(program, appOptions)
-        if (appOptions?.verbose) {
-            log('')
-        }
-        log(`## ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
-        log('')
+        log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
 
-        const response = printToFiles(appOptions, parsedLogics)
+        const response = printToFiles(program, appOptions, parsedLogics)
 
         // running "kea-typegen check" and would write files?
         // exit with 1
@@ -242,12 +243,12 @@ function runCLI(appOptions: AppOptions) {
                 const { writtenFiles } = goThroughAllTheFiles(program, appOptions)
 
                 if (writtenFiles === 0) {
-                    log(`Finished writing files! Exiting.`)
+                    log(`👋 Finished writing files! Exiting.`)
                     process.exit(0)
                 }
 
                 if (round > 50) {
-                    log(`We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
+                    log(`🔁 We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
                     process.exit(1)
                 }
 

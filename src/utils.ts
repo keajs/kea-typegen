@@ -31,10 +31,6 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
         return false
     }
 
-    if (!node.parent || !ts.isCallExpression(node.parent)) {
-        return false
-    }
-
     const symbol = checker.getSymbolAtLocation(node)
     if (!symbol || symbol.getName() !== 'kea') {
         return false
