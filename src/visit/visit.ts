@@ -93,7 +93,7 @@ export function createVisit(
         const pathString = getLogicPathString(appOptions, sourceFile.fileName)
         let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')
 
-        if (appOptions.rootPath && appOptions.typesPath) {
+        if (appOptions?.rootPath && appOptions?.typesPath) {
             const relativePathFromRoot = path.relative(appOptions.rootPath, typeFileName)
             typeFileName = path.resolve(appOptions.typesPath, relativePathFromRoot)
         }
