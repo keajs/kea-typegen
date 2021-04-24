@@ -1,3 +1,7 @@
+## 0.6.0 - 2021-04-25
+- Automatically add `import { logicType } from './logicType'` statements
+- Automatically add the type to `kea<logicType>()`
+
 ## 0.5.4 - 2021-03-30
 - Support reducers with selectors as defaults
 
