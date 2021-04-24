@@ -33,7 +33,7 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
 
             if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
                 let takenNames: Record<string, number> = {}
-                functionTypes = selectorInputTypeNode.elements
+                functionTypes = (selectorInputTypeNode.elements || ts.createNodeArray([]))
                     .filter((e) => ts.isTypeNode(e))
                     .map((selectorTypeNode, index) => {
                         let name = functionNames[index] || 'arg'
