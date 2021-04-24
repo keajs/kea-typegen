@@ -1,4 +1,4 @@
-## 0.6.0 - 2021-04-25
+## 0.6.1 - 2021-04-25
 - Automatically add `import { logicType } from './logicType'` statements
 - Automatically add the type to `kea<logicType>()`
 
