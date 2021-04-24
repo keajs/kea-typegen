@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@wessberg/ts-clone-node": "0.3.18",
+        "diff": "^5.0.0",
         "prettier": "^2.2.1",
         "yargs": "^16.2.0"
     },

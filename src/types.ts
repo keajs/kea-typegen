@@ -26,8 +26,11 @@ export interface ListenerTransform {
 }
 
 export interface ParsedLogic {
+    node: ts.Node,
     fileName: string
     logicName: string
+    logicTypeName: string
+    logicTypeImported: boolean
     path: string[]
     pathString: string
     logicTypeArguments: string[]

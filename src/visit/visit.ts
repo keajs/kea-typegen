@@ -70,12 +70,14 @@ export function createVisit(
         const logicTypeName = `${logicName}Type`
 
         let logicTypeArguments = []
+        let logicTypeImported = false
 
+        // get "logicType" in "kea<logicType>(..)"
         const keaTypeArguments = ts.isCallExpression(node.parent) ? node.parent.typeArguments : []
         const keaTypeArgument = keaTypeArguments?.[0]
 
-        // // kea<logicType>(..)
         if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {
+            logicTypeImported = true
             // kea<logicType<somethingElse>>(...)
             // store <somethingElse> on the generated type!
             if (keaTypeArgument.typeArguments && keaTypeArgument.typeArguments.length > 0) {
@@ -87,7 +89,10 @@ export function createVisit(
 
         const parsedLogic: ParsedLogic = {
             checker,
+            node,
             logicName,
+            logicTypeImported,
+            logicTypeName,
             logicTypeArguments: logicTypeArguments,
             fileName: sourceFile.fileName,
             actions: [],

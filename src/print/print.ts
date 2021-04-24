@@ -23,8 +23,9 @@ import { printReducerOptions } from './printReducerOptions'
 import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
+import { writeLogicTypeImports } from '../import/writeLogicTypeImports'
 
-function runThroughPrettier(sourceText: string, filePath: string): string {
+export function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
     if (options) {
         try {
@@ -41,6 +42,7 @@ function runThroughPrettier(sourceText: string, filePath: string): string {
 
 // returns files to write
 export function printToFiles(
+    program: ts.Program,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
 ): { filesToWrite: number; writtenFiles: number } {
@@ -80,6 +82,8 @@ export function printToFiles(
             output,
         ].join('\n\n')
 
+        // write the logic type
+
         let existingOutput
 
         try {
@@ -95,29 +99,38 @@ export function printToFiles(
                 fs.mkdirSync(path.dirname(typeFileName), { recursive: true })
                 fs.writeFileSync(typeFileName, finalOutput)
                 writtenFiles += 1
-                log(`!! Writing: ${path.relative(process.cwd(), typeFileName)}`)
+                log(`🔥 Writing: ${path.relative(process.cwd(), typeFileName)}`)
             } else {
-                log(`:${smiles[i++ % smiles.length]} Would write: ${path.relative(process.cwd(), typeFileName)}`)
+                log(`❌ Will not write: ${path.relative(process.cwd(), typeFileName)}`)
             }
         } else {
             if (appOptions.verbose) {
-                log(`-- Unchanged: ${path.relative(process.cwd(), typeFileName)}`)
+                log(`🤷 Unchanged: ${path.relative(process.cwd(), typeFileName)}`)
+            }
+        }
+
+        // write the type into the logic itself
+        const logicsNeedingImports = parsedLogics.filter(
+            (pl) => pl.logicTypeImported === false && pl.fileName.match(/\.tsx?$/),
+        )
+        if (logicsNeedingImports.length > 0) {
+            if (appOptions.write) {
+                writeLogicTypeImports(appOptions, program, fileName, logicsNeedingImports)
+            } else {
+                log(`❌ Will not write logic type imports`)
             }
         }
     })
 
-    if (filesToWrite > 0 || (appOptions.verbose && Object.keys(groupedByFile).length > 0)) {
-        log('')
-    }
-
     if (writtenFiles === 0) {
         if (appOptions.write) {
-            log(`-> No changes in logic type files needed`)
+            log(`💚 Logic types up to date!`)
+            log('')
         } else if (filesToWrite > 0) {
-            log(`-> Run "kea-typegen write" to save logic type files to disk`)
+            log(`🚨 Run "kea-typegen write" to save types to disk`)
         }
     } else if (writtenFiles > 0) {
-        log(`-> Written ${writtenFiles} logic type file${writtenFiles === 1 ? '' : 's'}`)
+        log(`✨ Wrote ${writtenFiles} logic type file${writtenFiles === 1 ? '' : 's'}`)
     }
 
     return { filesToWrite, writtenFiles }
