@@ -36,6 +36,7 @@ export function writeLogicTypeImports(
     program: ts.Program,
     filename: string,
     parsedLogics: ParsedLogic[],
+    allParsedLogics: ParsedLogic[],
 ) {
     const { log } = appOptions
     const sourceFile = program.getSourceFile(filename)
@@ -45,6 +46,27 @@ export function writeLogicTypeImports(
     for (const parsedLogic of parsedLogics) {
         parsedLogicMapByNode.set(parsedLogic.node, parsedLogic)
     }
+
+    let importLocation = path.relative(path.dirname(filename), parsedLogics[0].typeFileName).replace(/\.[tj]sx?$/, '')
+    if (!importLocation.startsWith('.')) {
+        importLocation = `./${importLocation}`
+    }
+    const createImportDeclaration = () =>
+        ts.createImportDeclaration(
+            undefined,
+            undefined,
+            ts.createImportClause(
+                undefined,
+                ts.createNamedImports(
+                    allParsedLogics.map((l) =>
+                        ts.createImportSpecifier(undefined, ts.createIdentifier(l.logicTypeName)),
+                    ),
+                ),
+            ),
+            ts.createLiteral(importLocation),
+        )
+
+    let foundImport = false
 
     const transformer = <T extends ts.Node>(context: ts.TransformationContext) => {
         return (rootNode: T) => {
@@ -62,6 +84,37 @@ export function writeLogicTypeImports(
                         [ts.createTypeReferenceNode(ts.createIdentifier(logicTypeName), undefined)],
                         node.arguments,
                     )
+                }
+
+                if (ts.isImportDeclaration(node)) {
+                    const symbol = checker.getSymbolAtLocation(node.moduleSpecifier)
+                    const typeFile = symbol?.getDeclarations()?.[0]?.getSourceFile().fileName
+                    if (typeFile === parsedLogics[0].typeFileName) {
+                        foundImport = true
+                        const bindings = node.importClause.namedBindings
+                        if (ts.isNamedImports(bindings)) {
+                            const oldString = bindings.elements
+                                .map((e) => e.getText())
+                                .sort()
+                                .join(',')
+                            const newString = parsedLogics
+                                .map((l) => l.logicTypeName)
+                                .sort()
+                                .join(',')
+                            if (oldString !== newString) {
+                                return createImportDeclaration()
+                            }
+                        }
+                    }
+                }
+
+                if (ts.isSourceFile(node)) {
+                    if (!foundImport) {
+                        return ts.updateSourceFileNode(sourceFile, [
+                            createImportDeclaration(),
+                            ...sourceFile.statements,
+                        ])
+                    }
                 }
 
                 return node
@@ -84,52 +137,4 @@ export function writeLogicTypeImports(
     fs.writeFileSync(filename, newestText)
 
     log(`🔥 Import added: ${path.relative(process.cwd(), filename)}`)
-
-    // function addImport(statements: ts.NodeArray<ts.Statement>) {
-    //     const importStatement = ts.createImportStatement(/*...*/);
-    //     return ts.createNodeArray([importStatement, ...statements]);
-    // }
-    //
-    // visitEachChild(
-    //     sourceFile,
-    //     /*replace this with something that controls traversal*/ x => x,
-    //     context,
-    //     addImport);
-
-    // const imports = []
-    // ts.forEachChild(sourceFile, (node: ts.Node) => {
-    //       if (!ts.isImportDeclaration(node)) {
-    //           return
-    //       }
-    //
-    // })
-    // const update = ts.updateSourceFileNode(sourceFile, [
-    //   ts.createImportDeclaration(
-    //     undefined,
-    //     undefined,
-    //     ts.createImportClause(
-    //       undefined,
-    //       ts.createNamedImports([ts.createImportSpecifier(ts.createIdentifier("default"), ts.createIdentifier("salami"))])
-    //     ),
-    //     ts.createExternalModuleReference(createLiteral("styles"))
-    //
-    //
-    //   ),
-    //   ...file.statements
-    //     ]);
-    // const file = node as SourceFile;
-    // updateSourceFileNode(sourceFile, [createImportEqualsDeclaration(
-    //     /*decorators*/ undefined,
-    //     /*modifiers*/ undefined,
-    //     "style",
-    //     createExternalModuleReference(createLiteral("styles"))
-    // ), ...file.statements]);
-
-    //     const file = node as SourceFile;
-    // updateSourceFileNode(file, [createImportEqualsDeclaration(
-    //     /*decorators*/ undefined,
-    //     /*modifiers*/ undefined,
-    //     "style",
-    //     createExternalModuleReference(createLiteral("styles"))
-    // ), ...file.statements]);
 }

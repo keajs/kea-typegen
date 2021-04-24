@@ -41,7 +41,7 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
             if (appOptions?.verbose) {
-                appOptions.log(`-> Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
+                appOptions.log(`👀 Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
             }
             ts.forEachChild(sourceFile, createVisit(checker, parsedLogics, sourceFile, appOptions))
         }
@@ -77,15 +77,26 @@ export function createVisit(
         const keaTypeArgument = keaTypeArguments?.[0]
 
         if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {
-            logicTypeImported = true
             // kea<logicType<somethingElse>>(...)
             // store <somethingElse> on the generated type!
             if (keaTypeArgument.typeArguments && keaTypeArgument.typeArguments.length > 0) {
                 logicTypeArguments = (keaTypeArgument.typeArguments as ts.Node[]).map((a) => a.getFullText())
             }
+
+            // only if symbol resolves we mark the logic type as imported
+            const symbol = checker.getSymbolAtLocation(keaTypeArgument.typeName)
+            if (symbol) {
+                logicTypeImported = true
+            }
         }
 
         const pathString = getLogicPathString(appOptions, sourceFile.fileName)
+        let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')
+
+        if (appOptions.rootPath && appOptions.typesPath) {
+            const relativePathFromRoot = path.relative(appOptions.rootPath, typeFileName)
+            typeFileName = path.resolve(appOptions.typesPath, relativePathFromRoot)
+        }
 
         const parsedLogic: ParsedLogic = {
             checker,
@@ -95,6 +106,7 @@ export function createVisit(
             logicTypeName,
             logicTypeArguments: logicTypeArguments,
             fileName: sourceFile.fileName,
+            typeFileName,
             actions: [],
             reducers: [],
             selectors: [],

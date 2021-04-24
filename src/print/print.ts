@@ -60,12 +60,7 @@ export function printToFiles(
     let filesToWrite = 0
 
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
-        let typeFileName = fileName.replace(/\.[tj]sx?$/, 'Type.ts')
-
-        if (appOptions.rootPath && appOptions.typesPath) {
-            const relativePathFromRoot = path.relative(appOptions.rootPath, typeFileName)
-            typeFileName = path.resolve(appOptions.typesPath, relativePathFromRoot)
-        }
+        const typeFileName = parsedLogics[0].typeFileName
 
         const output = parsedLogics
             .map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), typeFileName))
@@ -115,7 +110,7 @@ export function printToFiles(
         )
         if (logicsNeedingImports.length > 0) {
             if (appOptions.write) {
-                writeLogicTypeImports(appOptions, program, fileName, logicsNeedingImports)
+                writeLogicTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
             } else {
                 log(`❌ Will not write logic type imports`)
             }
@@ -129,8 +124,6 @@ export function printToFiles(
         } else if (filesToWrite > 0) {
             log(`🚨 Run "kea-typegen write" to save types to disk`)
         }
-    } else if (writtenFiles > 0) {
-        log(`✨ Wrote ${writtenFiles} logic type file${writtenFiles === 1 ? '' : 's'}`)
     }
 
     return { filesToWrite, writtenFiles }
