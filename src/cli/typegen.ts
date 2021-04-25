@@ -102,8 +102,8 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
             process.exit(1)
         }
 
-        Object.keys(newOptions)
-            .filter((key) => keaConfig[key])
+        Object.keys(keaConfig)
+            .filter((key) => typeof newOptions[key] === 'undefined')
             .forEach((key) => {
                 // set all paths in .kearc to be relative from where the file is located
                 if (key.endsWith('Path')) {
