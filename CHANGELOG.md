@@ -1,3 +1,7 @@
+## 0.7.0 - 2021-04-26
+- Fix various bugs from last version. 
+- Run with `--no-import` to skip automatically adding imports to logic types.
+
 ## 0.6.2 - 2021-04-25
 - Automatically add `import { logicType } from './logicType'` statements
 - Automatically add the type to `kea<logicType>()`
