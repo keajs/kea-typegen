@@ -1,5 +1,0 @@
-{
-  "tsConfigPath": "./samples/tsconfig.json",
-  "rootPath": ".",
-  "typesPath": "."
-}

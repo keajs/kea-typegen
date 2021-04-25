@@ -66,8 +66,6 @@ export function writeLogicTypeImports(
             ts.createLiteral(importLocation),
         )
 
-    let foundImport = false
-
     const transformer = <T extends ts.Node>(context: ts.TransformationContext) => {
         return (rootNode: T) => {
             function visit(node: ts.Node): ts.Node {
@@ -86,34 +84,53 @@ export function writeLogicTypeImports(
                     )
                 }
 
-                if (ts.isImportDeclaration(node)) {
-                    const symbol = checker.getSymbolAtLocation(node.moduleSpecifier)
-                    const typeFile = symbol?.getDeclarations()?.[0]?.getSourceFile().fileName
-                    if (typeFile === parsedLogics[0].typeFileName) {
-                        foundImport = true
-                        const bindings = node.importClause.namedBindings
-                        if (ts.isNamedImports(bindings)) {
-                            const oldString = bindings.elements
-                                .map((e) => e.getText())
-                                .sort()
-                                .join(',')
-                            const newString = parsedLogics
-                                .map((l) => l.logicTypeName)
-                                .sort()
-                                .join(',')
-                            if (oldString !== newString) {
-                                return createImportDeclaration()
+                if (ts.isSourceFile(node)) {
+                    let foundImport = false
+                    let changedImport = false
+                    let newStatements = sourceFile.statements.map((node: ts.Statement) => {
+                        if (ts.isImportDeclaration(node)) {
+                            // Warning: We can not rely on "symbol" leading us to the direct file
+                            // (bypassing path resolution), because the symbol will be undefined if the
+                            // type is fresh and the AST is not loaded yet. This leads to endless loops.
+                            // // const symbol = checker.getSymbolAtLocation(node.moduleSpecifier)
+                            // // const typeFile = symbol?.getDeclarations()?.[0]?.getSourceFile().fileName
+
+                            // Warning: This simpler path resolution won't work with aliases.
+                            const moduleFile = node.moduleSpecifier.getText().split(/['"]/).join('')
+
+                            if (
+                                path.resolve(path.dirname(filename), moduleFile) ===
+                                path.resolve(path.dirname(filename), importLocation)
+                            ) {
+                                foundImport = true
+                                const bindings = node.importClause.namedBindings
+                                if (ts.isNamedImports(bindings)) {
+                                    const oldString = bindings.elements
+                                        .map((e) => e.getText())
+                                        .sort()
+                                        .join(',')
+                                    const newString = parsedLogics
+                                        .map((l) => l.logicTypeName)
+                                        .sort()
+                                        .join(',')
+                                    if (oldString !== newString) {
+                                        changedImport = true
+                                        return createImportDeclaration()
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-
-                if (ts.isSourceFile(node)) {
+                        return node
+                    })
                     if (!foundImport) {
-                        return ts.updateSourceFileNode(sourceFile, [
+                        newStatements = [
+                            ...sourceFile.statements.filter((node) => ts.isImportDeclaration(node)),
                             createImportDeclaration(),
-                            ...sourceFile.statements,
-                        ])
+                            ...sourceFile.statements.filter((node) => !ts.isImportDeclaration(node)),
+                        ]
+                    }
+                    if (!foundImport || changedImport) {
+                        return ts.updateSourceFileNode(sourceFile, newStatements)
                     }
                 }
 

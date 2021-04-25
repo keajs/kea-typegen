@@ -86,8 +86,9 @@ export function printToFiles(
         } catch (error) {}
 
         if (
-            existingOutput &&
-            existingOutput.split('\n').slice(1).join('\n') !== finalOutput.split('\n').slice(1).join('\n')
+            !existingOutput ||
+            (existingOutput &&
+                existingOutput.split('\n').slice(1).join('\n') !== finalOutput.split('\n').slice(1).join('\n'))
         ) {
             filesToWrite += 1
             if (appOptions.write) {

@@ -38,7 +38,7 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
 
     const input = node.parent.arguments[0]
 
-    if (!ts.isObjectLiteralExpression(input)) {
+    if (!input || !ts.isObjectLiteralExpression(input)) {
         return false
     }
 
