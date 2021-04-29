@@ -223,7 +223,9 @@ function runCLI(appOptions: AppOptions) {
 
     function goThroughAllTheFiles(program, appOptions): { filesToWrite: number; writtenFiles: number } {
         const parsedLogics = visitProgram(program, appOptions)
-        log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
+        if (appOptions.verbose) {
+            log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
+        }
 
         const response = printToFiles(program, appOptions, parsedLogics)
 

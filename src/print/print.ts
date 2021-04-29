@@ -113,17 +113,17 @@ export function printToFiles(
             if (appOptions.write && !appOptions.noImport) {
                 writeLogicTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
             } else {
-                log(`❌ Will not write logic type imports`)
+                log(`❌ Will not write ${logicsNeedingImports.length} logic type imports`)
             }
         }
     })
 
     if (writtenFiles === 0) {
         if (appOptions.write) {
-            log(`💚 Logic types up to date!`)
+            log(`💚 ${parsedLogics.length} logic types up to date!`)
             log('')
         } else if (filesToWrite > 0) {
-            log(`🚨 Run "kea-typegen write" to save types to disk`)
+            log(`🚨 Run "kea-typegen write" to save ${filesToWrite} types to disk`)
         }
     }
 
