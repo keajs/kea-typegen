@@ -193,7 +193,11 @@ function runCLI(appOptions: AppOptions) {
             }
 
             function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
-                console.info(`🥚 ${ts.formatDiagnostic(diagnostic, formatHost).trim()}`)
+                const codes = {
+                    6031: `👀 Starting TypeScript watch mode`,
+                    6032: `🔄 Reloading...`
+                }
+                console.info(codes[diagnostic.code] || `🥚 ${ts.formatDiagnostic(diagnostic, formatHost).trim()}`)
             }
 
             const origCreateProgram = host.createProgram
