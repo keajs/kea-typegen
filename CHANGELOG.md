@@ -1,3 +1,6 @@
+## 0.7.1 - 2021-04-30
+- Improve error display, condense logs
+
 ## 0.7.0 - 2021-04-26
 - Fix various bugs from last version. 
 - Run with `--no-import` to skip automatically adding imports to logic types.
