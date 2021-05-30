@@ -9,9 +9,9 @@
         "prepublishOnly": "npm run test && npm run clean && npm run build",
         "run-built-cli": "node dist/src/cli/typegen.js",
         "test": "jest",
-        "samples-check": "ts-node ./src/cli/typegen.ts check",
-        "samples-write": "ts-node ./src/cli/typegen.ts write",
-        "samples-watch": "ts-node ./src/cli/typegen.ts watch"
+        "samples-check": "ts-node ./src/cli/typegen.ts check -c ./samples/tsconfig.json",
+        "samples-write": "ts-node ./src/cli/typegen.ts write -c ./samples/tsconfig.json",
+        "samples-watch": "ts-node ./src/cli/typegen.ts watch -c ./samples/tsconfig.json"
     },
     "main": "dist/cli/typegen.js",
     "author": "Marius Andra <marius.andra@gmail.com>",
