@@ -1,3 +1,6 @@
+## 0.7.2 - 2021-05-30
+- Support actions that return payloads with over 16 properties (fix ".. 4 more .." in the generated type).
+
 ## 0.7.1 - 2021-04-30
 - Improve error display, condense logs
 
