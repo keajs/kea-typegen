@@ -5,7 +5,27 @@ type FormInstance = {}
 type AntdFieldData = { name: number; key: number }
 type ActionType = { name?: string; steps?: string[] }
 type ActionForm = { name?: string; steps?: string[] }
-
+type DashboardItemType = {
+    key1: string
+    key2: string
+    key3: string
+    key4: string
+    key5: string
+    key6: string
+    key7: string
+    key8: string
+    key9: string
+    key10: string
+    key11: string
+    key12: string
+    key13: string
+    key14: string
+    key15: string
+    key16: string
+    key17: string
+    key18: string
+    key19: string
+}
 function newAction(element: HTMLElement | null): Partial<ActionType> {
     return {
         name: '',
@@ -13,7 +33,9 @@ function newAction(element: HTMLElement | null): Partial<ActionType> {
     }
 }
 
-export const complexLogic = kea<complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData>>({
+export const complexLogic = kea<
+    complexLogicType<ActionType, ActionForm, FormInstance, AntdFieldData, DashboardItemType>
+>({
     actions: {
         setForm: (form: FormInstance) => ({ form }),
         selectAction: (id: string | null) => ({ id: id || null }),
@@ -27,6 +49,7 @@ export const complexLogic = kea<complexLogicType<ActionType, ActionForm, FormIns
         showButtonActions: true,
         hideButtonActions: true,
         setShowActionsTooltip: (showActionsTooltip: boolean) => ({ showActionsTooltip }),
+        updateDashboardInsight: (id: number, payload: DashboardItemType) => ({ id, ...payload }),
     },
 
     reducers: {

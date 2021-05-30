@@ -1,5 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
+import { NodeBuilderFlags } from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
 
 export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
@@ -27,7 +28,10 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
                     undefined,
                 )
             })
-            returnTypeNode = cloneNode(checker.typeToTypeNode(signature.getReturnType(), undefined, undefined))
+
+            const sigReturnType = signature.getReturnType()
+            const sigReturnTypeNode = checker.typeToTypeNode(sigReturnType, undefined, NodeBuilderFlags.NoTruncation)
+            returnTypeNode = cloneNode(sigReturnTypeNode)
         } else {
             returnTypeNode = ts.createTypeLiteralNode([
                 ts.createPropertySignature(undefined, ts.createIdentifier('value'), undefined, typeNode, undefined),
