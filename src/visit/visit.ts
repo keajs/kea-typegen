@@ -1,7 +1,7 @@
 import * as ts from 'typescript'
 import * as path from 'path'
 import { AppOptions, ParsedLogic } from '../types'
-import { getLogicPathString, isKeaCall } from '../utils'
+import { gatherImports, getLogicPathString, isKeaCall } from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
@@ -120,6 +120,7 @@ export function createVisit(
             path: pathString.split('.'),
             pathString: pathString,
             typeImports: {},
+            localTypes: new Set(),
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
@@ -141,6 +142,8 @@ export function createVisit(
 
             visitFunctions[name]?.(type, inputProperty, parsedLogic)
         }
+
+        gatherImports(input, checker, parsedLogic)
 
         parsedLogics.push(parsedLogic)
     }

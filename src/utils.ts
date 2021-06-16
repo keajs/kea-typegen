@@ -175,3 +175,30 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
 
     return pathString
 }
+
+export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
+    ts.forEachChild(input, function getImports(node) {
+        if (ts.isTypeReferenceNode(node)) {
+            const type = checker.getTypeAtLocation(node)
+            const symbol = type.getSymbol()
+            const files = symbol.declarations
+                .map((d) => d.getSourceFile().fileName)
+                .filter((fileName) => !fileName.includes('/node_modules/'))
+            const declaration = symbol.getDeclarations()[0]
+
+            const isExported = declaration.parent.modifiers?.[0]?.kind === 92
+
+            if (isExported && files.length === 1 && files[0] !== parsedLogic.fileName) {
+                if (!parsedLogic.typeImports[files[0]]) {
+                    parsedLogic.typeImports[files[0]] = new Set()
+                }
+                parsedLogic.typeImports[files[0]].add(type.aliasSymbol.escapedName as string)
+            }
+            if (!isExported && files.length === 1 && files[0] === parsedLogic.fileName) {
+                parsedLogic.localTypes.add((type.aliasSymbol || type.symbol).escapedName as string)
+            }
+        } else {
+            ts.forEachChild(node, getImports)
+        }
+    })
+}

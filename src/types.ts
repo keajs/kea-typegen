@@ -47,6 +47,7 @@ export interface ParsedLogic {
     propsType?: ts.TypeNode
     keyType?: ts.TypeNode
     typeImports: Record<string, Set<string>>
+    localTypes: Set<string>
 }
 
 export interface AppOptions {
