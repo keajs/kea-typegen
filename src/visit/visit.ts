@@ -119,6 +119,7 @@ export function createVisit(
             propsType: undefined,
             path: pathString.split('.'),
             pathString: pathString,
+            typeImports: {},
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
