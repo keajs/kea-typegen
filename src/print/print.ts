@@ -46,7 +46,7 @@ export function printToFiles(
     program: ts.Program,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
-): { filesToWrite: number; writtenFiles: number } {
+): { filesToWrite: number; writtenFiles: number; importsToModify:number } {
     const { log } = appOptions
 
     const groupedByFile: Record<string, ParsedLogic[]> = {}
@@ -59,6 +59,7 @@ export function printToFiles(
 
     let writtenFiles = 0
     let filesToWrite = 0
+    let importsToModify = 0
 
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
         const typeFileName = parsedLogics[0].typeFileName
@@ -131,6 +132,7 @@ export function printToFiles(
         if (logicsNeedingImports.length > 0) {
             if (appOptions.write && !appOptions.noImport) {
                 writeLogicTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
+                importsToModify = logicsNeedingImports.length
             } else {
                 log(
                     `❌ Will not write ${logicsNeedingImports.length} logic type import${
@@ -145,12 +147,12 @@ export function printToFiles(
         if (appOptions.write) {
             log(`💚 ${parsedLogics.length} logic type${parsedLogics.length === 1 ? '' : 's'} up to date!`)
             log('')
-        } else if (filesToWrite > 0) {
-            log(`🚨 Run "kea-typegen write" to save ${filesToWrite} type${filesToWrite === 1 ? '' : 's'} to disk`)
+        } else if (filesToWrite > 0 || importsToModify > 0) {
+            log(`🚨 Run "kea-typegen write" to save ${filesToWrite + importsToModify} file${filesToWrite === 1 ? '' : 's'} to disk`)
         }
     }
 
-    return { filesToWrite, writtenFiles }
+    return { filesToWrite, writtenFiles, importsToModify }
 }
 
 export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: AppOptions) {

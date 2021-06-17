@@ -195,7 +195,7 @@ function runCLI(appOptions: AppOptions) {
             function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
                 const codes = {
                     6031: `👀 Starting TypeScript watch mode`,
-                    6032: `🔄 Reloading...`
+                    6032: `🔄 Reloading...`,
                 }
                 console.info(codes[diagnostic.code] || `🥚 ${ts.formatDiagnostic(diagnostic, formatHost).trim()}`)
             }
@@ -225,7 +225,7 @@ function runCLI(appOptions: AppOptions) {
         log(`⛔ No tsconfig.json found! No source file specified.`)
     }
 
-    function goThroughAllTheFiles(program, appOptions): { filesToWrite: number; writtenFiles: number } {
+    function goThroughAllTheFiles(program, appOptions): { filesToWrite: number; writtenFiles: number, importsToModify: number } {
         const parsedLogics = visitProgram(program, appOptions)
         if (appOptions.verbose) {
             log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
@@ -235,7 +235,7 @@ function runCLI(appOptions: AppOptions) {
 
         // running "kea-typegen check" and would write files?
         // exit with 1
-        if (!appOptions.write && !appOptions.watch && response.filesToWrite > 0) {
+        if (!appOptions.write && !appOptions.watch && (response.filesToWrite > 0 || response.importsToModify > 0)) {
             process.exit(1)
         }
 
@@ -246,9 +246,9 @@ function runCLI(appOptions: AppOptions) {
         if (appOptions.write) {
             let round = 0
             while ((round += 1)) {
-                const { writtenFiles } = goThroughAllTheFiles(program, appOptions)
+                const { writtenFiles, importsToModify } = goThroughAllTheFiles(program, appOptions)
 
-                if (writtenFiles === 0) {
+                if (writtenFiles === 0 && importsToModify === 0) {
                     log(`👋 Finished writing files! Exiting.`)
                     process.exit(0)
                 }
