@@ -2,6 +2,7 @@ import { kea, KeaPlugin } from 'kea'
 
 import { autoImportLogicType } from './autoImportLogicType'
 import { T1, T2, T3, T4 } from './autoImportTypes'
+import {githubLogic} from "./githubLogic";
 
 type L1 = 'haha'
 
@@ -30,4 +31,7 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
             stringType,
         }),
     },
+    connect: {
+        actions: [githubLogic, ['setRepositories']]
+    }
 })

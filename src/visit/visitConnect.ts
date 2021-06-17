@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { getParameterDeclaration } from '../utils'
+import { gatherImports, getParameterDeclaration } from '../utils'
 
 export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -64,6 +64,8 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                                         const payload = returnType.members.find(
                                             (m) => m.name.getText() === 'payload',
                                         ) as ts.PropertySignature
+
+                                        gatherImports(actionType, checker, parsedLogic)
 
                                         parsedLogic.actions.push({
                                             name: lookup[name],
