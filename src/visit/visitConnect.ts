@@ -99,6 +99,7 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                                         returnType = returnType.type
                                     }
 
+                                    gatherImports(selectorType, checker, parsedLogic)
                                     parsedLogic.selectors.push({
                                         name: lookup[name],
                                         typeNode: returnType,

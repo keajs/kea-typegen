@@ -1,14 +1,9 @@
 import { kea } from 'kea'
 import { loadersLogicType } from './loadersLogicType'
 
-interface Dashboard {
-    id: number
-    created_at?: string
-    name?: string
-    pinned?: boolean
-}
+import { Dashboard } from './types'
 
-export const loadersLogic = kea<loadersLogicType<Dashboard>>({
+export const loadersLogic = kea<loadersLogicType>({
     actions: {
         addDashboard: (name: string) => ({ name }),
     },
@@ -19,13 +14,13 @@ export const loadersLogic = kea<loadersLogicType<Dashboard>>({
             addDashboardNoType: ({ name }: { name: string }): Dashboard => ({ id: -1, name, pinned: true }),
         },
         shouldNotBeNeverButAny: {
-            __default: []
+            __default: [],
         },
         misc: [
             {} as Record<string, any>,
             {
-                loadIt: () => ({id: -1, name, pinned: true}),
-            }
+                loadIt: () => ({ id: -1, name, pinned: true }),
+            },
         ],
     },
     reducers: () => ({
