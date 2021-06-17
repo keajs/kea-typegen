@@ -46,7 +46,7 @@ export function printToFiles(
     program: ts.Program,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
-): { filesToWrite: number; writtenFiles: number; importsToModify:number } {
+): { filesToWrite: number; writtenFiles: number; importsToModify: number } {
     const { log } = appOptions
 
     const groupedByFile: Record<string, ParsedLogic[]> = {}
@@ -124,8 +124,15 @@ export function printToFiles(
         // write the type into the logic itself
         const logicsNeedingImports = parsedLogics.filter(
             (pl) =>
+                // reload if logic type not imported
                 (pl.logicTypeImported === false ||
+                    // reload if don't have all local types in arguments
                     !arrayContainsSet(pl.logicTypeArguments, pl.localTypes) ||
+                    // reload if logic type arguments contain anything we are importing manually
+                    pl.logicTypeArguments.some((arg) =>
+                        Object.values(pl.typeImports).some((values) => values.has(arg)),
+                    ) ||
+                    // reload if not sorted in the right order
                     pl.logicTypeArguments.join(', ') !== [...pl.logicTypeArguments].sort().join(', ')) &&
                 pl.fileName.match(/\.tsx?$/),
         )
@@ -148,7 +155,11 @@ export function printToFiles(
             log(`💚 ${parsedLogics.length} logic type${parsedLogics.length === 1 ? '' : 's'} up to date!`)
             log('')
         } else if (filesToWrite > 0 || importsToModify > 0) {
-            log(`🚨 Run "kea-typegen write" to save ${filesToWrite + importsToModify} file${filesToWrite === 1 ? '' : 's'} to disk`)
+            log(
+                `🚨 Run "kea-typegen write" to save ${filesToWrite + importsToModify} file${
+                    filesToWrite === 1 ? '' : 's'
+                } to disk`,
+            )
         }
     }
 
