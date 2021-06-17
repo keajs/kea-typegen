@@ -208,7 +208,11 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
 
             const files = getFilenamesForSymbol(symbol)
             if (files.length === 1 && files[0] === parsedLogic.fileName) {
-                if (ts.isTypeAliasDeclaration(declaration) || ts.isInterfaceDeclaration(declaration)) {
+                if (
+                    ts.isTypeAliasDeclaration(declaration) ||
+                    ts.isInterfaceDeclaration(declaration) ||
+                    ts.isEnumDeclaration(declaration)
+                ) {
                     parsedLogic.localTypes.add(declaration.name.getText())
                 }
             }
