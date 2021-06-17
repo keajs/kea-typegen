@@ -80,7 +80,7 @@ export function createVisit(
             // kea<logicType<somethingElse>>(...)
             // store <somethingElse> on the generated type!
             if (keaTypeArgument.typeArguments && keaTypeArgument.typeArguments.length > 0) {
-                logicTypeArguments = (keaTypeArgument.typeArguments as ts.Node[]).map((a) => a.getFullText())
+                logicTypeArguments = (keaTypeArgument.typeArguments as ts.Node[]).map((a) => a.getFullText().trim())
             }
 
             // only if symbol resolves we mark the logic type as imported
@@ -104,7 +104,7 @@ export function createVisit(
             logicName,
             logicTypeImported,
             logicTypeName,
-            logicTypeArguments: logicTypeArguments,
+            logicTypeArguments,
             fileName: sourceFile.fileName,
             typeFileName,
             actions: [],

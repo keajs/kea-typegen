@@ -176,29 +176,61 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
     return pathString
 }
 
+export function getFilenamesForSymbol(symbol: ts.Symbol): string[] | undefined {
+    return symbol?.declarations.map((d) => d.getSourceFile().fileName)
+}
+
+/** gathers onto parsedLogic the TypeReference nodes that are declared in a different sourceFile */
 export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
     ts.forEachChild(input, function getImports(node) {
         if (ts.isTypeReferenceNode(node)) {
-            const type = checker.getTypeAtLocation(node)
-            const symbol = type.getSymbol()
-            const files = symbol.declarations
-                .map((d) => d.getSourceFile().fileName)
-                .filter((fileName) => !fileName.includes('/node_modules/'))
+            const symbol = checker.getSymbolAtLocation(node.typeName)
+            if (!symbol) {
+                return
+            }
             const declaration = symbol.getDeclarations()[0]
 
-            const isExported = declaration.parent.modifiers?.[0]?.kind === 92
-
-            if (isExported && files.length === 1 && files[0] !== parsedLogic.fileName) {
-                if (!parsedLogic.typeImports[files[0]]) {
-                    parsedLogic.typeImports[files[0]] = new Set()
+            if (ts.isImportSpecifier(declaration)) {
+                let importNode: ts.Node = declaration
+                while (importNode && !ts.isImportDeclaration(importNode)) {
+                    importNode = importNode.parent
                 }
-                parsedLogic.typeImports[files[0]].add(type.aliasSymbol.escapedName as string)
+                if (ts.isImportDeclaration(importNode)) {
+                    const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
+                    const otherSourceFile = moduleSymbol.getDeclarations()[0].getSourceFile()
+                    const importFilename = otherSourceFile.fileName || importNode.moduleSpecifier.getText()
+                    addTypeImport(parsedLogic, importFilename, declaration.getText())
+                } else {
+                    parsedLogic.localTypes.add(declaration.getText())
+                }
+                return
             }
-            if (!isExported && files.length === 1 && files[0] === parsedLogic.fileName) {
-                parsedLogic.localTypes.add((type.aliasSymbol || type.symbol).escapedName as string)
+
+            const files = getFilenamesForSymbol(symbol)
+            if (files.length === 1 && files[0] === parsedLogic.fileName) {
+                if (ts.isTypeAliasDeclaration(declaration)) {
+                    parsedLogic.localTypes.add(declaration.name.getText())
+                }
             }
         } else {
             ts.forEachChild(node, getImports)
         }
     })
+}
+
+function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string) {
+    if (!parsedLogic.typeImports[file]) {
+        parsedLogic.typeImports[file] = new Set()
+    }
+    parsedLogic.typeImports[file].add(typeName)
+}
+
+export function arrayContainsSet(array: string[], setToContain: Set<string>): boolean {
+    const arraySet = new Set(array)
+    for (const str of setToContain) {
+        if (!arraySet.has(str)) {
+            return false
+        }
+    }
+    return true
 }
