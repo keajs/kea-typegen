@@ -24,7 +24,7 @@ import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
 import { writeLogicTypeImports } from '../import/writeLogicTypeImports'
-import {arrayContainsSet} from "../utils";
+import { arrayContainsSet } from '../utils'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -123,7 +123,9 @@ export function printToFiles(
         // write the type into the logic itself
         const logicsNeedingImports = parsedLogics.filter(
             (pl) =>
-                (pl.logicTypeImported === false || !arrayContainsSet(pl.logicTypeArguments, pl.localTypes)) &&
+                (pl.logicTypeImported === false ||
+                    !arrayContainsSet(pl.logicTypeArguments, pl.localTypes) ||
+                    pl.logicTypeArguments.join(', ') !== [...pl.logicTypeArguments].sort().join(', ')) &&
                 pl.fileName.match(/\.tsx?$/),
         )
         if (logicsNeedingImports.length > 0) {
@@ -168,9 +170,9 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
         ts.createIdentifier(`${parsedLogic.logicName}Type`),
-        [
-            ...new Set([...parsedLogic.logicTypeArguments.map((t) => t.trim()), ...parsedLogic.localTypes]).values(),
-        ].sort().map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined)),
+        [...new Set([...parsedLogic.logicTypeArguments.map((t) => t.trim()), ...parsedLogic.localTypes]).values()]
+            .sort()
+            .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined)),
         [
             ts.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, [
                 ts.createExpressionWithTypeArguments(undefined, ts.createIdentifier('Logic')),

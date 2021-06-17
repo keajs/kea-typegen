@@ -83,7 +83,7 @@ export function writeLogicTypeImports(
                             ts.createTypeReferenceNode(
                                 ts.createIdentifier(logicTypeName),
                                 localTypes.size > 0
-                                    ? [...localTypes.values()].map((type) =>
+                                    ? [...localTypes.values()].sort().map((type) =>
                                           ts.createTypeReferenceNode(ts.createIdentifier(type), undefined),
                                       )
                                     : undefined,
