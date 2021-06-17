@@ -4,13 +4,13 @@ import { autoImportLogicType } from './autoImportLogicType'
 import { T1, T2, T3, T4 } from './autoImportTypes'
 import { githubLogic } from './githubLogic'
 import { loadersLogic } from './loadersLogic'
-
+type Timeout = NodeJS.Timeout
 type L1 = 'haha'
 
 type L2 = {
     bla: string
 }
-export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
+export const autoImportLogic = kea<autoImportLogicType<L1, L2, Timeout>>({
     actions: {
         actionT1: (
             local1: L1,
@@ -31,6 +31,7 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
             keaPlugin,
             stringType,
         }),
+        complexAction: (element: HTMLElement, timeout: Timeout) => ({ element, timeout }),
     },
     connect: {
         actions: [githubLogic, ['setRepositories']],

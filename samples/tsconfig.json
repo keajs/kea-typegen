@@ -10,7 +10,7 @@
         "outDir": "./dist",
         "baseUrl": "./src",
         "incremental": true,
-        "types": ["jest", "node"],
+        "types": ["jest", "node", "dom"],
         "resolveJsonModule": true,
         "jsx": "react"
     }
