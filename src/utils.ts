@@ -216,9 +216,8 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
                     parsedLogic.localTypes.add(declaration.name.getText())
                 }
             }
-        } else {
-            ts.forEachChild(node, getImports)
         }
+        ts.forEachChild(node, getImports)
     })
 }
 
