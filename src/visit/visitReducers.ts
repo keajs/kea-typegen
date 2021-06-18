@@ -23,7 +23,7 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
                 }
 
                 const actionObjects = value.elements[value.elements.length - 1]
-                extraActions = extractImportedActions(actionObjects, checker)
+                extraActions = extractImportedActions(actionObjects, checker, parsedLogic)
 
                 if (value.elements.length > 2) {
                     const options = value.elements[value.elements.length - 2]

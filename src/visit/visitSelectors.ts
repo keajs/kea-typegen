@@ -2,6 +2,7 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
 import { NodeBuilderFlags } from 'typescript'
+import { gatherImports } from '../utils'
 
 export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -55,6 +56,9 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
             const computedFunction = value.elements[1] as ts.ArrowFunction | ts.FunctionDeclaration
             const computedFunctionTypeNode = checker.getTypeAtLocation(computedFunction)
             const type = computedFunctionTypeNode.getCallSignatures()[0]?.getReturnType()
+            const sigReturnTypeNode = checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation)
+
+            gatherImports(sigReturnTypeNode, checker, parsedLogic)
 
             parsedLogic.selectors.push({
                 name,

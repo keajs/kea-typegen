@@ -4,6 +4,7 @@ import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
 import { AppOptions, NameType, ParsedLogic } from './types'
+import { NodeBuilderFlags } from 'typescript'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -108,6 +109,7 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
 export function extractImportedActions(
     actionObjects: ts.Expression | ts.ObjectLiteralExpression,
     checker: ts.TypeChecker,
+    parsedLogic: ParsedLogic
 ) {
     let extraActions = {}
 
@@ -151,6 +153,16 @@ export function extractImportedActions(
                                 ts.isPropertySignature(actionCreator) &&
                                 ts.isFunctionTypeNode(actionCreator.type)
                             ) {
+                                const type = checker.getTypeFromTypeNode(actionCreator.type)
+                                const signature = type.getCallSignatures()[0]
+                                const sigReturnType = signature.getReturnType()
+                                const sigReturnTypeNode = checker.typeToTypeNode(
+                                    sigReturnType,
+                                    undefined,
+                                    NodeBuilderFlags.NoTruncation,
+                                )
+                                gatherImports(sigReturnTypeNode, checker, parsedLogic)
+
                                 extraActions[actionType] = cloneNode(actionCreator.type) //payload
                             }
                         }
@@ -177,7 +189,9 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
 }
 
 export function getFilenamesForSymbol(symbol: ts.Symbol): string[] | undefined {
-    return symbol?.declarations.map((d) => d.getSourceFile().fileName).filter(str => !str.includes('/node_modules/typescript/lib/lib'))
+    return symbol?.declarations
+        .map((d) => d.getSourceFile().fileName)
+        .filter((str) => !str.includes('/node_modules/typescript/lib/lib'))
 }
 
 /** gathers onto parsedLogic the TypeReference nodes that are declared in a different sourceFile */
