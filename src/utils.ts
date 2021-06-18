@@ -177,48 +177,59 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
 }
 
 export function getFilenamesForSymbol(symbol: ts.Symbol): string[] | undefined {
-    return symbol?.declarations.map((d) => d.getSourceFile().fileName)
+    return symbol?.declarations.map((d) => d.getSourceFile().fileName).filter(str => !str.includes('/node_modules/typescript/lib/lib'))
 }
 
 /** gathers onto parsedLogic the TypeReference nodes that are declared in a different sourceFile */
 export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
     ts.forEachChild(input, function getImports(node) {
         if (ts.isTypeReferenceNode(node)) {
-            const symbol = checker.getSymbolAtLocation(node.typeName)
-            if (!symbol) {
-                return
-            }
-            const declaration = symbol.getDeclarations()[0]
-
-            if (ts.isImportSpecifier(declaration)) {
-                let importNode: ts.Node = declaration
-                while (importNode && !ts.isImportDeclaration(importNode)) {
-                    importNode = importNode.parent
-                }
-                if (ts.isImportDeclaration(importNode)) {
-                    const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
-                    const otherSourceFile = moduleSymbol.getDeclarations()[0].getSourceFile()
-                    const importFilename = otherSourceFile.fileName || importNode.moduleSpecifier.getText()
-                    addTypeImport(parsedLogic, importFilename, declaration.getText())
-                } else {
-                    parsedLogic.localTypes.add(declaration.getText())
-                }
-                return
-            }
-
-            const files = getFilenamesForSymbol(symbol)
-            if (files.length === 1 && files[0] === parsedLogic.fileName) {
-                if (
-                    ts.isTypeAliasDeclaration(declaration) ||
-                    ts.isInterfaceDeclaration(declaration) ||
-                    ts.isEnumDeclaration(declaration)
-                ) {
-                    parsedLogic.localTypes.add(declaration.name.getText())
-                }
+            const symbol = checker.getSymbolAtLocation(node.typeName) || (node.typeName as any).symbol
+            if (symbol) {
+                storeExtractedSymbol(symbol, checker, parsedLogic)
             }
         }
         ts.forEachChild(node, getImports)
     })
+}
+
+export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
+    const declaration = symbol.getDeclarations()[0]
+
+    if (ts.isImportSpecifier(declaration)) {
+        let importNode: ts.Node = declaration
+        while (importNode && !ts.isImportDeclaration(importNode)) {
+            importNode = importNode.parent
+        }
+        if (ts.isImportDeclaration(importNode)) {
+            const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
+            const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
+            if (otherSourceFile) {
+                const importFilename = otherSourceFile.fileName || importNode.moduleSpecifier.getText()
+                addTypeImport(parsedLogic, importFilename, declaration.getText())
+            }
+        } else {
+            parsedLogic.localTypes.add(declaration.getText())
+        }
+        return
+    }
+
+    const files = getFilenamesForSymbol(symbol)
+    if (files.length === 1) {
+        // same file, add to logicType<...>
+        if (
+            ts.isTypeAliasDeclaration(declaration) ||
+            ts.isInterfaceDeclaration(declaration) ||
+            ts.isEnumDeclaration(declaration)
+        ) {
+            if (files[0] === parsedLogic.fileName) {
+                parsedLogic.localTypes.add(declaration.name.getText())
+            } else {
+                // but is it exported?
+                addTypeImport(parsedLogic, files[0], declaration.name.getText())
+            }
+        }
+    }
 }
 
 function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string) {

@@ -2,6 +2,7 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { NodeBuilderFlags } from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
+import { gatherImports } from '../utils'
 
 export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -11,12 +12,12 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
         const name = property.getName()
         const type = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration!)
         const typeNode = checker.typeToTypeNode(type, undefined, undefined)
-        const signature = type.getCallSignatures()[0]
 
         let returnTypeNode
         let parameters
 
         if (ts.isFunctionTypeNode(typeNode)) {
+            const signature = type.getCallSignatures()[0]
             parameters = signature.getDeclaration().parameters.map((param) => {
                 return ts.createParameter(
                     undefined,
@@ -31,6 +32,8 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
 
             const sigReturnType = signature.getReturnType()
             const sigReturnTypeNode = checker.typeToTypeNode(sigReturnType, undefined, NodeBuilderFlags.NoTruncation)
+
+            gatherImports(sigReturnTypeNode, checker, parsedLogic)
             returnTypeNode = cloneNode(sigReturnTypeNode)
         } else {
             returnTypeNode = ts.createTypeLiteralNode([
