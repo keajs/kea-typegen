@@ -223,7 +223,7 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
                 addTypeImport(parsedLogic, importFilename, declaration.getText())
             }
         } else {
-            parsedLogic.localTypes.add(declaration.getText())
+            parsedLogic.typeReferencesInLogicInput.add(declaration.getText())
         }
         return
     }
@@ -237,7 +237,7 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
             ts.isEnumDeclaration(declaration)
         ) {
             if (files[0] === parsedLogic.fileName) {
-                parsedLogic.localTypes.add(declaration.name.getText())
+                parsedLogic.typeReferencesInLogicInput.add(declaration.name.getText())
             } else {
                 // but is it exported?
                 addTypeImport(parsedLogic, files[0], declaration.name.getText())
@@ -247,10 +247,10 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
 }
 
 function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string) {
-    if (!parsedLogic.typeImports[file]) {
-        parsedLogic.typeImports[file] = new Set()
+    if (!parsedLogic.typeReferencesToImportFromFiles[file]) {
+        parsedLogic.typeReferencesToImportFromFiles[file] = new Set()
     }
-    parsedLogic.typeImports[file].add(typeName)
+    parsedLogic.typeReferencesToImportFromFiles[file].add(typeName)
 }
 
 export function arrayContainsSet(array: string[], setToContain: Set<string>): boolean {

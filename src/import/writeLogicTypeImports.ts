@@ -76,14 +76,14 @@ export function writeLogicTypeImports(
                     isKeaCall(node.expression, checker) &&
                     parsedLogicMapByNode.has(node.expression)
                 ) {
-                    const { logicTypeName, localTypes } = parsedLogicMapByNode.get(node.expression)
+                    const { logicTypeName, typeReferencesInLogicInput } = parsedLogicMapByNode.get(node.expression)
                     return ts.createCall(
                         node.expression,
                         [
                             ts.createTypeReferenceNode(
                                 ts.createIdentifier(logicTypeName),
-                                localTypes.size > 0
-                                    ? [...localTypes.values()].sort().map((type) =>
+                                typeReferencesInLogicInput.size > 0
+                                    ? [...typeReferencesInLogicInput.values()].sort().map((type) =>
                                           ts.createTypeReferenceNode(ts.createIdentifier(type), undefined),
                                       )
                                     : undefined,

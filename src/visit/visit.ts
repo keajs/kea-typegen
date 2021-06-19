@@ -119,8 +119,9 @@ export function createVisit(
             propsType: undefined,
             path: pathString.split('.'),
             pathString: pathString,
-            typeImports: {},
-            localTypes: new Set(),
+            typeReferencesToImportFromFiles: {},
+            typeReferencesInLogicInput: new Set(),
+            // typeReferencesInCreatedLogicType: new Set(),
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression

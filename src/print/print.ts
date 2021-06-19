@@ -50,12 +50,15 @@ export function printToFiles(
     const { log } = appOptions
 
     const groupedByFile: Record<string, ParsedLogic[]> = {}
-    parsedLogics.forEach((parsedLogic) => {
+    for (const parsedLogic of parsedLogics) {
         if (!groupedByFile[parsedLogic.fileName]) {
             groupedByFile[parsedLogic.fileName] = []
         }
         groupedByFile[parsedLogic.fileName].push(parsedLogic)
-    })
+
+        // create the ts.Nodes and gather referenced types
+        printLogicType(parsedLogic, appOptions)
+    }
 
     let writtenFiles = 0
     let filesToWrite = 0
@@ -64,23 +67,28 @@ export function printToFiles(
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
         const typeFileName = parsedLogics[0].typeFileName
 
-        const output = parsedLogics
-            .map((l) => runThroughPrettier(parsedLogicToTypeString(l, appOptions), typeFileName))
-            .join('\n\n')
+        const logicStrings = []
+        for (const parsedLogic of parsedLogics) {
+            const logicTypeStirng = runThroughPrettier(nodeToString(parsedLogic.interfaceDeclaration), typeFileName)
+            logicStrings.push(logicTypeStirng)
+        }
+
+        const output = logicStrings.join('\n\n')
 
         const requiredKeys = ['Logic']
         if (parsedLogics.find((l) => l.sharedListeners.length > 0)) {
             requiredKeys.push('BreakPointFunction')
         }
 
-        const otherimports = Object.entries(parsedLogics[0].typeImports)
+        const otherimports = Object.entries(parsedLogics[0].typeReferencesToImportFromFiles)
+            .filter(([_, list]) => list.size > 0)
             .map(([file, list]) => {
                 let relativePath = path.relative(path.dirname(parsedLogics[0].typeFileName), file)
                 relativePath = relativePath.replace(/\.tsx?$/, '')
                 if (!relativePath.startsWith('.')) {
                     relativePath = `./${relativePath}`
                 }
-                return `import { ${[...list.values()].sort().join(', ')} } from '${relativePath}'`
+                return `import { ${[...list].join(', ')} } from '${relativePath}'`
             })
             .join('\n')
 
@@ -127,10 +135,10 @@ export function printToFiles(
                 // reload if logic type not imported
                 (pl.logicTypeImported === false ||
                     // reload if don't have all local types in arguments
-                    !arrayContainsSet(pl.logicTypeArguments, pl.localTypes) ||
+                    !arrayContainsSet(pl.logicTypeArguments, pl.typeReferencesInLogicInput) ||
                     // reload if logic type arguments contain anything we are importing manually
                     pl.logicTypeArguments.some((arg) =>
-                        Object.values(pl.typeImports).some((values) => values.has(arg)),
+                        Object.values(pl.typeReferencesToImportFromFiles).some((values) => values.has(arg)),
                     ) ||
                     // reload if not sorted in the right order
                     pl.logicTypeArguments.join(', ') !== [...pl.logicTypeArguments].sort().join(', ')) &&
@@ -166,66 +174,90 @@ export function printToFiles(
     return { filesToWrite, writtenFiles, importsToModify }
 }
 
-export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
-    const logicType = printLogicType(parsedLogic, appOptions)
+export function nodeToString(node: ts.Node): string {
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
     const sourceFile = ts.createSourceFile('logic.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)
-    return printer.printNode(ts.EmitHint.Unspecified, logicType, sourceFile)
+    return printer.printNode(ts.EmitHint.Unspecified, node, sourceFile)
 }
 
-export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
+export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: AppOptions): string {
+    printLogicType(parsedLogic, appOptions)
+    return nodeToString(parsedLogic.interfaceDeclaration)
+}
+
+export function printLogicType(
+    parsedLogic: ParsedLogic,
+    appOptions?: AppOptions,
+): void {
     const printProperty = (name, typeNode) =>
         ts.createPropertySignature(undefined, ts.createIdentifier(name), undefined, typeNode, undefined)
 
     const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
 
-    return ts.createInterfaceDeclaration(
+    const logicProperties = [
+        printProperty('actionCreators', printActionCreators(parsedLogic, appOptions)),
+        printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
+        printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
+        printProperty('actions', printActions(parsedLogic, appOptions)),
+        printProperty('constants', printConstants(parsedLogic)),
+        printProperty('defaults', printDefaults(parsedLogic)),
+        printProperty('events', printEvents(parsedLogic)),
+        printProperty('key', printKey(parsedLogic)),
+        printProperty('listeners', printListeners(parsedLogic)),
+        printProperty(
+            'path',
+            ts.createTupleTypeNode(parsedLogic.path.map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p)))),
+        ),
+        printProperty('pathString', ts.createStringLiteral(parsedLogic.pathString)),
+        printProperty('props', printProps(parsedLogic)),
+        printProperty('reducer', printReducer(parsedLogic)),
+        printProperty('reducerOptions', printReducerOptions(parsedLogic)),
+        printProperty('reducers', printReducers(parsedLogic)),
+        printProperty('selector', printSelector(parsedLogic)),
+        printProperty('selectors', printSelectors(parsedLogic)),
+        printProperty('sharedListeners', printSharedListeners(parsedLogic)),
+        printProperty('values', printValues(parsedLogic)),
+        printProperty('_isKea', ts.createTrue()),
+        printProperty('_isKeaWithKey', parsedLogic.keyType ? ts.createTrue() : ts.createFalse()),
+        addSelectorTypeHelp
+            ? printProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
+            : null,
+        Object.keys(parsedLogic.extraActions).length > 0
+            ? printProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
+            : null,
+    ].filter((a) => !!a)
+    //
+    // const typeReferencesInCreatedLogicType = new Set<string>()
+    // for (const property of logicProperties) {
+    //     ts.forEachChild(property, function getPropertyTypes(node) {
+    //         if (ts.isTypeReferenceNode(node)) {
+    //             const name = (node.typeName as any).escapedText
+    //             typeReferencesInCreatedLogicType.add(name)
+    //         }
+    //         ts.forEachChild(node, getPropertyTypes)
+    //     })
+    // }
+
+    const logicTypeInput = new Set([...parsedLogic.logicTypeArguments.map((t) => t.trim()), ...parsedLogic.typeReferencesInLogicInput])
+
+    const logicTypeArguments = [...logicTypeInput]
+        // .filter((type) => typeReferencesInCreatedLogicType.has(type))
+        .sort()
+        .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined))
+
+    parsedLogic.interfaceDeclaration = ts.createInterfaceDeclaration(
         undefined,
         [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
         ts.createIdentifier(`${parsedLogic.logicName}Type`),
-        [...new Set([...parsedLogic.logicTypeArguments.map((t) => t.trim()), ...parsedLogic.localTypes]).values()]
-            .sort()
-            .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined)),
+        logicTypeArguments,
         [
             ts.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, [
                 ts.createExpressionWithTypeArguments(undefined, ts.createIdentifier('Logic')),
             ]),
         ],
-        [
-            printProperty('actionCreators', printActionCreators(parsedLogic, appOptions)),
-            printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
-            printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
-            printProperty('actions', printActions(parsedLogic, appOptions)),
-            printProperty('constants', printConstants(parsedLogic)),
-            printProperty('defaults', printDefaults(parsedLogic)),
-            printProperty('events', printEvents(parsedLogic)),
-            printProperty('key', printKey(parsedLogic)),
-            printProperty('listeners', printListeners(parsedLogic)),
-            printProperty(
-                'path',
-                ts.createTupleTypeNode(
-                    parsedLogic.path.map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p))),
-                ),
-            ),
-            printProperty('pathString', ts.createStringLiteral(parsedLogic.pathString)),
-            printProperty('props', printProps(parsedLogic)),
-            printProperty('reducer', printReducer(parsedLogic)),
-            printProperty('reducerOptions', printReducerOptions(parsedLogic)),
-            printProperty('reducers', printReducers(parsedLogic)),
-            printProperty('selector', printSelector(parsedLogic)),
-            printProperty('selectors', printSelectors(parsedLogic)),
-            printProperty('sharedListeners', printSharedListeners(parsedLogic)),
-            printProperty('values', printValues(parsedLogic)),
-            printProperty('_isKea', ts.createTrue()),
-            printProperty('_isKeaWithKey', parsedLogic.keyType ? ts.createTrue() : ts.createFalse()),
-            addSelectorTypeHelp
-                ? printProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
-                : null,
-            Object.keys(parsedLogic.extraActions).length > 0
-                ? printProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
-                : null,
-        ].filter((a) => a),
+        logicProperties,
     )
+    // parsedLogic.typeReferencesInCreatedLogicType = typeReferencesInCreatedLogicType
 }
 
 // haha

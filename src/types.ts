@@ -46,8 +46,10 @@ export interface ParsedLogic {
     extraActions: Record<string, ts.TypeNode>
     propsType?: ts.TypeNode
     keyType?: ts.TypeNode
-    typeImports: Record<string, Set<string>>
-    localTypes: Set<string>
+    typeReferencesToImportFromFiles: Record<string, Set<string>>
+    typeReferencesInLogicInput: Set<string>
+    // typeReferencesInCreatedLogicType: Set<string>
+    interfaceDeclaration?: ts.InterfaceDeclaration
 }
 
 export interface AppOptions {
