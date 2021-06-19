@@ -88,7 +88,7 @@ export function printToFiles(
                 if (!relativePath.startsWith('.')) {
                     relativePath = `./${relativePath}`
                 }
-                return `import { ${[...list].join(', ')} } from '${relativePath}'`
+                return `import { ${[...list].sort().join(', ')} } from '${relativePath}'`
             })
             .join('\n')
 
