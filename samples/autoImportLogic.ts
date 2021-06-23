@@ -1,7 +1,7 @@
 import { kea, KeaPlugin } from 'kea'
 
 import { autoImportLogicType } from './autoImportLogicType'
-import { T1, T2, T3, T4, T5 } from './autoImportTypes'
+import { A1, A2, A3, A4, A5 } from './autoImportTypes'
 import { githubLogic } from './githubLogic'
 import { loadersLogic } from './loadersLogic'
 
@@ -12,14 +12,14 @@ type L2 = {
 
 export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
     actions: {
-        actionT1: (
+        actionA1: (
             local1: L1,
             local2: L2,
-            param1: T1,
-            param2: T2,
-            param3: T3,
-            param4: T4,
-            param5: Partial<T5>,
+            param1: A1,
+            param2: A2,
+            param3: A3,
+            param4: A4,
+            param5: Partial<A5>,
             keaPlugin: KeaPlugin,
             stringType: string,
         ) => ({
@@ -34,7 +34,7 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
             stringType,
         }),
         complexAction: (element: HTMLElement, timeout: NodeJS.Timeout) => ({ element, timeout }),
-        combinedT6Action: (filter: T5) => ({ t6: filter.t6, bla: filter.bla }),
+        combinedA6Action: (filter: A5) => ({ a6: filter.a6, bla: filter.bla }),
     },
     connect: {
         actions: [githubLogic, ['setRepositories']],

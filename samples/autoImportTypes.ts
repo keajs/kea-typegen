@@ -1,14 +1,44 @@
-// export type T1 = 't1'
-export interface T1 {
+// actions
+export interface A1 {
     bla: string
 }
-export type T2 = 't2'
-export type T3 = string | boolean
-export type T4 = Record<string, boolean>
-export interface T5 {
+export type A2 = 'A2'
+export type A3 = string | boolean
+export type A4 = Record<string, boolean>
+export interface A5 {
     bla: string
     foo: boolean
-    t6: T6
+    a6: A6
 }
-export type T6 = Partial<Record<string, T7>>
-export type T7 = Array<string>
+export type A6 = Partial<Record<string, A7>>
+export type A7 = Array<string>
+
+// defaults
+export interface D1 {
+    bla: string
+}
+export type D2 = 'D2'
+export type D3 = string | boolean
+export type D4 = Record<string, boolean>
+export interface D5 {
+    bla: string
+    foo: boolean
+    a6: D6
+}
+export type D6 = Partial<Record<string, D7>>
+export type D7 = Array<string>
+
+// reducers
+export interface R1 {
+    bla: string
+}
+export type R2 = 'R2'
+export type R3 = string | boolean
+export type R4 = Record<string, boolean>
+export interface R5 {
+    bla: string
+    foo: boolean
+    a6: R6
+}
+export type R6 = Partial<Record<string, R7>>
+export type R7 = Array<string>
