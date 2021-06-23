@@ -37,10 +37,12 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                 const otherLogicType = checker.getTypeOfSymbolAtLocation(symbol, logicReference)
 
                 if (loaderName === 'actions') {
-                    const actionsForLogic = otherLogicType.getProperties()?.find((p) => p.getName() === 'actionCreators')
+                    const actionsForLogic = otherLogicType
+                        .getProperties()
+                        ?.find((p) => p.getName() === 'actionCreators')
 
                     if (actionsForLogic) {
-                        const actionTypes = (actionsForLogic.valueDeclaration as any).type.members
+                       const actionTypes = (actionsForLogic.valueDeclaration as any).type.members
 
                         for (const actionType of actionTypes || []) {
                             if (ts.isPropertySignature(actionType)) {
@@ -85,16 +87,15 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                         for (const property of type.getProperties()) {
                             const name = property.getName()
                             if (lookup[name]) {
-                                const returnType = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration)
-                                const returnTypeNode = checker.typeToTypeNode(returnType, property.valueDeclaration, undefined)
-
-                                gatherImports(returnTypeNode, checker, parsedLogic)
-
-                                parsedLogic.selectors.push({
-                                    name: lookup[name],
-                                    typeNode: returnTypeNode,
-                                    functionTypes: [],
-                                })
+                                if (ts.isPropertySignature(property.valueDeclaration)) {
+                                    const typeNode = property.valueDeclaration.type
+                                    gatherImports(typeNode, checker, parsedLogic)
+                                    parsedLogic.selectors.push({
+                                        name: lookup[name],
+                                        typeNode,
+                                        functionTypes: [],
+                                    })
+                                }
                             }
                         }
                     }
