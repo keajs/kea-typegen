@@ -1,7 +1,7 @@
 import { kea, KeaPlugin } from 'kea'
 
 import { autoImportLogicType } from './autoImportLogicType'
-import { A1, A2, A3, A4, A5, A7 } from './autoImportTypes'
+import { A1, A2, A3, A4, A5, A7, D1, D3, D6, R1, R6, S6 } from './autoImportTypes'
 import { githubLogic } from './githubLogic'
 import { loadersLogic } from './loadersLogic'
 
@@ -11,6 +11,7 @@ type L2 = {
 }
 
 export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
+    props: {} as { asd: D3 },
     actions: {
         actionA1: (
             local1: L1,
@@ -40,5 +41,16 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
     connect: {
         actions: [githubLogic, ['setRepositories']],
         values: [loadersLogic, ['dashboard']],
+    },
+    defaults: {
+        bla: { bla: 'asd' } as D1,
+        asd: {} as D6,
+    },
+    reducers: {
+        rbla: [{ bla: 'asd' } as R1, {}],
+        rasd: [{} as R6, {}],
+    },
+    selectors: {
+        sbla: [(s) => [(): S6 => ({})], (a) => a],
     },
 })

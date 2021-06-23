@@ -144,8 +144,6 @@ export function createVisit(
             visitFunctions[name]?.(type, inputProperty, parsedLogic)
         }
 
-        gatherImports(input, checker, parsedLogic)
-
         parsedLogics.push(parsedLogic)
     }
 }

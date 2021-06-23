@@ -1,5 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
+import { gatherImports } from '../utils'
 
 export function visitWindowValues(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -13,6 +14,7 @@ export function visitWindowValues(type: ts.Type, inputProperty: ts.PropertyAssig
                 const type = checker.getTypeOfSymbolAtLocation(property, value)
                 const signature = type.getCallSignatures()[0]
                 const typeNode = checker.typeToTypeNode(signature.getReturnType(), undefined, undefined)
+                gatherImports(typeNode, checker, parsedLogic)
 
                 parsedLogic.reducers.push({ name, typeNode })
             }

@@ -42,3 +42,18 @@ export interface R5 {
 }
 export type R6 = Partial<Record<string, R7>>
 export type R7 = Array<string>
+
+// selectors
+export interface S1 {
+    bla: string
+}
+export type S2 = 'S2'
+export type S3 = string | boolean
+export type S4 = Record<string, boolean>
+export interface S5 {
+    bla: string
+    foo: boolean
+    a6: S6
+}
+export type S6 = Partial<Record<string, S7>>
+export type S7 = Array<string>
