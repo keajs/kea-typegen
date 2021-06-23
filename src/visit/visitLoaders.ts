@@ -1,22 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { getParameterDeclaration, getTypeNodeForDefaultValue } from '../utils'
+import { getParameterDeclaration, getTypeNodeForDefaultValue, isAnyUnknown, unPromisify } from '../utils'
 import { NodeBuilderFlags } from 'typescript'
-
-function isAnyUnknown(node?: ts.Node): boolean {
-    if (!node) {
-        return true
-    }
-    const unPromised = unPromisify(node)
-    return !unPromised || unPromised.kind === ts.SyntaxKind.AnyKeyword || unPromised.kind === ts.SyntaxKind.UnknownKeyword || (ts.isTypeLiteralNode(unPromised) && unPromised.members.length === 0)
-}
-
-function unPromisify(node: ts.Node): ts.Node {
-    if (ts.isTypeReferenceNode(node) && (node.typeName as any)?.escapedText === 'Promise') {
-        return node.typeArguments?.[0]
-    }
-    return node
-}
 
 export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic

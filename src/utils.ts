@@ -98,7 +98,7 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
     let newReducers = {}
 
     for (const reducer of reducers) {
-        if (!newReducers[reducer.name] || reducer.typeNode.kind === ts.SyntaxKind.AnyKeyword) {
+        if (!newReducers[reducer.name] || !isAnyUnknown(reducer.typeNode)) {
             newReducers[reducer.name] = reducer
         }
     }
@@ -261,4 +261,19 @@ export function arrayContainsSet(array: string[], setToContain: Set<string>): bo
         }
     }
     return true
+}
+
+export function unPromisify(node: ts.Node): ts.Node {
+    if (ts.isTypeReferenceNode(node) && (node.typeName as any)?.escapedText === 'Promise') {
+        return node.typeArguments?.[0]
+    }
+    return node
+}
+
+export function isAnyUnknown(node?: ts.Node): boolean {
+    if (!node) {
+        return true
+    }
+    const unPromised = unPromisify(node)
+    return !unPromised || unPromised.kind === ts.SyntaxKind.AnyKeyword || unPromised.kind === ts.SyntaxKind.UnknownKeyword || (ts.isTypeLiteralNode(unPromised) && unPromised.members.length === 0)
 }
