@@ -98,7 +98,7 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
     let newReducers = {}
 
     for (const reducer of reducers) {
-        if (!newReducers[reducer.name] || ts.SyntaxKind[reducer.typeNode.kind] === '‌AnyKeyword') {
+        if (!newReducers[reducer.name] || reducer.typeNode.kind === ts.SyntaxKind.AnyKeyword) {
             newReducers[reducer.name] = reducer
         }
     }
