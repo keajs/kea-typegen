@@ -48,7 +48,6 @@ export interface ParsedLogic {
     keyType?: ts.TypeNode
     typeReferencesToImportFromFiles: Record<string, Set<string>>
     typeReferencesInLogicInput: Set<string>
-    // typeReferencesInCreatedLogicType: Set<string>
     interfaceDeclaration?: ts.InterfaceDeclaration
 }
 

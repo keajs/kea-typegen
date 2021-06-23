@@ -134,14 +134,8 @@ export function printToFiles(
             (pl) =>
                 // reload if logic type not imported
                 (pl.logicTypeImported === false ||
-                    // reload if don't have all local types in arguments
-                    !arrayContainsSet(pl.logicTypeArguments, pl.typeReferencesInLogicInput) ||
-                    // reload if logic type arguments contain anything we are importing manually
-                    pl.logicTypeArguments.some((arg) =>
-                        Object.values(pl.typeReferencesToImportFromFiles).some((values) => values.has(arg)),
-                    ) ||
-                    // reload if not sorted in the right order
-                    pl.logicTypeArguments.join(', ') !== [...pl.logicTypeArguments].sort().join(', ')) &&
+                    // reload if don't have the right types in arguments
+                    pl.logicTypeArguments.join(', ') !== [...pl.typeReferencesInLogicInput].sort().join(', ')) &&
                 pl.fileName.match(/\.tsx?$/),
         )
         if (logicsNeedingImports.length > 0) {
@@ -185,10 +179,7 @@ export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: A
     return nodeToString(parsedLogic.interfaceDeclaration)
 }
 
-export function printLogicType(
-    parsedLogic: ParsedLogic,
-    appOptions?: AppOptions,
-): void {
+export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions): void {
     const printProperty = (name, typeNode) =>
         ts.createPropertySignature(undefined, ts.createIdentifier(name), undefined, typeNode, undefined)
 
@@ -226,22 +217,8 @@ export function printLogicType(
             ? printProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
             : null,
     ].filter((a) => !!a)
-    //
-    // const typeReferencesInCreatedLogicType = new Set<string>()
-    // for (const property of logicProperties) {
-    //     ts.forEachChild(property, function getPropertyTypes(node) {
-    //         if (ts.isTypeReferenceNode(node)) {
-    //             const name = (node.typeName as any).escapedText
-    //             typeReferencesInCreatedLogicType.add(name)
-    //         }
-    //         ts.forEachChild(node, getPropertyTypes)
-    //     })
-    // }
 
-    const logicTypeInput = new Set([...parsedLogic.logicTypeArguments.map((t) => t.trim()), ...parsedLogic.typeReferencesInLogicInput])
-
-    const logicTypeArguments = [...logicTypeInput]
-        // .filter((type) => typeReferencesInCreatedLogicType.has(type))
+    const logicTypeArguments = [...parsedLogic.typeReferencesInLogicInput,]
         .sort()
         .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined))
 

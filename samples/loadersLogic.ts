@@ -21,7 +21,7 @@ export const loadersLogic = kea<loadersLogicType>({
             {
                 loadIt: () => ({ id: -1, name, pinned: true }),
             },
-        ]
+        ],
     },
     reducers: () => ({
         dashboard: {

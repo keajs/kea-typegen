@@ -11,7 +11,9 @@ type L2 = {
 }
 
 export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
-    props: {} as { asd: D3 },
+    props: {} as {
+        asd: D3
+    },
     actions: {
         actionA1: (
             local1: L1,

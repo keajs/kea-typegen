@@ -226,17 +226,9 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
     const declaration = symbol.getDeclarations()[0]
 
     if (ts.isImportSpecifier(declaration)) {
-        let importNode: ts.Node = declaration
-        while (importNode && !ts.isImportDeclaration(importNode)) {
-            importNode = importNode.parent
-        }
-        if (ts.isImportDeclaration(importNode)) {
-            const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
-            const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
-            if (otherSourceFile) {
-                const importFilename = otherSourceFile.fileName || importNode.moduleSpecifier.getText()
-                addTypeImport(parsedLogic, importFilename, declaration.getText())
-            }
+        const importFilename = getFilenameForImportSpecifier(declaration, checker)
+        if (importFilename) {
+            addTypeImport(parsedLogic, importFilename, declaration.getText())
         } else {
             parsedLogic.typeReferencesInLogicInput.add(declaration.getText())
         }
@@ -257,6 +249,23 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
                 // but is it exported?
                 addTypeImport(parsedLogic, files[0], declaration.name.getText())
             }
+        }
+    }
+}
+
+export function getFilenameForImportSpecifier(
+    declaration: ts.ImportSpecifier,
+    checker: ts.TypeChecker,
+): string | void {
+    let importNode: ts.Node = declaration
+    while (importNode && !ts.isImportDeclaration(importNode)) {
+        importNode = importNode.parent
+    }
+    if (ts.isImportDeclaration(importNode)) {
+        const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
+        const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
+        if (otherSourceFile) {
+            return otherSourceFile.fileName || importNode.moduleSpecifier.getText()
         }
     }
 }

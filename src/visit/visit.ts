@@ -1,7 +1,7 @@
 import * as ts from 'typescript'
 import * as path from 'path'
 import { AppOptions, ParsedLogic } from '../types'
-import { gatherImports, getLogicPathString, isKeaCall } from '../utils'
+import { gatherImports, getFilenameForImportSpecifier, getLogicPathString, isKeaCall } from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
@@ -76,6 +76,9 @@ export function createVisit(
         const keaTypeArguments = ts.isCallExpression(node.parent) ? node.parent.typeArguments : []
         const keaTypeArgument = keaTypeArguments?.[0]
 
+        const pathString = getLogicPathString(appOptions, sourceFile.fileName)
+        let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')
+
         if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {
             // kea<logicType<somethingElse>>(...)
             // store <somethingElse> on the generated type!
@@ -86,12 +89,14 @@ export function createVisit(
             // only if symbol resolves we mark the logic type as imported
             const symbol = checker.getSymbolAtLocation(keaTypeArgument.typeName)
             if (symbol) {
-                logicTypeImported = true
+                const declaration = symbol.getDeclarations()[0]
+
+                if (ts.isImportSpecifier(declaration)) {
+                    const filename = getFilenameForImportSpecifier(declaration, checker)
+                    logicTypeImported = filename === typeFileName
+                }
             }
         }
-
-        const pathString = getLogicPathString(appOptions, sourceFile.fileName)
-        let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')
 
         if (appOptions?.rootPath && appOptions?.typesPath) {
             const relativePathFromRoot = path.relative(appOptions.rootPath, typeFileName)
