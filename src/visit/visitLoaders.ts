@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { getParameterDeclaration, getTypeNodeForDefaultValue, isAnyUnknown, unPromisify } from '../utils'
+import { gatherImports, getParameterDeclaration, getTypeNodeForDefaultValue, isAnyUnknown, unPromisify } from '../utils'
 import { NodeBuilderFlags } from 'typescript'
 
 export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
@@ -81,6 +81,8 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                     ) {
                         returnTypeNode = returnTypeNode.typeArguments?.[0]
                     }
+
+                    gatherImports(returnTypeNode, checker, parsedLogic)
 
                     const successParameters = [
                         ts.createParameter(
