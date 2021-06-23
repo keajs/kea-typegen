@@ -46,10 +46,15 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
     return true
 }
 
-export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.TypeChecker): ts.TypeNode {
+export function getAndGatherTypeNodeForDefaultValue(
+    defaultValue: ts.Node,
+    checker: ts.TypeChecker,
+    parsedLogic: ParsedLogic,
+): ts.TypeNode {
     let typeNode
     if (defaultValue) {
         if (ts.isAsExpression(defaultValue)) {
+            gatherImports(defaultValue.type, checker, parsedLogic)
             typeNode = cloneNode(defaultValue.type)
             if (ts.isParenthesizedTypeNode(typeNode)) {
                 typeNode = typeNode.type
@@ -66,7 +71,9 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
         } else if (ts.isArrayLiteralExpression(defaultValue) && defaultValue.elements.length === 0) {
             typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
         } else {
-            typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue), undefined, undefined))
+            const foundTypeNode = checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue), undefined, undefined)
+            gatherImports(foundTypeNode, checker, parsedLogic)
+            typeNode = cloneNode(foundTypeNode)
         }
     } else {
         typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
@@ -112,7 +119,7 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
 export function extractImportedActions(
     actionObjects: ts.Expression | ts.ObjectLiteralExpression,
     checker: ts.TypeChecker,
-    parsedLogic: ParsedLogic
+    parsedLogic: ParsedLogic,
 ) {
     let extraActions = {}
 
@@ -199,15 +206,20 @@ export function getFilenamesForSymbol(symbol: ts.Symbol): string[] | undefined {
 
 /** gathers onto parsedLogic the TypeReference nodes that are declared in a different sourceFile */
 export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
-    ts.forEachChild(input, function getImports(node) {
+    if (!input) {
+        return
+    }
+    function getImports(requestedNode) {
+        let node = requestedNode
         if (ts.isTypeReferenceNode(node)) {
             const symbol = checker.getSymbolAtLocation(node.typeName) || (node.typeName as any).symbol
             if (symbol) {
                 storeExtractedSymbol(symbol, checker, parsedLogic)
             }
         }
-        ts.forEachChild(node, getImports)
-    })
+        ts.forEachChild(requestedNode, getImports)
+    }
+    getImports(input)
 }
 
 export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
@@ -278,5 +290,10 @@ export function isAnyUnknown(node?: ts.Node): boolean {
         return true
     }
     const unPromised = unPromisify(node)
-    return !unPromised || unPromised.kind === ts.SyntaxKind.AnyKeyword || unPromised.kind === ts.SyntaxKind.UnknownKeyword || (ts.isTypeLiteralNode(unPromised) && unPromised.members.length === 0)
+    return (
+        !unPromised ||
+        unPromised.kind === ts.SyntaxKind.AnyKeyword ||
+        unPromised.kind === ts.SyntaxKind.UnknownKeyword ||
+        (ts.isTypeLiteralNode(unPromised) && unPromised.members.length === 0)
+    )
 }

@@ -1,6 +1,12 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { gatherImports, getParameterDeclaration, getTypeNodeForDefaultValue, isAnyUnknown, unPromisify } from '../utils'
+import {
+    gatherImports,
+    getParameterDeclaration,
+    getAndGatherTypeNodeForDefaultValue,
+    isAnyUnknown,
+    unPromisify,
+} from '../utils'
 import { NodeBuilderFlags } from 'typescript'
 
 export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
@@ -22,7 +28,9 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
             objectLiteral = value
         }
 
-        const defaultValueTypeNode = getTypeNodeForDefaultValue(defaultValue, checker)
+        const defaultValueTypeNode = getAndGatherTypeNodeForDefaultValue(defaultValue, checker, parsedLogic)
+
+        gatherImports(defaultValueTypeNode, checker, parsedLogic)
 
         parsedLogic.reducers.push({ name: loaderName, typeNode: defaultValueTypeNode })
         parsedLogic.reducers.push({
@@ -42,11 +50,13 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                     return
                 }
 
-                const param = func.parameters ? (func.parameters[0] as ts.ParameterDeclaration) : null
+                const param = func.parameters ? func.parameters[0] : null
                 const parameters = param ? [getParameterDeclaration(param)] : []
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}`)) {
                     const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                    gatherImports(param, checker, parsedLogic)
+
                     parsedLogic.actions.push({ name: `${loaderActionName}`, parameters, returnTypeNode })
                 }
 

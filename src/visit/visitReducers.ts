@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { extractImportedActions, getTypeNodeForDefaultValue } from '../utils'
+import { extractImportedActions, getAndGatherTypeNodeForDefaultValue } from '../utils'
 import { cloneNode } from '@wessberg/ts-clone-node'
 
 export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
@@ -17,7 +17,7 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
 
             if (ts.isArrayLiteralExpression(value)) {
                 let defaultValue = value.elements[0]
-                typeNode = getTypeNodeForDefaultValue(defaultValue, checker)
+                typeNode = getAndGatherTypeNodeForDefaultValue(defaultValue, checker, parsedLogic)
                 if (ts.isFunctionTypeNode(typeNode)) {
                     typeNode = typeNode.type
                 }

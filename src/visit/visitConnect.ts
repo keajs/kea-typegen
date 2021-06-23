@@ -37,12 +37,10 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                 const otherLogicType = checker.getTypeOfSymbolAtLocation(symbol, logicReference)
 
                 if (loaderName === 'actions') {
-                    const actionsForLogic = (
-                        (otherLogicType as any).properties || (otherLogicType as any).resolvedProperties
-                    )?.find((p) => p.escapedName === 'actionCreators')
+                    const actionsForLogic = otherLogicType.getProperties()?.find((p) => p.getName() === 'actionCreators')
 
                     if (actionsForLogic) {
-                        const actionTypes = actionsForLogic.valueDeclaration.type.members
+                        const actionTypes = (actionsForLogic.valueDeclaration as any).type.members
 
                         for (const actionType of actionTypes || []) {
                             if (ts.isPropertySignature(actionType)) {
@@ -80,32 +78,23 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                 }
 
                 if (loaderName === 'values' || loaderName === 'props') {
-                    const selectorsForLogic = (
-                        (otherLogicType as any).properties || (otherLogicType as any).resolvedProperties
-                    )?.find((p) => p.escapedName === 'selectors')
+                    const valuesForLogic = otherLogicType.getProperties()?.find((p) => p.getName() === 'values')
 
-                    if (selectorsForLogic) {
-                        const selectorTypes = selectorsForLogic.valueDeclaration.type.members
+                    if (valuesForLogic) {
+                        const type = checker.getTypeOfSymbolAtLocation(valuesForLogic, valuesForLogic.valueDeclaration)
+                        for (const property of type.getProperties()) {
+                            const name = property.getName()
+                            if (lookup[name]) {
+                                const returnType = checker.getTypeOfSymbolAtLocation(property, property.valueDeclaration)
+                                const returnTypeNode = checker.typeToTypeNode(returnType, property.valueDeclaration, undefined)
 
-                        for (const selectorType of selectorTypes || []) {
-                            if (ts.isPropertySignature(selectorType)) {
-                                const name = selectorType.name.getText()
+                                gatherImports(returnTypeNode, checker, parsedLogic)
 
-                                const functionTypeNode = selectorType.type
-                                if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
-                                    let returnType = functionTypeNode.type
-
-                                    if (ts.isParenthesizedTypeNode(returnType)) {
-                                        returnType = returnType.type
-                                    }
-
-                                    gatherImports(selectorType, checker, parsedLogic)
-                                    parsedLogic.selectors.push({
-                                        name: lookup[name],
-                                        typeNode: returnType,
-                                        functionTypes: [],
-                                    })
-                                }
+                                parsedLogic.selectors.push({
+                                    name: lookup[name],
+                                    typeNode: returnTypeNode,
+                                    functionTypes: [],
+                                })
                             }
                         }
                     }

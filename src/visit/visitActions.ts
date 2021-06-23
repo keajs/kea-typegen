@@ -19,6 +19,10 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
         if (ts.isFunctionTypeNode(typeNode)) {
             const signature = type.getCallSignatures()[0]
             parameters = signature.getDeclaration().parameters.map((param) => {
+                if (param.type) {
+                    gatherImports(param.type, checker, parsedLogic)
+                }
+
                 return ts.createParameter(
                     undefined,
                     undefined,
@@ -36,6 +40,7 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
             gatherImports(sigReturnTypeNode, checker, parsedLogic)
             returnTypeNode = cloneNode(sigReturnTypeNode)
         } else {
+            gatherImports(typeNode, checker, parsedLogic)
             returnTypeNode = ts.createTypeLiteralNode([
                 ts.createPropertySignature(undefined, ts.createIdentifier('value'), undefined, typeNode, undefined),
             ])

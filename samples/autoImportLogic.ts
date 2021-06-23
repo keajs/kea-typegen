@@ -1,7 +1,7 @@
 import { kea, KeaPlugin } from 'kea'
 
 import { autoImportLogicType } from './autoImportLogicType'
-import { A1, A2, A3, A4, A5 } from './autoImportTypes'
+import { A1, A2, A3, A4, A5, A7 } from './autoImportTypes'
 import { githubLogic } from './githubLogic'
 import { loadersLogic } from './loadersLogic'
 
@@ -35,6 +35,7 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
         }),
         complexAction: (element: HTMLElement, timeout: NodeJS.Timeout) => ({ element, timeout }),
         combinedA6Action: (filter: A5) => ({ a6: filter.a6, bla: filter.bla }),
+        valueAction: [] as A7,
     },
     connect: {
         actions: [githubLogic, ['setRepositories']],
