@@ -241,7 +241,8 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
         if (
             ts.isTypeAliasDeclaration(declaration) ||
             ts.isInterfaceDeclaration(declaration) ||
-            ts.isEnumDeclaration(declaration)
+            ts.isEnumDeclaration(declaration)  ||
+            ts.isClassDeclaration(declaration)
         ) {
             if (files[0] === parsedLogic.fileName) {
                 parsedLogic.typeReferencesInLogicInput.add(declaration.name.getText())
