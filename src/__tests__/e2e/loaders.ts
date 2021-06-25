@@ -61,7 +61,7 @@ test('loaders - with no param', () => {
                 sessions: [
                     [] as string[],
                     {
-                        loadSessions: () => []
+                        loadSessions: () => [],
                         loadResults: async () => {
                             return []
                         }

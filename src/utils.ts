@@ -4,6 +4,7 @@ import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
 import { AppOptions, NameType, ParsedLogic } from './types'
+import { NodeBuilderFlags } from 'typescript'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -45,10 +46,15 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
     return true
 }
 
-export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.TypeChecker): ts.TypeNode {
+export function getAndGatherTypeNodeForDefaultValue(
+    defaultValue: ts.Node,
+    checker: ts.TypeChecker,
+    parsedLogic: ParsedLogic,
+): ts.TypeNode {
     let typeNode
     if (defaultValue) {
         if (ts.isAsExpression(defaultValue)) {
+            gatherImports(defaultValue.type, checker, parsedLogic)
             typeNode = cloneNode(defaultValue.type)
             if (ts.isParenthesizedTypeNode(typeNode)) {
                 typeNode = typeNode.type
@@ -65,7 +71,9 @@ export function getTypeNodeForDefaultValue(defaultValue: ts.Node, checker: ts.Ty
         } else if (ts.isArrayLiteralExpression(defaultValue) && defaultValue.elements.length === 0) {
             typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
         } else {
-            typeNode = cloneNode(checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue), undefined, undefined))
+            const foundTypeNode = checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue), undefined, undefined)
+            gatherImports(foundTypeNode, checker, parsedLogic)
+            typeNode = cloneNode(foundTypeNode)
         }
     } else {
         typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
@@ -97,7 +105,10 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
     let newReducers = {}
 
     for (const reducer of reducers) {
-        if (!newReducers[reducer.name] || ts.SyntaxKind[reducer.typeNode.kind] === '‌AnyKeyword') {
+        // if (reducer.name === 'featureFlag') {
+        //     debugger
+        // }
+        if (!newReducers[reducer.name] || !isAnyUnknown(reducer.typeNode)) {
             newReducers[reducer.name] = reducer
         }
     }
@@ -108,6 +119,7 @@ export function cleanDuplicateAnyNodes(reducers: NameType[]): NameType[] {
 export function extractImportedActions(
     actionObjects: ts.Expression | ts.ObjectLiteralExpression,
     checker: ts.TypeChecker,
+    parsedLogic: ParsedLogic,
 ) {
     let extraActions = {}
 
@@ -151,6 +163,16 @@ export function extractImportedActions(
                                 ts.isPropertySignature(actionCreator) &&
                                 ts.isFunctionTypeNode(actionCreator.type)
                             ) {
+                                const type = checker.getTypeFromTypeNode(actionCreator.type)
+                                const signature = type.getCallSignatures()[0]
+                                const sigReturnType = signature.getReturnType()
+                                const sigReturnTypeNode = checker.typeToTypeNode(
+                                    sigReturnType,
+                                    undefined,
+                                    NodeBuilderFlags.NoTruncation,
+                                )
+                                gatherImports(sigReturnTypeNode, checker, parsedLogic)
+
                                 extraActions[actionType] = cloneNode(actionCreator.type) //payload
                             }
                         }
@@ -174,4 +196,114 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
         .replace(/\//g, '.')
 
     return pathString
+}
+
+export function getFilenamesForSymbol(symbol: ts.Symbol): string[] | undefined {
+    return symbol?.declarations
+        .map((d) => d.getSourceFile().fileName)
+        .filter((str) => !str.includes('/node_modules/typescript/lib/lib'))
+}
+
+/** gathers onto parsedLogic the TypeReference nodes that are declared in a different sourceFile */
+export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
+    if (!input) {
+        return
+    }
+    function getImports(requestedNode) {
+        let node = requestedNode
+        if (ts.isTypeReferenceNode(node)) {
+            const symbol = checker.getSymbolAtLocation(node.typeName) || (node.typeName as any).symbol
+            if (symbol) {
+                storeExtractedSymbol(symbol, checker, parsedLogic)
+            }
+        }
+        ts.forEachChild(requestedNode, getImports)
+    }
+    getImports(input)
+}
+
+export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
+    const declaration = symbol.getDeclarations()[0]
+
+    if (ts.isImportSpecifier(declaration)) {
+        const importFilename = getFilenameForImportSpecifier(declaration, checker)
+        if (importFilename) {
+            addTypeImport(parsedLogic, importFilename, declaration.getText())
+        } else {
+            parsedLogic.typeReferencesInLogicInput.add(declaration.getText())
+        }
+        return
+    }
+
+    const files = getFilenamesForSymbol(symbol)
+    if (files.length === 1) {
+        // same file, add to logicType<...>
+        if (
+            ts.isTypeAliasDeclaration(declaration) ||
+            ts.isInterfaceDeclaration(declaration) ||
+            ts.isEnumDeclaration(declaration)  ||
+            ts.isClassDeclaration(declaration)
+        ) {
+            if (files[0] === parsedLogic.fileName) {
+                parsedLogic.typeReferencesInLogicInput.add(declaration.name.getText())
+            } else {
+                // but is it exported?
+                addTypeImport(parsedLogic, files[0], declaration.name.getText())
+            }
+        }
+    }
+}
+
+export function getFilenameForImportSpecifier(
+    declaration: ts.ImportSpecifier,
+    checker: ts.TypeChecker,
+): string | void {
+    let importNode: ts.Node = declaration
+    while (importNode && !ts.isImportDeclaration(importNode)) {
+        importNode = importNode.parent
+    }
+    if (ts.isImportDeclaration(importNode)) {
+        const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
+        const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
+        if (otherSourceFile) {
+            return otherSourceFile.fileName || importNode.moduleSpecifier.getText()
+        }
+    }
+}
+
+function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string) {
+    if (!parsedLogic.typeReferencesToImportFromFiles[file]) {
+        parsedLogic.typeReferencesToImportFromFiles[file] = new Set()
+    }
+    parsedLogic.typeReferencesToImportFromFiles[file].add(typeName)
+}
+
+export function arrayContainsSet(array: string[], setToContain: Set<string>): boolean {
+    const arraySet = new Set(array)
+    for (const str of setToContain) {
+        if (!arraySet.has(str)) {
+            return false
+        }
+    }
+    return true
+}
+
+export function unPromisify(node: ts.Node): ts.Node {
+    if (ts.isTypeReferenceNode(node) && (node.typeName as any)?.escapedText === 'Promise') {
+        return node.typeArguments?.[0]
+    }
+    return node
+}
+
+export function isAnyUnknown(node?: ts.Node): boolean {
+    if (!node) {
+        return true
+    }
+    const unPromised = unPromisify(node)
+    return (
+        !unPromised ||
+        unPromised.kind === ts.SyntaxKind.AnyKeyword ||
+        unPromised.kind === ts.SyntaxKind.UnknownKeyword ||
+        (ts.isTypeLiteralNode(unPromised) && unPromised.members.length === 0)
+    )
 }

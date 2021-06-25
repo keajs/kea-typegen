@@ -18,7 +18,7 @@ export function visitListeners(type: ts.Type, inputProperty: ts.PropertyAssignme
     }
 
     if (ts.isObjectLiteralExpression(objectLiteral)) {
-        extraActions = extractImportedActions(objectLiteral, checker)
+        extraActions = extractImportedActions(objectLiteral, checker, parsedLogic)
 
         if (extraActions) {
             Object.assign(parsedLogic.extraActions, extraActions)

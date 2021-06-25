@@ -1,6 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
+import { gatherImports } from '../utils'
 
 export function visitSharedListeners(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -16,6 +17,7 @@ export function visitSharedListeners(type: ts.Type, inputProperty: ts.PropertyAs
                 typeNode = cloneNode(
                     checker.typeToTypeNode(checker.getTypeAtLocation(firstParameter), undefined, undefined),
                 )
+                gatherImports(typeNode, checker, parsedLogic)
             }
 
             parsedLogic.sharedListeners.push({

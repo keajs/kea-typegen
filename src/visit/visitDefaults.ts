@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { getTypeNodeForDefaultValue } from '../utils'
+import { getAndGatherTypeNodeForDefaultValue } from '../utils'
 
 export function visitDefaults(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -9,7 +9,7 @@ export function visitDefaults(type: ts.Type, inputProperty: ts.PropertyAssignmen
         const name = property.getName()
         const value = (property.valueDeclaration as ts.PropertyAssignment).initializer
 
-        const typeNode = getTypeNodeForDefaultValue(value, checker)
+        const typeNode = getAndGatherTypeNodeForDefaultValue(value, checker, parsedLogic)
         if (typeNode) {
             parsedLogic.reducers.push({ name, typeNode })
         }

@@ -1,3 +1,6 @@
+## 1.0.0 - 2021-07-26
+- Support auto-importing referenced types into logic types
+
 ## 0.7.2 - 2021-05-30
 - Support actions that return payloads with over 16 properties (fix ".. 4 more .." in the generated type).
 

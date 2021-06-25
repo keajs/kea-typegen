@@ -1,7 +1,8 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { cloneNode } from '@wessberg/ts-clone-node'
 import { NodeBuilderFlags } from 'typescript'
+import { cloneNode } from '@wessberg/ts-clone-node'
+import { gatherImports } from '../utils'
 
 export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -41,7 +42,9 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
                         if (takenNames[name] > 1) {
                             name = `${name}${takenNames[name]}`
                         }
-
+                        if (ts.isFunctionTypeNode(selectorTypeNode)) {
+                            gatherImports(selectorTypeNode.type, checker, parsedLogic)
+                        }
                         return {
                             name,
                             type: ts.isFunctionTypeNode(selectorTypeNode)
@@ -52,17 +55,23 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
             }
 
             // return type
-            const computedFunction = value.elements[1] as ts.ArrowFunction | ts.FunctionDeclaration
-            const computedFunctionTypeNode = checker.getTypeAtLocation(computedFunction)
-            const type = computedFunctionTypeNode.getCallSignatures()[0]?.getReturnType()
+            const computedFunction = value.elements[1]
+            if (ts.isFunctionLike(computedFunction)) {
+                const type = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(computedFunction))
+                const typeNode = type
+                    ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation)
+                    : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
 
-            parsedLogic.selectors.push({
-                name,
-                typeNode: type
-                    ? checker.typeToTypeNode(type, undefined, undefined)
-                    : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                functionTypes,
-            })
+                if (type) {
+                    gatherImports(typeNode, checker, parsedLogic)
+                }
+
+                parsedLogic.selectors.push({
+                    name,
+                    typeNode,
+                    functionTypes,
+                })
+            }
         }
     }
 }

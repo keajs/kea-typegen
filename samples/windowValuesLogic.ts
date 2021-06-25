@@ -1,6 +1,5 @@
-import {kea} from "kea";
-import {windowValuesLogicType} from "./windowValuesLogicType";
-
+import { kea } from 'kea'
+import { windowValuesLogicType } from './windowValuesLogicType'
 export const windowValuesLogic = kea<windowValuesLogicType>({
     windowValues: () => ({
         windowHeight: (window) => window.innerHeight,

@@ -1,7 +1,7 @@
 import * as ts from 'typescript'
 import * as path from 'path'
 import { AppOptions, ParsedLogic } from '../types'
-import { getLogicPathString, isKeaCall } from '../utils'
+import { gatherImports, getFilenameForImportSpecifier, getLogicPathString, isKeaCall } from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
@@ -76,22 +76,27 @@ export function createVisit(
         const keaTypeArguments = ts.isCallExpression(node.parent) ? node.parent.typeArguments : []
         const keaTypeArgument = keaTypeArguments?.[0]
 
+        const pathString = getLogicPathString(appOptions, sourceFile.fileName)
+        let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')
+
         if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {
             // kea<logicType<somethingElse>>(...)
             // store <somethingElse> on the generated type!
             if (keaTypeArgument.typeArguments && keaTypeArgument.typeArguments.length > 0) {
-                logicTypeArguments = (keaTypeArgument.typeArguments as ts.Node[]).map((a) => a.getFullText())
+                logicTypeArguments = (keaTypeArgument.typeArguments as ts.Node[]).map((a) => a.getFullText().trim())
             }
 
             // only if symbol resolves we mark the logic type as imported
             const symbol = checker.getSymbolAtLocation(keaTypeArgument.typeName)
             if (symbol) {
-                logicTypeImported = true
+                const declaration = symbol.getDeclarations()[0]
+
+                if (ts.isImportSpecifier(declaration)) {
+                    const filename = getFilenameForImportSpecifier(declaration, checker)
+                    logicTypeImported = filename === typeFileName
+                }
             }
         }
-
-        const pathString = getLogicPathString(appOptions, sourceFile.fileName)
-        let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')
 
         if (appOptions?.rootPath && appOptions?.typesPath) {
             const relativePathFromRoot = path.relative(appOptions.rootPath, typeFileName)
@@ -104,7 +109,7 @@ export function createVisit(
             logicName,
             logicTypeImported,
             logicTypeName,
-            logicTypeArguments: logicTypeArguments,
+            logicTypeArguments,
             fileName: sourceFile.fileName,
             typeFileName,
             actions: [],
@@ -119,6 +124,9 @@ export function createVisit(
             propsType: undefined,
             path: pathString.split('.'),
             pathString: pathString,
+            typeReferencesToImportFromFiles: {},
+            typeReferencesInLogicInput: new Set(),
+            // typeReferencesInCreatedLogicType: new Set(),
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression

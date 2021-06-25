@@ -1,6 +1,13 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { getParameterDeclaration, getTypeNodeForDefaultValue } from '../utils'
+import {
+    gatherImports,
+    getParameterDeclaration,
+    getAndGatherTypeNodeForDefaultValue,
+    isAnyUnknown,
+    unPromisify,
+} from '../utils'
+import { NodeBuilderFlags } from 'typescript'
 
 export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -21,9 +28,11 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
             objectLiteral = value
         }
 
-        const typeNode = getTypeNodeForDefaultValue(defaultValue, checker)
+        const defaultValueTypeNode = getAndGatherTypeNodeForDefaultValue(defaultValue, checker, parsedLogic)
 
-        parsedLogic.reducers.push({ name: loaderName, typeNode })
+        gatherImports(defaultValueTypeNode, checker, parsedLogic)
+
+        parsedLogic.reducers.push({ name: loaderName, typeNode: defaultValueTypeNode })
         parsedLogic.reducers.push({
             name: `${loaderName}Loading`,
             typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
@@ -41,24 +50,49 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                     return
                 }
 
-                const param = func.parameters ? (func.parameters[0] as ts.ParameterDeclaration) : null
+                const param = func.parameters ? func.parameters[0] : null
                 const parameters = param ? [getParameterDeclaration(param)] : []
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}`)) {
                     const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                    gatherImports(param, checker, parsedLogic)
+
                     parsedLogic.actions.push({ name: `${loaderActionName}`, parameters, returnTypeNode })
                 }
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}Success`)) {
-                    let returnTypeNode = func?.type || typeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                    let returnTypeNode: ts.TypeNode
+                    if (func) {
+                        const funcType = checker.getTypeAtLocation(func)
+                        const signature = funcType?.getCallSignatures()[0]
+                        const sigReturnType = signature?.getReturnType()
+                        if (sigReturnType) {
+                            const resolvedReturnType = checker.typeToTypeNode(
+                                sigReturnType,
+                                undefined,
+                                NodeBuilderFlags.NoTruncation,
+                            )
+                            if (!isAnyUnknown(unPromisify(resolvedReturnType))) {
+                                returnTypeNode = resolvedReturnType
+                            }
+                        }
+                        if (!returnTypeNode && !isAnyUnknown(func.type)) {
+                            returnTypeNode = func.type
+                        }
+                    }
+
+                    if (!returnTypeNode) {
+                        returnTypeNode = defaultValueTypeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                    }
 
                     if (
                         ts.isTypeReferenceNode(returnTypeNode) &&
-                        returnTypeNode.getSourceFile() /* checking this avoids a bug within the .getText() function */ &&
-                        returnTypeNode.typeName.getText() === 'Promise'
+                        (returnTypeNode.typeName as any)?.escapedText === 'Promise'
                     ) {
                         returnTypeNode = returnTypeNode.typeArguments?.[0]
                     }
+
+                    gatherImports(returnTypeNode, checker, parsedLogic)
 
                     const successParameters = [
                         ts.createParameter(

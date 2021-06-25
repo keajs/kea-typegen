@@ -1,7 +1,7 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`loaders - with a function 1`] = `
-"export interface logicType extends Logic {
+"export interface logicType<Session> extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";
@@ -85,7 +85,7 @@ exports[`loaders - with a function 1`] = `
 `;
 
 exports[`loaders - with an array and default 1`] = `
-"export interface logicType extends Logic {
+"export interface logicType<Session> extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
             type: \\"update name (logic)\\";

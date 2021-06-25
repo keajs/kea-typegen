@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { getParameterDeclaration } from '../utils'
+import { gatherImports, getParameterDeclaration } from '../utils'
 
 export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -37,12 +37,12 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                 const otherLogicType = checker.getTypeOfSymbolAtLocation(symbol, logicReference)
 
                 if (loaderName === 'actions') {
-                    const actionsForLogic = (
-                        (otherLogicType as any).properties || (otherLogicType as any).resolvedProperties
-                    )?.find((p) => p.escapedName === 'actionCreators')
+                    const actionsForLogic = otherLogicType
+                        .getProperties()
+                        ?.find((p) => p.getName() === 'actionCreators')
 
                     if (actionsForLogic) {
-                        const actionTypes = actionsForLogic.valueDeclaration.type.members
+                       const actionTypes = (actionsForLogic.valueDeclaration as any).type.members
 
                         for (const actionType of actionTypes || []) {
                             if (ts.isPropertySignature(actionType)) {
@@ -65,6 +65,8 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                                             (m) => m.name.getText() === 'payload',
                                         ) as ts.PropertySignature
 
+                                        gatherImports(actionType, checker, parsedLogic)
+
                                         parsedLogic.actions.push({
                                             name: lookup[name],
                                             returnTypeNode: payload.type,
@@ -78,28 +80,19 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                 }
 
                 if (loaderName === 'values' || loaderName === 'props') {
-                    const selectorsForLogic = (
-                        (otherLogicType as any).properties || (otherLogicType as any).resolvedProperties
-                    )?.find((p) => p.escapedName === 'selectors')
+                    const valuesForLogic = otherLogicType.getProperties()?.find((p) => p.getName() === 'values')
 
-                    if (selectorsForLogic) {
-                        const selectorTypes = selectorsForLogic.valueDeclaration.type.members
-
-                        for (const selectorType of selectorTypes || []) {
-                            if (ts.isPropertySignature(selectorType)) {
-                                const name = selectorType.name.getText()
-
-                                const functionTypeNode = selectorType.type
-                                if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
-                                    let returnType = functionTypeNode.type
-
-                                    if (ts.isParenthesizedTypeNode(returnType)) {
-                                        returnType = returnType.type
-                                    }
-
+                    if (valuesForLogic) {
+                        const type = checker.getTypeOfSymbolAtLocation(valuesForLogic, valuesForLogic.valueDeclaration)
+                        for (const property of type.getProperties()) {
+                            const name = property.getName()
+                            if (lookup[name]) {
+                                if (ts.isPropertySignature(property.valueDeclaration)) {
+                                    const typeNode = property.valueDeclaration.type
+                                    gatherImports(typeNode, checker, parsedLogic)
                                     parsedLogic.selectors.push({
                                         name: lookup[name],
-                                        typeNode: returnType,
+                                        typeNode,
                                         functionTypes: [],
                                     })
                                 }

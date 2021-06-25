@@ -1,6 +1,6 @@
 {
     "name": "kea-typegen",
-    "version": "0.7.2",
+    "version": "0.8.0-beta.6",
     "description": "Generate type definitions for kea logic",
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
@@ -11,7 +11,8 @@
         "test": "jest",
         "samples:check": "ts-node ./src/cli/typegen.ts check -c ./samples/tsconfig.json",
         "samples:write": "ts-node ./src/cli/typegen.ts write -c ./samples/tsconfig.json",
-        "samples:watch": "ts-node ./src/cli/typegen.ts watch -c ./samples/tsconfig.json"
+        "samples:watch": "ts-node ./src/cli/typegen.ts watch -c ./samples/tsconfig.json",
+        "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json"
     },
     "main": "dist/cli/typegen.js",
     "author": "Marius Andra <marius.andra@gmail.com>",
@@ -20,9 +21,9 @@
         "kea-typegen": "dist/src/cli/typegen.js"
     },
     "dependencies": {
-        "@wessberg/ts-clone-node": "0.3.18",
+        "@wessberg/ts-clone-node": "0.3.19",
         "diff": "^5.0.0",
-        "prettier": "^2.2.1",
+        "prettier": "^2.3.1",
         "yargs": "^16.2.0"
     },
     "devDependencies": {
@@ -34,14 +35,14 @@
         "@types/yargs": "^16.0.0",
         "babel-jest": "^26.6.3",
         "husky": ">=4",
-        "jest": "^26.6.3",
+        "jest": "^27.0.5",
         "kea": "^2.4.2",
         "lint-staged": ">=10.5.4",
         "react": "^16.13.1",
         "rimraf": "^3.0.2",
-        "ts-jest": "^26.5.1",
-        "ts-node": "^9.1.1",
-        "typescript": "^4.1.5"
+        "ts-jest": "^27.0.3",
+        "ts-node": "^10.0.0",
+        "typescript": "^4.3.4"
     },
     "peerDependencies": {
         "typescript": "*"

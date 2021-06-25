@@ -1,17 +1,10 @@
 import { kea } from 'kea'
 import { githubLogicType } from './githubLogicType'
+import { Repository } from './types'
 
 const API_URL = 'https://api.github.com'
 
-export type Repository = {
-    id: number
-    stargazers_count: number
-    html_url: string
-    full_name: string
-    forks: number
-}
-
-export const githubLogic = kea<githubLogicType<Repository>>({
+export const githubLogic = kea<githubLogicType>({
     actions: {
         setUsername: (username: string) => ({ username }),
         setRepositories: (repositories: Repository[]) => ({ repositories }),

@@ -20,7 +20,7 @@ export const logic = kea<logicType<Session>>({
         updateNumber: (number: number) => ({ number }),
     }),
     defaults: {
-        yetAnotherNameWithNullDefault: "blue" as string | null
+        yetAnotherNameWithNullDefault: 'blue' as string | null,
     },
     reducers: () => {
         return {
@@ -76,14 +76,15 @@ export const logic = kea<logicType<Session>>({
         ],
         randomSelector: [
             () => [selectors.capitalizedName],
-            (capitalizedName) => ({
-                name: capitalizedName
-            }) as Record<string, any>,
+            (capitalizedName) =>
+                ({
+                    name: capitalizedName,
+                } as Record<string, any>),
         ],
         longSelector: [
             (s) => [s.name, s.number, s.capitalizedName, s.upperCaseName, s.randomSelector, s.randomSelector],
-            (a1, a2, a3, a4, a5, a6) => false
-        ]
+            (a1, a2, a3, a4, a5, a6) => false,
+        ],
     }),
     loaders: () => ({
         sessions: {
@@ -99,17 +100,16 @@ export const logic = kea<logicType<Session>>({
             actions.updateName(number.toString())
             console.log(number)
         },
-        updateName: sharedListeners.someRandomFunction
+        updateName: sharedListeners.someRandomFunction,
     }),
     sharedListeners: () => ({
-        someRandomFunction: ({ name } : { name: string, id?: number }) => {
+        someRandomFunction: ({ name }: { name: string; id?: number }) => {
             console.log('haha')
-        }
+        },
     }),
     events: { afterMount: () => {} },
 })
 
 function MyComponent() {
     const {} = useValues(logic)
-
 }
