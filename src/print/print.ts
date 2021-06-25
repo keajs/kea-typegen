@@ -152,7 +152,7 @@ export function printToFiles(
         }
     })
 
-    if (writtenFiles === 0) {
+    if (writtenFiles === 0 && importsToModify === 0) {
         if (appOptions.write) {
             log(`💚 ${parsedLogics.length} logic type${parsedLogics.length === 1 ? '' : 's'} up to date!`)
             log('')
