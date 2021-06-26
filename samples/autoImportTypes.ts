@@ -59,3 +59,9 @@ export type S6 = Partial<Record<string, S7>>
 export type S7 = Array<string>
 
 export class EventIndex {}
+
+export declare namespace ExportedApi {
+    interface RandomThing {
+        key: string
+    }
+}

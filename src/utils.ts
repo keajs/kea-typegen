@@ -212,9 +212,14 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
     function getImports(requestedNode) {
         let node = requestedNode
         if (ts.isTypeReferenceNode(node)) {
+            let typeRootName: string | undefined
+            if (node.typeName?.kind === ts.SyntaxKind.FirstNode) {
+                typeRootName = node.typeName.getFirstToken().getText()
+            }
+
             const symbol = checker.getSymbolAtLocation(node.typeName) || (node.typeName as any).symbol
             if (symbol) {
-                storeExtractedSymbol(symbol, checker, parsedLogic)
+                storeExtractedSymbol(symbol, checker, parsedLogic, typeRootName)
             }
         }
         ts.forEachChild(requestedNode, getImports)
@@ -222,15 +227,15 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
     getImports(input)
 }
 
-export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker, parsedLogic: ParsedLogic) {
+export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker, parsedLogic: ParsedLogic, typeRootName?: string) {
     const declaration = symbol.getDeclarations()[0]
 
     if (ts.isImportSpecifier(declaration)) {
         const importFilename = getFilenameForImportSpecifier(declaration, checker)
         if (importFilename) {
-            addTypeImport(parsedLogic, importFilename, declaration.getText())
+            addTypeImport(parsedLogic, importFilename, typeRootName || declaration.getText())
         } else {
-            parsedLogic.typeReferencesInLogicInput.add(declaration.getText())
+            parsedLogic.typeReferencesInLogicInput.add(typeRootName || declaration.getText())
         }
         return
     }
@@ -245,10 +250,10 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
             ts.isClassDeclaration(declaration)
         ) {
             if (files[0] === parsedLogic.fileName) {
-                parsedLogic.typeReferencesInLogicInput.add(declaration.name.getText())
+                parsedLogic.typeReferencesInLogicInput.add(typeRootName || declaration.name.getText())
             } else {
                 // but is it exported?
-                addTypeImport(parsedLogic, files[0], declaration.name.getText())
+                addTypeImport(parsedLogic, files[0], typeRootName || declaration.name.getText())
             }
         }
     }
@@ -275,7 +280,7 @@ function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string)
     if (!parsedLogic.typeReferencesToImportFromFiles[file]) {
         parsedLogic.typeReferencesToImportFromFiles[file] = new Set()
     }
-    parsedLogic.typeReferencesToImportFromFiles[file].add(typeName)
+    parsedLogic.typeReferencesToImportFromFiles[file].add(typeName.split('.')[0])
 }
 
 export function arrayContainsSet(array: string[], setToContain: Set<string>): boolean {

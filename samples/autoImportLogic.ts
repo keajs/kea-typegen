@@ -1,7 +1,7 @@
 import { kea, KeaPlugin } from 'kea'
 
 import { autoImportLogicType } from './autoImportLogicType'
-import { A1, A2, A3, A4, A5, A7, D1, D3, D6, EventIndex, R1, R6, S6 } from './autoImportTypes'
+import { A1, A2, A3, A4, A5, A7, D1, D3, D6, EventIndex, ExportedApi, R1, R6, S6 } from './autoImportTypes'
 import { githubLogic } from './githubLogic'
 import { loadersLogic } from './loadersLogic'
 
@@ -51,6 +51,7 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
     reducers: {
         rbla: [{ bla: 'asd' } as R1, {}],
         rasd: [{} as R6, {}],
+        then: [null as null | ExportedApi.RandomThing, {}],
     },
     selectors: {
         sbla: [(s) => [(): S6 => ({})], (a) => a],

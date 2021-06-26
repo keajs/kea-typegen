@@ -234,7 +234,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         ],
         logicProperties,
     )
-    // parsedLogic.typeReferencesInCreatedLogicType = typeReferencesInCreatedLogicType
 }
 
 // haha
