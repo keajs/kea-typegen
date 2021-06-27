@@ -43,6 +43,9 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
         miscActionWithType: (randomThing: ExportedApi.RandomThing): { randomThing: ExportedApi.RandomThing } => ({
             randomThing,
         }),
+        miscActionWithTypeConstants: (): { color: 'green' | 'blue' } => ({
+            color: 'blue',
+        }),
         miscActionWithoutType: (randomThing: ExportedApi.RandomThing) => ({ randomThing }),
         miscInterfacedAction: (randomApi: RandomAPI) => ({ randomApi }),
     },
@@ -65,5 +68,6 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
         randomDetectedReturn: [() => [], () => ({} as ExportedApi.RandomThing)],
         randomSpecifiedReturn: [() => [], (): ExportedApi.RandomThing => ({} as ExportedApi.RandomThing)],
         randomInterfacedReturn: [() => [], () => ({} as RandomAPI)],
+        typedStringReturn: [() => [], (): 'green' | 'blue' | null => 'green'],
     },
 })

@@ -2,7 +2,7 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { NodeBuilderFlags } from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
-import { gatherImports} from '../utils'
+import { gatherImports } from '../utils'
 
 export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -40,8 +40,10 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
             // first try the specified type (action: (): Type => {...})
             returnTypeNode = initializer.type
 
-            // if not found, use the TS compiler to detect it
-            if (!returnTypeNode) {
+            if (returnTypeNode) {
+                returnTypeNode = cloneNode(returnTypeNode)
+            } else {
+                // if not found, use the TS compiler to detect it
                 const signature = type.getCallSignatures()[0]
                 const sigReturnType = signature.getReturnType()
                 const sigReturnTypeNode = checker.typeToTypeNode(
