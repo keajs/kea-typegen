@@ -214,7 +214,11 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
         if (ts.isTypeReferenceNode(node)) {
             let typeRootName: string | undefined
             if (node.typeName?.kind === ts.SyntaxKind.FirstNode) {
-                typeRootName = node.typeName.getFirstToken().getText()
+                try {
+                    typeRootName = node.typeName.getFirstToken().getText()
+                } catch (e) {
+                    typeRootName = (node.typeName.left as any)?.escapedText
+                }
             }
 
             const symbol = checker.getSymbolAtLocation(node.typeName) || (node.typeName as any).symbol
@@ -227,7 +231,12 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
     getImports(input)
 }
 
-export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker, parsedLogic: ParsedLogic, typeRootName?: string) {
+export function storeExtractedSymbol(
+    symbol: ts.Symbol,
+    checker: ts.TypeChecker,
+    parsedLogic: ParsedLogic,
+    typeRootName?: string,
+) {
     const declaration = symbol.getDeclarations()[0]
 
     if (ts.isImportSpecifier(declaration)) {
@@ -241,12 +250,12 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
     }
 
     const files = getFilenamesForSymbol(symbol)
-    if (files.length === 1) {
+    if (files[0]) {
         // same file, add to logicType<...>
         if (
             ts.isTypeAliasDeclaration(declaration) ||
             ts.isInterfaceDeclaration(declaration) ||
-            ts.isEnumDeclaration(declaration)  ||
+            ts.isEnumDeclaration(declaration) ||
             ts.isClassDeclaration(declaration)
         ) {
             if (files[0] === parsedLogic.fileName) {
@@ -259,10 +268,7 @@ export function storeExtractedSymbol(symbol: ts.Symbol, checker: ts.TypeChecker,
     }
 }
 
-export function getFilenameForImportSpecifier(
-    declaration: ts.ImportSpecifier,
-    checker: ts.TypeChecker,
-): string | void {
+export function getFilenameForImportSpecifier(declaration: ts.ImportSpecifier, checker: ts.TypeChecker): string | void {
     let importNode: ts.Node = declaration
     while (importNode && !ts.isImportDeclaration(importNode)) {
         importNode = importNode.parent
