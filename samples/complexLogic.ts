@@ -147,6 +147,14 @@ export const complexLogic = kea<
                 return initialValuesForForm
             },
         ],
+        miscSelector: [
+            () => [],
+            () => {
+                const a = {} as DashboardItemType
+                const result = { ...a, bla: true }
+                return result
+            }
+        ]
     },
 
     listeners: ({ actions, values }) => ({

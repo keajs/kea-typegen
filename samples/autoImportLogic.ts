@@ -9,8 +9,9 @@ type L1 = 'haha'
 type L2 = {
     bla: string
 }
+interface RandomAPI extends ExportedApi.RandomThing {}
 
-export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
+export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
     props: {} as {
         asd: D3
     },
@@ -39,6 +40,11 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
         complexAction: (element: HTMLElement, timeout: NodeJS.Timeout) => ({ element, timeout }),
         combinedA6Action: (filter: A5) => ({ a6: filter.a6, bla: filter.bla }),
         valueAction: [] as A7,
+        miscActionWithType: (randomThing: ExportedApi.RandomThing): { randomThing: ExportedApi.RandomThing } => ({
+            randomThing,
+        }),
+        miscActionWithoutType: (randomThing: ExportedApi.RandomThing) => ({ randomThing }),
+        miscInterfacedAction: (randomApi: RandomAPI) => ({ randomApi }),
     },
     connect: {
         actions: [githubLogic, ['setRepositories']],
@@ -56,5 +62,8 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2>>({
     selectors: {
         sbla: [(s) => [(): S6 => ({})], (a) => a],
         eventIndex: [() => [], () => new EventIndex()],
+        randomDetectedReturn: [() => [], () => ({} as ExportedApi.RandomThing)],
+        randomSpecifiedReturn: [() => [], (): ExportedApi.RandomThing => ({} as ExportedApi.RandomThing)],
+        randomInterfacedReturn: [() => [], () => ({} as RandomAPI)],
     },
 })
