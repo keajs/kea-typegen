@@ -1,3 +1,7 @@
+## 1.0.2 - 2021-07-27
+- Use explicitly specified function return types if present for actions and selectors (vs detection via compiler api).
+- This helps with namespaced types like `This.That`, as the namespace information is lost in detected types.
+
 ## 1.0.1 - 2021-07-27
 - Republish as 1.0.0 on npm is actually 0.7.2
 - Only import `A` when encountering complex types like `A.B`
