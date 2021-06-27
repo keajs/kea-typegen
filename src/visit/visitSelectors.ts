@@ -61,8 +61,8 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
 
                 let typeNode: ts.TypeNode
                 if (computedFunction.type) {
+                    gatherImports(computedFunction.type, checker, parsedLogic)
                     typeNode = cloneNode(computedFunction.type)
-                    gatherImports(typeNode, checker, parsedLogic)
                 } else if (type) {
                     typeNode = checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation)
                     gatherImports(typeNode, checker, parsedLogic)

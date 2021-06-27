@@ -40,9 +40,7 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
             // first try the specified type (action: (): Type => {...})
             returnTypeNode = initializer.type
 
-            if (returnTypeNode) {
-                returnTypeNode = cloneNode(returnTypeNode)
-            } else {
+            if (!returnTypeNode) {
                 // if not found, use the TS compiler to detect it
                 const signature = type.getCallSignatures()[0]
                 const sigReturnType = signature.getReturnType()
@@ -51,10 +49,11 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
                     undefined,
                     NodeBuilderFlags.NoTruncation,
                 )
-                returnTypeNode = cloneNode(sigReturnTypeNode)
+                returnTypeNode = sigReturnTypeNode
             }
 
             gatherImports(returnTypeNode, checker, parsedLogic)
+            returnTypeNode = cloneNode(returnTypeNode)
         } else {
             // action is a value (action: true)
             const typeNode = checker.typeToTypeNode(type, undefined, undefined)
