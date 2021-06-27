@@ -1,3 +1,7 @@
+## 1.0.1 - 2021-07-27
+- Republish as 1.0.0 on npm is actually 0.7.2
+- Only import `A` when encountering complex types like `A.B`
+
 ## 1.0.0 - 2021-07-26
 - Support auto-importing referenced types into logic types
 
