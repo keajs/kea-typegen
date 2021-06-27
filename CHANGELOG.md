@@ -1,3 +1,6 @@
+## 1.0.4 - 2021-07-27
+- Fix regression
+
 ## 1.0.3 - 2021-07-27
 - Fix regression
 
