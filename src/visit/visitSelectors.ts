@@ -58,12 +58,16 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
             const computedFunction = value.elements[1]
             if (ts.isFunctionLike(computedFunction)) {
                 const type = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(computedFunction))
-                const typeNode = type
-                    ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation)
-                    : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
 
-                if (type) {
+                let typeNode: ts.TypeNode
+                if (computedFunction.type) {
+                    typeNode = computedFunction.type
                     gatherImports(typeNode, checker, parsedLogic)
+                } else if (type) {
+                    typeNode = checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation)
+                    gatherImports(typeNode, checker, parsedLogic)
+                } else {
+                    typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                 }
 
                 parsedLogic.selectors.push({
