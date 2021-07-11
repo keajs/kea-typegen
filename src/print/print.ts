@@ -24,7 +24,6 @@ import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
 import { writeLogicTypeImports } from '../import/writeLogicTypeImports'
-import { arrayContainsSet } from '../utils'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)

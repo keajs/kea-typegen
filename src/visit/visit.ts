@@ -1,7 +1,13 @@
 import * as ts from 'typescript'
 import * as path from 'path'
-import { AppOptions, ParsedLogic } from '../types'
-import { gatherImports, getFilenameForImportSpecifier, getLogicPathString, isKeaCall } from '../utils'
+import { AppOptions, ParsedLogic, PluginModule, VisitKeaPropertyArguments } from '../types'
+import {
+    gatherImports,
+    getFilenameForImportDeclaration,
+    getFilenameForImportSpecifier,
+    getLogicPathString,
+    isKeaCall,
+} from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
 import { visitSelectors } from './visitSelectors'
@@ -37,24 +43,104 @@ const visitFunctions = {
 export function visitProgram(program: ts.Program, appOptions?: AppOptions): ParsedLogic[] {
     const checker = program.getTypeChecker()
     const parsedLogics: ParsedLogic[] = []
+    const pluginModules: PluginModule[] = []
+
+    for (const sourceFile of program.getSourceFiles()) {
+        if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
+            ts.forEachChild(sourceFile, visitResetContext(checker, pluginModules))
+        }
+    }
 
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
             if (appOptions?.verbose) {
                 appOptions.log(`👀 Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
             }
-            ts.forEachChild(sourceFile, createVisit(checker, parsedLogics, sourceFile, appOptions))
+            ts.forEachChild(sourceFile, visitKeaCalls(checker, parsedLogics, sourceFile, appOptions, pluginModules))
         }
     }
 
     return parsedLogics
 }
 
-export function createVisit(
+export function visitResetContext(checker: ts.TypeChecker, pluginModules: PluginModule[]) {
+    return function visit(node: ts.Node) {
+        // find a `resetContext` call
+        if (
+            !ts.isIdentifier(node) ||
+            !node.parent ||
+            !ts.isCallExpression(node.parent) ||
+            node.getText() !== 'resetContext'
+        ) {
+            ts.forEachChild(node, visit)
+            return
+        }
+
+        // find the `plugins` property of resetContext
+        const callArgument = node.parent.arguments?.[0]
+        if (ts.isObjectLiteralExpression(callArgument)) {
+            for (const prop of callArgument.properties) {
+                if (ts.isPropertyAssignment(prop) && prop.name.getText() === 'plugins') {
+                    if (ts.isArrayLiteralExpression(prop.initializer)) {
+                        // gather typegen modules for plugins that have any
+                        for (const plugin of prop.initializer.elements) {
+                            const identifier = ts.isCallExpression(plugin) ? plugin.expression : plugin
+                            const pluginName = identifier.getText()
+                            const symbol = checker.getSymbolAtLocation(identifier)
+
+                            if (symbol && !pluginModules.find(({ name }) => name === pluginName)) {
+                                for (let declaration of symbol.getDeclarations()) {
+                                    let decNode: ts.Node = declaration
+                                    while (decNode) {
+                                        // find if it's an imported plugin
+                                        if (ts.isImportDeclaration(decNode)) {
+                                            const filename = getFilenameForImportDeclaration(checker, decNode)
+                                            if (!filename) {
+                                                break
+                                            }
+                                            const folder = path.dirname(filename)
+
+                                            const typegenFile = path.join(
+                                                ...[...folder.split(path.delimiter), 'typegen.js'],
+                                            )
+
+                                            try {
+                                                let typegenModule = require(typegenFile)
+
+                                                if (typegenModule && typegenModule.default) {
+                                                    typegenModule = typegenModule.default
+                                                }
+
+                                                if (
+                                                    typeof typegenModule?.visitKeaProperty !== 'undefined'
+                                                ) {
+                                                    pluginModules.push({
+                                                        name: pluginName,
+                                                        file: typegenFile,
+                                                        visitKeaProperty: typegenModule.visitKeaProperty,
+                                                    })
+                                                }
+                                            } catch (error) {}
+                                            break
+                                        }
+                                        decNode = decNode.parent
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export function visitKeaCalls(
     checker: ts.TypeChecker,
     parsedLogics: ParsedLogic[],
     sourceFile: ts.SourceFile,
-    appOptions?: AppOptions,
+    appOptions: AppOptions,
+    pluginModules: PluginModule[],
 ) {
     return function visit(node: ts.Node) {
         if (!isKeaCall(node, checker)) {
@@ -126,14 +212,16 @@ export function createVisit(
             pathString: pathString,
             typeReferencesToImportFromFiles: {},
             typeReferencesInLogicInput: new Set(),
-            // typeReferencesInCreatedLogicType: new Set(),
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
 
         for (const inputProperty of input.properties) {
-            const symbol = checker.getSymbolAtLocation(inputProperty.name as ts.Identifier)
+            if (!ts.isPropertyAssignment(inputProperty)) {
+                continue
+            }
 
+            const symbol = checker.getSymbolAtLocation(inputProperty.name)
             if (!symbol) {
                 continue
             }
@@ -147,6 +235,25 @@ export function createVisit(
             }
 
             visitFunctions[name]?.(type, inputProperty, parsedLogic)
+
+            const visitKeaPropertyArguments: VisitKeaPropertyArguments = {
+                name,
+                appOptions,
+                type,
+                parsedLogic,
+                node: inputProperty.initializer,
+                checker,
+                gatherImports: (input: ts.Node) => gatherImports(input, checker, parsedLogic),
+            }
+
+            for (const pluginModule of Object.values(pluginModules)) {
+                try {
+                    pluginModule.visitKeaProperty?.(visitKeaPropertyArguments)
+                } catch (e) {
+                    console.error('!! Problem running `visitKeaProperty` on plugin ""')
+                    console.error(e)
+                }
+            }
         }
 
         parsedLogics.push(parsedLogic)

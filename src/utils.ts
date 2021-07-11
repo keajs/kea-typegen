@@ -268,17 +268,21 @@ export function storeExtractedSymbol(
     }
 }
 
+export function getFilenameForImportDeclaration(checker: ts.TypeChecker, importNode: ts.ImportDeclaration): string {
+    const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
+    const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
+    if (otherSourceFile) {
+        return otherSourceFile.fileName || importNode.moduleSpecifier.getText()
+    }
+}
+
 export function getFilenameForImportSpecifier(declaration: ts.ImportSpecifier, checker: ts.TypeChecker): string | void {
     let importNode: ts.Node = declaration
     while (importNode && !ts.isImportDeclaration(importNode)) {
         importNode = importNode.parent
     }
     if (ts.isImportDeclaration(importNode)) {
-        const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
-        const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
-        if (otherSourceFile) {
-            return otherSourceFile.fileName || importNode.moduleSpecifier.getText()
-        }
+        return getFilenameForImportDeclaration(checker, importNode);
     }
 }
 
