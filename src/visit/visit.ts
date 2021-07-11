@@ -101,26 +101,28 @@ export function visitResetContext(checker: ts.TypeChecker, pluginModules: Plugin
                                             }
                                             const folder = path.dirname(filename)
 
-                                            const typegenFile = path.join(
-                                                ...[...folder.split(path.delimiter), 'typegen.js'],
-                                            )
+                                            for (const filename of ['typegen.js', 'typegen.ts']) {
+                                                const typegenFile = path.resolve(folder, filename)
 
-                                            try {
-                                                let typegenModule = require(typegenFile)
+                                                try {
+                                                    let typegenModule = require(typegenFile)
 
-                                                if (typegenModule && typegenModule.default) {
-                                                    typegenModule = typegenModule.default
+                                                    if (typegenModule && typegenModule.default) {
+                                                        typegenModule = typegenModule.default
+                                                    }
+
+                                                    if (typeof typegenModule?.visitKeaProperty !== 'undefined') {
+                                                        pluginModules.push({
+                                                            name: pluginName,
+                                                            file: typegenFile,
+                                                            visitKeaProperty: typegenModule.visitKeaProperty,
+                                                        })
+                                                        break
+                                                    }
+                                                } catch (error) {
+                                                    console.error(error)
                                                 }
-
-                                                if (typeof typegenModule?.visitKeaProperty !== 'undefined') {
-                                                    pluginModules.push({
-                                                        name: pluginName,
-                                                        file: typegenFile,
-                                                        visitKeaProperty: typegenModule.visitKeaProperty,
-                                                    })
-                                                }
-                                            } catch (error) {}
-                                            break
+                                            }
                                         }
                                         decNode = decNode.parent
                                     }
