@@ -22,6 +22,7 @@ import { visitConstants } from './visitConstants'
 import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
+import { cloneNode } from '@wessberg/ts-clone-node'
 
 const visitFunctions = {
     actions: visitActions,
@@ -111,9 +112,7 @@ export function visitResetContext(checker: ts.TypeChecker, pluginModules: Plugin
                                                     typegenModule = typegenModule.default
                                                 }
 
-                                                if (
-                                                    typeof typegenModule?.visitKeaProperty !== 'undefined'
-                                                ) {
+                                                if (typeof typegenModule?.visitKeaProperty !== 'undefined') {
                                                     pluginModules.push({
                                                         name: pluginName,
                                                         file: typegenFile,
@@ -244,13 +243,16 @@ export function visitKeaCalls(
                 node: inputProperty.initializer,
                 checker,
                 gatherImports: (input: ts.Node) => gatherImports(input, checker, parsedLogic),
+                cloneNode,
             }
 
             for (const pluginModule of Object.values(pluginModules)) {
                 try {
                     pluginModule.visitKeaProperty?.(visitKeaPropertyArguments)
                 } catch (e) {
-                    console.error('!! Problem running `visitKeaProperty` on plugin ""')
+                    console.error(
+                        `!! Problem running "visitKeaProperty" on plugin "${pluginModule.name}" (${pluginModule.file})`,
+                    )
                     console.error(e)
                 }
             }
