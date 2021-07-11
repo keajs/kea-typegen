@@ -1,4 +1,5 @@
 import * as ts from 'typescript';
+import { CloneNodeOptions } from '@wessberg/ts-clone-node';
 export interface ActionTransform {
     name: string;
     parameters: ts.ParameterDeclaration[];
@@ -67,6 +68,7 @@ export interface VisitKeaPropertyArguments {
     appOptions: AppOptions;
     checker: ts.TypeChecker;
     gatherImports(input: ts.Node): void;
+    cloneNode(node: ts.Node | undefined, options?: Partial<CloneNodeOptions<ts.Node>>): ts.Node | undefined;
 }
 export interface Plugin {
     visitKeaProperty?: (args: VisitKeaPropertyArguments) => void;
