@@ -19,7 +19,6 @@ export default {
                 ]),
             })
 
-            // add reducer "form" to parsedLogic
             parsedLogic.reducers.push({
                 name: 'inlineReducer',
                 typeNode: ts.createTypeLiteralNode([
