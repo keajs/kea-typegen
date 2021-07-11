@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "declaration": true,
+        "removeComments": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "target": "ES2015",
+        "sourceMap": true,
+        "outDir": "./lib",
+        "baseUrl": "./src",
+        "incremental": true,
+        "types": ["jest", "node"],
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "jsx": "react"
+    }
+}

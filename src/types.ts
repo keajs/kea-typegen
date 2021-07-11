@@ -26,7 +26,7 @@ export interface ListenerTransform {
 }
 
 export interface ParsedLogic {
-    node: ts.Node,
+    node: ts.Node
     fileName: string
     typeFileName: string
     logicName: string
@@ -63,4 +63,23 @@ export interface AppOptions {
     noImport?: boolean
 
     log: (message: string) => void
+}
+
+export interface VisitKeaPropertyArguments {
+    name: string
+    node: ts.Node
+    type: ts.Type
+    parsedLogic: ParsedLogic
+    appOptions: AppOptions
+    checker: ts.TypeChecker
+    gatherImports(input: ts.Node): void
+}
+
+export interface Plugin {
+    visitKeaProperty?: (args: VisitKeaPropertyArguments) => void
+}
+
+export interface PluginModule extends Plugin {
+    name: string
+    file: string
 }

@@ -12,7 +12,8 @@
         "samples:check": "ts-node ./src/cli/typegen.ts check -c ./samples/tsconfig.json",
         "samples:write": "ts-node ./src/cli/typegen.ts write -c ./samples/tsconfig.json",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -c ./samples/tsconfig.json",
-        "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json"
+        "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json",
+        "rebuild:forms-plugin": "cd forms-plugin && yarn build && cd .. && rm -rf node_modules && yarn"
     },
     "main": "dist/cli/typegen.js",
     "author": "Marius Andra <marius.andra@gmail.com>",
@@ -35,6 +36,7 @@
         "@types/yargs": "^16.0.0",
         "babel-jest": "^26.6.3",
         "dayjs": "^1.10.5",
+        "forms-plugin": "file:./forms-plugin",
         "husky": ">=4",
         "jest": "^27.0.5",
         "kea": "^2.4.2",
