@@ -1,3 +1,6 @@
+## 1.1.3 - 2021-07-13
+- Bugfixes
+
 ## 1.1.2 - 2021-07-12
 - Export types and `runTypeGen` function
 
