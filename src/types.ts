@@ -50,7 +50,7 @@ export interface ParsedLogic {
     typeReferencesToImportFromFiles: Record<string, Set<string>>
     typeReferencesInLogicInput: Set<string>
     interfaceDeclaration?: ts.InterfaceDeclaration
-    extraInput?: Record<string, { typeNode: ts.TypeNode, withLogicFunction: boolean }>
+    extraInput: Record<string, { typeNode: ts.TypeNode, withLogicFunction: boolean }>
 }
 
 export interface AppOptions {
