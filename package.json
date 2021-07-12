@@ -40,7 +40,7 @@
         "forms-plugin": "file:./forms-plugin",
         "husky": ">=4",
         "jest": "^27.0.5",
-        "kea": "^2.4.2",
+        "kea": "^2.4.6",
         "lint-staged": ">=10.5.4",
         "react": "^16.13.1",
         "react-redux": "^7.2.4",

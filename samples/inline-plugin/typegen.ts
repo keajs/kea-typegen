@@ -36,6 +36,50 @@ export default {
                     ]),
             })
 
+            // add extra type for logic input
+            parsedLogic.extraInput['inline'] = {
+                // adds support for both { inline: (logic) => ({}) } and { inline: {} }
+                withLogicFunction: true,
+                // type applied in LogicInput
+                typeNode: ts.createTypeLiteralNode([
+                    // default?: Record<string, any>
+                    ts.createPropertySignature(
+                        undefined,
+                        ts.createIdentifier('default'),
+                        ts.createToken(ts.SyntaxKind.QuestionToken),
+                        ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
+                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        ]),
+                    ),
+                    // submit?: (form: $typeNode || Record<string, any>) => void
+                    ts.createPropertySignature(
+                        undefined,
+                        ts.createIdentifier('submit'),
+                        ts.createToken(ts.SyntaxKind.QuestionToken),
+                        ts.createFunctionTypeNode(
+                            undefined,
+                            [
+                                ts.createParameter(
+                                    undefined,
+                                    undefined,
+                                    undefined,
+                                    ts.createIdentifier('form'),
+                                    undefined,
+                                    typeNode ||
+                                        ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
+                                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                                        ]),
+                                    undefined,
+                                ),
+                            ],
+                            ts.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword),
+                        ),
+                    ),
+                ]),
+            }
+
             // add action "submitForm" to parsedLogic
             parsedLogic.actions.push({
                 name: 'inlineAction',

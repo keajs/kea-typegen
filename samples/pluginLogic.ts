@@ -11,14 +11,23 @@ export const pluginLogic = kea<pluginLogicType>({
             name: 'john',
             age: 123,
         },
+        submit: (form) => {
+            console.log(form.name)
+            console.log(form.age)
+        },
     },
 })
 
 export const anotherPluginLogic = kea<anotherPluginLogicType>({
-    inline: () => ({
+    inline: ({ values }) => ({
         default: {
             name: 'john',
             age: 123,
+        },
+        submit: (form) => {
+            console.log(values.inlineReducer)
+            console.log(form.name)
+            console.log(form.age)
         },
     }),
 })
