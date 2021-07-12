@@ -1,18 +1,27 @@
-## 1.0.4 - 2021-07-27
+## 1.1.2 - 2021-07-12
+- Export types and `runTypeGen` function
+
+## 1.1.1 - 2021-07-12
+- Fix main field in package.json
+
+## 1.1.0 - 2021-07-12
+- Experimental support for typegen plugins
+
+## 1.0.4 - 2021-06-27
 - Fix regression
 
-## 1.0.3 - 2021-07-27
+## 1.0.3 - 2021-06-27
 - Fix regression
 
-## 1.0.2 - 2021-07-27
+## 1.0.2 - 2021-06-27
 - Use explicitly specified function return types if present for actions and selectors (vs detection via compiler api).
 - This helps with namespaced types like `This.That`, as the namespace information is lost in detected types.
 
-## 1.0.1 - 2021-07-27
+## 1.0.1 - 2021-06-27
 - Republish as 1.0.0 on npm is actually 0.7.2
 - Only import `A` when encountering complex types like `A.B`
 
-## 1.0.0 - 2021-07-26
+## 1.0.0 - 2021-06-26
 - Support auto-importing referenced types into logic types
 
 ## 0.7.2 - 2021-05-30

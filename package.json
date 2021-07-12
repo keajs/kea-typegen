@@ -16,7 +16,7 @@
         "form-plugin:build": "cd form-plugin && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },
-    "main": "dist/src/cli/typegen.js",
+    "main": "dist/src/index.js",
     "author": "Marius Andra <marius.andra@gmail.com>",
     "license": "MIT",
     "bin": {
