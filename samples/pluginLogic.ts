@@ -1,9 +1,9 @@
 import { kea, resetContext } from 'kea'
 import { formsPlugin } from 'forms-plugin'
 import { inlinePlugin } from './inline-plugin'
-import { formsPluginLogicType } from './formsPluginLogicType'
+import { pluginLogicType, anotherPluginLogicType } from './pluginLogicType'
 
-export const formsPluginLogic = kea<formsPluginLogicType>({
+export const pluginLogic = kea<pluginLogicType>({
     forms: { bla: true },
 
     inline: {
@@ -12,6 +12,15 @@ export const formsPluginLogic = kea<formsPluginLogicType>({
             age: 123,
         },
     },
+})
+
+export const anotherPluginLogic = kea<anotherPluginLogicType>({
+    inline: () => ({
+        default: {
+            name: 'john',
+            age: 123,
+        },
+    }),
 })
 
 resetContext({

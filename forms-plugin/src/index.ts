@@ -14,7 +14,7 @@ export const formsPlugin = (): KeaPlugin => {
                     return
                 }
 
-                logic.extend({ actions: { ranFormsPlugin: true } })
+                logic.extend({ actions: { submitForm: true }, reducers: { form: [{ asd: true }] } })
             },
         },
 

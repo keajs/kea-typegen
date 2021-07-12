@@ -1,6 +1,6 @@
-'use strict'
-Object.defineProperty(exports, '__esModule', { value: true })
-exports.formsPlugin = void 0
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.formsPlugin = void 0;
 const formsPlugin = () => {
     return {
         name: 'forms',
@@ -10,15 +10,15 @@ const formsPlugin = () => {
         buildSteps: {
             forms(logic, input) {
                 if (!input.forms) {
-                    return
+                    return;
                 }
-                logic.extend({ actions: { ranFormsPlugin: true } })
+                logic.extend({ actions: { submitForm: true }, reducers: { form: [{ asd: true }] } });
             },
         },
         buildOrder: {
             forms: { after: 'defaults' },
         },
-    }
-}
-exports.formsPlugin = formsPlugin
+    };
+};
+exports.formsPlugin = formsPlugin;
 //# sourceMappingURL=index.js.map

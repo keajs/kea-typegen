@@ -6,6 +6,7 @@ import {
     getFilenameForImportDeclaration,
     getFilenameForImportSpecifier,
     getLogicPathString,
+    getTypeNodeForNode,
     isKeaCall,
 } from '../utils'
 import { visitActions } from './visitActions'
@@ -120,7 +121,9 @@ export function visitResetContext(checker: ts.TypeChecker, pluginModules: Plugin
                                                         break
                                                     }
                                                 } catch (error) {
-                                                    console.error(error)
+                                                    if (error.code !== 'MODULE_NOT_FOUND') {
+                                                        console.error(error)
+                                                    }
                                                 }
                                             }
                                         }
@@ -228,11 +231,13 @@ export function visitKeaCalls(
             }
 
             const name = symbol.getName()
-            let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!)
+
+            let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
             let typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
 
             if (typeNode && ts.isFunctionTypeNode(typeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()
+                typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
             }
 
             visitFunctions[name]?.(type, inputProperty, parsedLogic)
@@ -241,11 +246,17 @@ export function visitKeaCalls(
                 name,
                 appOptions,
                 type,
+                typeNode,
                 parsedLogic,
                 node: inputProperty.initializer,
                 checker,
-                gatherImports: (input: ts.Node) => gatherImports(input, checker, parsedLogic),
+                gatherImports: (input) => gatherImports(input, checker, parsedLogic),
                 cloneNode,
+                getTypeNodeForNode: (node) => getTypeNodeForNode(node, checker),
+                prepareForPrint: (node) => {
+                    gatherImports(node, checker, parsedLogic)
+                    return cloneNode(node)
+                },
             }
 
             for (const pluginModule of Object.values(pluginModules)) {

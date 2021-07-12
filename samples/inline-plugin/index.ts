@@ -14,7 +14,10 @@ export const inlinePlugin = (): KeaPlugin => {
                     return
                 }
 
-                logic.extend({ actions: { ranFormsPlugin: true } })
+                logic.extend({
+                    actions: { inlineAction: true },
+                    reducers: { inlineReducer: [(input.inline as any).default] },
+                })
             },
         },
 

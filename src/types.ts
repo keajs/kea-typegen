@@ -70,11 +70,14 @@ export interface VisitKeaPropertyArguments {
     name: string
     node: ts.Node
     type: ts.Type
+    typeNode: ts.TypeNode
     parsedLogic: ParsedLogic
     appOptions: AppOptions
     checker: ts.TypeChecker
     gatherImports(input: ts.Node): void
     cloneNode(node: ts.Node | undefined, options?: Partial<CloneNodeOptions<ts.Node>>): ts.Node | undefined
+    getTypeNodeForNode(node: ts.Node): ts.TypeNode
+    prepareForPrint<T extends ts.Node>(node: T): T
 }
 
 export interface Plugin {
