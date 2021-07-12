@@ -7,11 +7,12 @@
         "experimentalDecorators": true,
         "target": "ES2015",
         "sourceMap": true,
-        "outDir": "./dist",
+        "outDir": "./lib",
         "baseUrl": "./src",
         "incremental": true,
         "types": ["jest", "node"],
-        "resolveJsonModule": true
-    },
-    "exclude": ["node_modules", "dist", "samples", "forms-plugin"]
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "jsx": "react"
+    }
 }

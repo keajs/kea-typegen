@@ -46,39 +46,42 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
     return true
 }
 
-export function getAndGatherTypeNodeForDefaultValue(
-    defaultValue: ts.Node,
+export function getTypeNodeForNode(
+    node: ts.Node,
     checker: ts.TypeChecker,
-    parsedLogic: ParsedLogic,
 ): ts.TypeNode {
     let typeNode
-    if (defaultValue) {
-        if (ts.isAsExpression(defaultValue)) {
-            gatherImports(defaultValue.type, checker, parsedLogic)
-            typeNode = cloneNode(defaultValue.type)
+    if (node) {
+        if (ts.isAsExpression(node)) {
+            typeNode = node.type
             if (ts.isParenthesizedTypeNode(typeNode)) {
                 typeNode = typeNode.type
             }
-        } else if (
-            defaultValue?.kind === ts.SyntaxKind.TrueKeyword ||
-            defaultValue?.kind === ts.SyntaxKind.FalseKeyword
-        ) {
+        } else if (node?.kind === ts.SyntaxKind.TrueKeyword || node?.kind === ts.SyntaxKind.FalseKeyword) {
             typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)
-        } else if (ts.isStringLiteralLike(defaultValue)) {
+        } else if (ts.isStringLiteralLike(node)) {
             typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
-        } else if (ts.isNumericLiteral(defaultValue)) {
+        } else if (ts.isNumericLiteral(node)) {
             typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword)
-        } else if (ts.isArrayLiteralExpression(defaultValue) && defaultValue.elements.length === 0) {
+        } else if (ts.isArrayLiteralExpression(node) && node.elements.length === 0) {
             typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
         } else {
-            const foundTypeNode = checker.typeToTypeNode(checker.getTypeAtLocation(defaultValue), undefined, undefined)
-            gatherImports(foundTypeNode, checker, parsedLogic)
-            typeNode = cloneNode(foundTypeNode)
+            typeNode = checker.typeToTypeNode(checker.getTypeAtLocation(node), undefined, undefined)
         }
     } else {
         typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
     }
     return typeNode
+}
+
+export function getAndGatherTypeNodeForDefaultValue(
+    defaultValue: ts.Node,
+    checker: ts.TypeChecker,
+    parsedLogic: ParsedLogic,
+): ts.TypeNode {
+    const typeNode = getTypeNodeForNode(defaultValue, checker)
+    gatherImports(typeNode, checker, parsedLogic)
+    return cloneNode(typeNode)
 }
 
 export function getParameterDeclaration(param: ts.ParameterDeclaration) {
@@ -268,17 +271,21 @@ export function storeExtractedSymbol(
     }
 }
 
+export function getFilenameForImportDeclaration(checker: ts.TypeChecker, importNode: ts.ImportDeclaration): string {
+    const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
+    const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
+    if (otherSourceFile) {
+        return otherSourceFile.fileName || importNode.moduleSpecifier.getText()
+    }
+}
+
 export function getFilenameForImportSpecifier(declaration: ts.ImportSpecifier, checker: ts.TypeChecker): string | void {
     let importNode: ts.Node = declaration
     while (importNode && !ts.isImportDeclaration(importNode)) {
         importNode = importNode.parent
     }
     if (ts.isImportDeclaration(importNode)) {
-        const moduleSymbol = checker.getSymbolAtLocation(importNode.moduleSpecifier)
-        const otherSourceFile = moduleSymbol?.getDeclarations()[0].getSourceFile()
-        if (otherSourceFile) {
-            return otherSourceFile.fileName || importNode.moduleSpecifier.getText()
-        }
+        return getFilenameForImportDeclaration(checker, importNode)
     }
 }
 

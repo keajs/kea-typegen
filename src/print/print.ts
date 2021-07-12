@@ -24,7 +24,7 @@ import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
 import { writeLogicTypeImports } from '../import/writeLogicTypeImports'
-import { arrayContainsSet } from '../utils'
+import { printInternalExtraInput } from './printInternalExtraInput'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -216,9 +216,12 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         Object.keys(parsedLogic.extraActions).length > 0
             ? printProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
             : null,
+        Object.keys(parsedLogic.extraInput).length > 0
+            ? printProperty('__keaTypeGenInternalExtraInput', printInternalExtraInput(parsedLogic))
+            : null,
     ].filter((a) => !!a)
 
-    const logicTypeArguments = [...parsedLogic.typeReferencesInLogicInput,]
+    const logicTypeArguments = [...parsedLogic.typeReferencesInLogicInput]
         .sort()
         .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined))
 

@@ -1,4 +1,5 @@
 import * as ts from 'typescript'
+import { CloneNodeOptions } from '@wessberg/ts-clone-node'
 
 export interface ActionTransform {
     name: string
@@ -26,7 +27,7 @@ export interface ListenerTransform {
 }
 
 export interface ParsedLogic {
-    node: ts.Node,
+    node: ts.Node
     fileName: string
     typeFileName: string
     logicName: string
@@ -49,6 +50,7 @@ export interface ParsedLogic {
     typeReferencesToImportFromFiles: Record<string, Set<string>>
     typeReferencesInLogicInput: Set<string>
     interfaceDeclaration?: ts.InterfaceDeclaration
+    extraInput?: Record<string, { typeNode: ts.TypeNode, withLogicFunction: boolean }>
 }
 
 export interface AppOptions {
@@ -63,4 +65,27 @@ export interface AppOptions {
     noImport?: boolean
 
     log: (message: string) => void
+}
+
+export interface VisitKeaPropertyArguments {
+    name: string
+    node: ts.Node
+    type: ts.Type
+    typeNode: ts.TypeNode
+    parsedLogic: ParsedLogic
+    appOptions: AppOptions
+    checker: ts.TypeChecker
+    gatherImports(input: ts.Node): void
+    cloneNode(node: ts.Node | undefined, options?: Partial<CloneNodeOptions<ts.Node>>): ts.Node | undefined
+    getTypeNodeForNode(node: ts.Node): ts.TypeNode
+    prepareForPrint<T extends ts.Node>(node: T): T
+}
+
+export interface Plugin {
+    visitKeaProperty?: (args: VisitKeaPropertyArguments) => void
+}
+
+export interface PluginModule extends Plugin {
+    name: string
+    file: string
 }
