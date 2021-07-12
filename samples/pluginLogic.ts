@@ -4,9 +4,9 @@ import { inlinePlugin } from './inline-plugin'
 import { pluginLogicType, anotherPluginLogicType } from './pluginLogicType'
 
 export const pluginLogic = kea<pluginLogicType>({
-    forms: { bla: true },
+    inline: { bla: true },
 
-    inline: {
+    form: {
         default: {
             name: 'john',
             age: 123,
@@ -19,7 +19,7 @@ export const pluginLogic = kea<pluginLogicType>({
 })
 
 export const anotherPluginLogic = kea<anotherPluginLogicType>({
-    inline: ({ values }) => ({
+    form: ({ values }) => ({
         default: {
             name: 'john',
             age: 123,
