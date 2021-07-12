@@ -46,10 +46,7 @@ export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
     return true
 }
 
-export function getTypeNodeForNode(
-    node: ts.Node,
-    checker: ts.TypeChecker,
-): ts.TypeNode {
+export function getTypeNodeForNode(node: ts.Node, checker: ts.TypeChecker): ts.TypeNode {
     let typeNode
     if (node) {
         if (ts.isAsExpression(node)) {

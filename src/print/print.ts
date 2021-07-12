@@ -179,6 +179,12 @@ export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: A
     return nodeToString(parsedLogic.interfaceDeclaration)
 }
 
+export function getLogicTypeArguments(parsedLogic: ParsedLogic): ts.TypeParameterDeclaration[] {
+    return [...parsedLogic.typeReferencesInLogicInput]
+        .sort()
+        .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined))
+}
+
 export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions): void {
     const printProperty = (name, typeNode) =>
         ts.createPropertySignature(undefined, ts.createIdentifier(name), undefined, typeNode, undefined)
@@ -221,9 +227,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             : null,
     ].filter((a) => !!a)
 
-    const logicTypeArguments = [...parsedLogic.typeReferencesInLogicInput]
-        .sort()
-        .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined))
+    const logicTypeArguments = getLogicTypeArguments(parsedLogic);
 
     parsedLogic.interfaceDeclaration = ts.createInterfaceDeclaration(
         undefined,
