@@ -1,5 +1,5 @@
 import { kea, resetContext } from 'kea'
-import { formsPlugin } from 'forms-plugin'
+import { formPlugin } from 'form-plugin'
 import { inlinePlugin } from './inline-plugin'
 import { pluginLogicType, anotherPluginLogicType } from './pluginLogicType'
 
@@ -25,7 +25,7 @@ export const anotherPluginLogic = kea<anotherPluginLogicType>({
             age: 123,
         },
         submit: (form) => {
-            console.log(values.inlineReducer)
+            console.log(values.form)
             console.log(form.name)
             console.log(form.age)
         },
@@ -33,5 +33,5 @@ export const anotherPluginLogic = kea<anotherPluginLogicType>({
 })
 
 resetContext({
-    plugins: [formsPlugin(), formsPlugin, inlinePlugin],
+    plugins: [formPlugin(), formPlugin, inlinePlugin],
 })

@@ -13,5 +13,7 @@
         "types": ["jest", "node"],
         "resolveJsonModule": true
     },
-    "exclude": ["node_modules", "dist", "samples", "forms-plugin"]
+    "exclude": ["node_modules", "dist", "samples",
+      "form-plugin"
+    ]
 }

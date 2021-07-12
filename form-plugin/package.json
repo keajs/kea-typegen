@@ -1,6 +1,6 @@
 {
-  "name": "forms-plugin",
-  "main": "./lib/forms-plugin/src/index.js",
+  "name": "form-plugin",
+  "main": "./lib/form-plugin/src/index.js",
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {

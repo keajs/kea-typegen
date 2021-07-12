@@ -1,16 +1,16 @@
 import { KeaPlugin } from 'kea'
 
-export const formsPlugin = (): KeaPlugin => {
+export const formPlugin = (): KeaPlugin => {
     return {
-        name: 'forms',
+        name: 'form',
 
         defaults: () => ({
-            forms: undefined,
+            form: undefined,
         }),
 
         buildSteps: {
-            forms(logic, input) {
-                if (!input.forms) {
+            form(logic, input) {
+                if (!input.form) {
                     return
                 }
 
@@ -19,7 +19,7 @@ export const formsPlugin = (): KeaPlugin => {
         },
 
         buildOrder: {
-            forms: { after: 'defaults' },
+            form: { after: 'defaults' },
         },
     }
 }

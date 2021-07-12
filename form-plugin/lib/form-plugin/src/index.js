@@ -1,24 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.formsPlugin = void 0;
-const formsPlugin = () => {
+exports.formPlugin = void 0;
+const formPlugin = () => {
     return {
-        name: 'forms',
+        name: 'form',
         defaults: () => ({
-            forms: undefined,
+            form: undefined,
         }),
         buildSteps: {
-            forms(logic, input) {
-                if (!input.forms) {
+            form(logic, input) {
+                if (!input.form) {
                     return;
                 }
                 logic.extend({ actions: { submitForm: true }, reducers: { form: [{ asd: true }] } });
             },
         },
         buildOrder: {
-            forms: { after: 'defaults' },
+            form: { after: 'defaults' },
         },
     };
 };
-exports.formsPlugin = formsPlugin;
+exports.formPlugin = formPlugin;
 //# sourceMappingURL=index.js.map

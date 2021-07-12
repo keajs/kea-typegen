@@ -2773,7 +2773,7 @@ form-data@^3.0.0:
     combined-stream "^1.0.8"
     mime-types "^2.1.12"
 
-"forms-plugin@file:./forms-plugin":
+"form-plugin@file:./form-plugin":
   version "0.0.0"
 
 fragment-cache@^0.2.1:
