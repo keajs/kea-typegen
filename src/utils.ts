@@ -88,7 +88,7 @@ export function getParameterDeclaration(param: ts.ParameterDeclaration) {
         undefined,
         ts.createIdentifier(param.name.getText()),
         param.initializer || param.questionToken ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
-        param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+        cloneNode(param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
         undefined,
     )
 }

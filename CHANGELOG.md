@@ -1,3 +1,6 @@
+## 1.1.5 - 2021-07-14
+- [Fix bug](https://github.com/keajs/kea-typegen/issues/28) with string constant types in action properties when connected with `connect`. 
+
 ## 1.1.4 - 2021-07-13
 - Support declaring `props: {} as SomeInterface`
 

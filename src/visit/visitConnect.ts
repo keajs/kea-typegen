@@ -1,6 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { gatherImports, getParameterDeclaration } from '../utils'
+import { cloneNode } from '@wessberg/ts-clone-node'
 
 export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
@@ -41,19 +42,22 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                         .getProperties()
                         ?.find((p) => p.getName() === 'actionCreators')
 
-                    if (actionsForLogic) {
-                       const actionTypes = (actionsForLogic.valueDeclaration as any).type.members
+                    if (
+                        actionsForLogic &&
+                        ts.isPropertySignature(actionsForLogic.valueDeclaration) &&
+                        ts.isTypeLiteralNode(actionsForLogic.valueDeclaration.type)
+                    ) {
+                        const actionTypes = actionsForLogic.valueDeclaration.type.members
 
                         for (const actionType of actionTypes || []) {
                             if (ts.isPropertySignature(actionType)) {
                                 const name = actionType.name.getText()
-
                                 const functionTypeNode = actionType.type
+
                                 if (lookup[name] && ts.isFunctionTypeNode(functionTypeNode)) {
                                     const parameters = functionTypeNode.parameters.map((param) =>
                                         getParameterDeclaration(param),
                                     )
-
                                     let returnType = functionTypeNode.type
 
                                     if (ts.isParenthesizedTypeNode(returnType)) {
@@ -61,17 +65,17 @@ export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment
                                     }
 
                                     if (ts.isTypeLiteralNode(returnType)) {
-                                        const payload = returnType.members.find(
-                                            (m) => m.name.getText() === 'payload',
-                                        ) as ts.PropertySignature
+                                        const payload = returnType.members.find((m) => m.name.getText() === 'payload')
+                                        if (ts.isPropertySignature(payload)) {
+                                            const returnTypeNode = cloneNode(payload.type)
+                                            gatherImports(actionType, checker, parsedLogic)
 
-                                        gatherImports(actionType, checker, parsedLogic)
-
-                                        parsedLogic.actions.push({
-                                            name: lookup[name],
-                                            returnTypeNode: payload.type,
-                                            parameters: parameters,
-                                        })
+                                            parsedLogic.actions.push({
+                                                name: lookup[name],
+                                                returnTypeNode,
+                                                parameters,
+                                            })
+                                        }
                                     }
                                 }
                             }
