@@ -1,3 +1,6 @@
+## 1.1.4 - 2021-07-13
+- Support declaring `props: {} as SomeInterface`
+
 ## 1.1.3 - 2021-07-13
 - Bugfixes
 

@@ -45,6 +45,8 @@ function newAction(element: HTMLElement | null): Partial<ActionType> {
 export const complexLogic = kea<
     complexLogicType<ActionForm, ActionType, AntdFieldData, DashboardItemType, FormInstance>
 >({
+    props: {} as AntdFieldData,
+    
     actions: {
         setForm: (form: FormInstance) => ({ form }),
         selectAction: (id: string | null) => ({ id: id || null }),
