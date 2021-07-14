@@ -227,7 +227,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             : null,
     ].filter((a) => !!a)
 
-    const logicTypeArguments = getLogicTypeArguments(parsedLogic);
+    const logicTypeArguments = getLogicTypeArguments(parsedLogic)
 
     parsedLogic.interfaceDeclaration = ts.createInterfaceDeclaration(
         undefined,
