@@ -135,14 +135,17 @@ export function extractImportedActions(
                     const actionName = name.escapedText
 
                     const nameSymbol = checker.getSymbolAtLocation(property.name)
-                    const actionType = nameSymbol.escapedName as string
+                    let actionType = nameSymbol.escapedName as string
 
                     if (ts.isPropertyAccessExpression(expression)) {
                         // expression.expression ==> githubLogic.actionTypes
                         // expression.name ==> setRepositories
 
-                        const symbol = checker.getSymbolAtLocation(expression.expression)
-                        const symbolType = checker.getTypeOfSymbolAtLocation(symbol, expression.expression)
+                        const logicForAction = ts.isCallExpression(expression.expression)
+                            ? expression.expression.expression
+                            : expression.expression
+                        const symbol = checker.getSymbolAtLocation(logicForAction)
+                        const symbolType = checker.getTypeOfSymbolAtLocation(symbol, logicForAction)
 
                         const actionCreatorsProperty = symbolType
                             .getProperties()
@@ -172,6 +175,20 @@ export function extractImportedActions(
                                     NodeBuilderFlags.NoTruncation,
                                 )
                                 gatherImports(sigReturnTypeNode, checker, parsedLogic)
+
+                                if (actionType === '__computed') {
+                                    if (ts.isTypeNode(actionCreator.type) && ts.isTypeNode(actionCreator.type.type)) {
+                                        const m = (actionCreator.type.type as any).members?.find(
+                                            (m) => m.name?.getText() === 'type',
+                                        )
+                                        if (ts.isPropertySignature(m) && ts.isLiteralTypeNode(m.type)) {
+                                            const str = m.type.getText()
+                                            if (str) {
+                                                actionType = str.substring(1, str.length - 1)
+                                            }
+                                        }
+                                    }
+                                }
 
                                 extraActions[actionType] = cloneNode(actionCreator.type) //payload
                             }

@@ -10,6 +10,7 @@ export const githubImportLogic = kea<githubImportLogicType>({
             [] as Repository[],
             {
                 [githubLogic.actionTypes.setRepositories]: (_, { repositories }) => repositories,
+                [githubLogic().actionTypes.setRepositories]: (_, { repositories }) => repositories,
             },
         ],
     }),

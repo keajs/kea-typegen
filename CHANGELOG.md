@@ -1,3 +1,6 @@
+## 1.1.6 - 2021-10-07
+- Support reducers with actions like `[otherLogic().actionTypes.bla]`
+
 ## 1.1.5 - 2021-07-14
 - [Fix bug](https://github.com/keajs/kea-typegen/issues/28) with string constant types in action properties when connected with `connect`. 
 
