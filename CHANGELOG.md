@@ -1,3 +1,6 @@
+## 1.2.0 - 2021-10-14
+- Support `kea-loaders` 0.5.0, add `payload` to the success action and `errorObject` to the failure action.
+
 ## 1.1.6 - 2021-10-07
 - Support reducers with actions like `[otherLogic().actionTypes.bla]`
 

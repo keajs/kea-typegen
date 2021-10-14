@@ -104,6 +104,15 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                             returnTypeNode,
                             undefined,
                         ),
+                        ts.createParameter(
+                            undefined,
+                            undefined,
+                            undefined,
+                            ts.createIdentifier('payload'),
+                            undefined,
+                            parsedLogic.actions.find((a) => a.name === loaderActionName)?.returnTypeNode,
+                            undefined,
+                        ),
                     ]
                     const successReturnTypeNode = ts.createTypeLiteralNode([
                         ts.createPropertySignature(
@@ -111,6 +120,13 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                             ts.createIdentifier(loaderName),
                             undefined,
                             returnTypeNode,
+                            undefined,
+                        ),
+                        ts.createPropertySignature(
+                            undefined,
+                            ts.createIdentifier('payload'),
+                            undefined,
+                            parsedLogic.actions.find((a) => a.name === loaderActionName)?.returnTypeNode,
                             undefined,
                         ),
                     ])
@@ -132,6 +148,15 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                             ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
                             undefined,
                         ),
+                        ts.createParameter(
+                            undefined,
+                            undefined,
+                            undefined,
+                            ts.createIdentifier('errorObject'),
+                            ts.createToken(ts.SyntaxKind.QuestionToken),
+                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            undefined,
+                        ),
                     ]
                     const failureReturnTypeNode = ts.createTypeLiteralNode([
                         ts.createPropertySignature(
@@ -139,6 +164,13 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                             ts.createIdentifier('error'),
                             undefined,
                             ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            undefined,
+                        ),
+                        ts.createPropertySignature(
+                            undefined,
+                            ts.createIdentifier('errorObject'),
+                            ts.createToken(ts.SyntaxKind.QuestionToken),
+                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                     ])
