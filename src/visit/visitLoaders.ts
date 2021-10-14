@@ -125,7 +125,9 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                         ts.createPropertySignature(
                             undefined,
                             ts.createIdentifier('payload'),
-                            undefined,
+                            parameters.length === 0 || isAnyUnknown(parameters[0])
+                                ? ts.createToken(ts.SyntaxKind.QuestionToken)
+                                : undefined,
                             parsedLogic.actions.find((a) => a.name === loaderActionName)?.returnTypeNode,
                             undefined,
                         ),

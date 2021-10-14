@@ -183,7 +183,7 @@ exports[`loaders - with no param 1`] = `
             type: \\"load sessions success (logic)\\";
             payload: {
                 sessions: string[];
-                payload: any;
+                payload?: any;
             };
         });
         loadSessionsFailure: (error: string, errorObject?: any) => ({
@@ -201,7 +201,7 @@ exports[`loaders - with no param 1`] = `
             type: \\"load results success (logic)\\";
             payload: {
                 sessions: string[];
-                payload: any;
+                payload?: any;
             };
         });
         loadResultsFailure: (error: string, errorObject?: any) => ({
