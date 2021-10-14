@@ -109,7 +109,7 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                             undefined,
                             undefined,
                             ts.createIdentifier('payload'),
-                            undefined,
+                            ts.createToken(ts.SyntaxKind.QuestionToken),
                             parsedLogic.actions.find((a) => a.name === loaderActionName)?.returnTypeNode,
                             undefined,
                         ),
@@ -125,9 +125,7 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                         ts.createPropertySignature(
                             undefined,
                             ts.createIdentifier('payload'),
-                            parameters.length === 0 || isAnyUnknown(parameters[0])
-                                ? ts.createToken(ts.SyntaxKind.QuestionToken)
-                                : undefined,
+                            ts.createToken(ts.SyntaxKind.QuestionToken),
                             parsedLogic.actions.find((a) => a.name === loaderActionName)?.returnTypeNode,
                             undefined,
                         ),

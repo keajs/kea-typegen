@@ -13,11 +13,11 @@ exports[`loaders - with a function 1`] = `
             type: \\"load sessions (logic)\\";
             payload: string;
         });
-        loadSessionsSuccess: (sessions: Session[], payload: string) => ({
+        loadSessionsSuccess: (sessions: Session[], payload?: string) => ({
             type: \\"load sessions success (logic)\\";
             payload: {
                 sessions: Session[];
-                payload: string;
+                payload?: string;
             };
         });
         loadSessionsFailure: (error: string, errorObject?: any) => ({
@@ -43,7 +43,7 @@ exports[`loaders - with a function 1`] = `
     actions: {
         updateName: (name: string) => void;
         loadSessions: (query: string) => void;
-        loadSessionsSuccess: (sessions: Session[], payload: string) => void;
+        loadSessionsSuccess: (sessions: Session[], payload?: string) => void;
         loadSessionsFailure: (error: string, errorObject?: any) => void;
     };
     constants: {};
@@ -99,11 +99,11 @@ exports[`loaders - with an array and default 1`] = `
             type: \\"load sessions (logic)\\";
             payload: string;
         });
-        loadSessionsSuccess: (sessions: Session[], payload: string) => ({
+        loadSessionsSuccess: (sessions: Session[], payload?: string) => ({
             type: \\"load sessions success (logic)\\";
             payload: {
                 sessions: Session[];
-                payload: string;
+                payload?: string;
             };
         });
         loadSessionsFailure: (error: string, errorObject?: any) => ({
@@ -129,7 +129,7 @@ exports[`loaders - with an array and default 1`] = `
     actions: {
         updateName: (name: string) => void;
         loadSessions: (query: string) => void;
-        loadSessionsSuccess: (sessions: Session[], payload: string) => void;
+        loadSessionsSuccess: (sessions: Session[], payload?: string) => void;
         loadSessionsFailure: (error: string, errorObject?: any) => void;
     };
     constants: {};
@@ -179,7 +179,7 @@ exports[`loaders - with no param 1`] = `
             type: \\"load sessions (logic)\\";
             payload: any;
         });
-        loadSessionsSuccess: (sessions: string[], payload: any) => ({
+        loadSessionsSuccess: (sessions: string[], payload?: any) => ({
             type: \\"load sessions success (logic)\\";
             payload: {
                 sessions: string[];
@@ -197,7 +197,7 @@ exports[`loaders - with no param 1`] = `
             type: \\"load results (logic)\\";
             payload: any;
         });
-        loadResultsSuccess: (sessions: string[], payload: any) => ({
+        loadResultsSuccess: (sessions: string[], payload?: any) => ({
             type: \\"load results success (logic)\\";
             payload: {
                 sessions: string[];
@@ -230,10 +230,10 @@ exports[`loaders - with no param 1`] = `
     };
     actions: {
         loadSessions: () => void;
-        loadSessionsSuccess: (sessions: string[], payload: any) => void;
+        loadSessionsSuccess: (sessions: string[], payload?: any) => void;
         loadSessionsFailure: (error: string, errorObject?: any) => void;
         loadResults: () => void;
-        loadResultsSuccess: (sessions: string[], payload: any) => void;
+        loadResultsSuccess: (sessions: string[], payload?: any) => void;
         loadResultsFailure: (error: string, errorObject?: any) => void;
     };
     constants: {};

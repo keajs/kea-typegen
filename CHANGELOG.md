@@ -1,3 +1,6 @@
+## 1.2.2 - 2021-10-14
+- Loaders: Make the `payload` parameter on the `Success` action optional.
+
 ## 1.2.1 - 2021-10-14
 - Improve `kea-loaders` 0.5.0 support
 
