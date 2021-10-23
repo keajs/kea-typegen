@@ -6,9 +6,12 @@ import { runThroughPrettier } from '../print/print'
 import * as diff from 'diff'
 import * as path from 'path'
 
+// NOTE:
 // This is an unfortunate workaround. The TS compiler strips all
-// whitespace. This uses "jsdiff" to add them back.
-// If it turns out to be flaky, it might be worth rewriting to babel.
+// whitespace AND COMMENTS. This uses "jsdiff" to add back the whitespace,
+// but not the comments.
+//
+// This should be rewritten to babel!
 // https://github.com/microsoft/TypeScript/issues/843#issuecomment-555932858
 function addBackNewlines(oldText: string, newText: string) {
     const patch = diff.parsePatch(diff.createPatch('file', oldText, newText, '', ''))
@@ -83,9 +86,11 @@ export function writeLogicTypeImports(
                             ts.createTypeReferenceNode(
                                 ts.createIdentifier(logicTypeName),
                                 typeReferencesInLogicInput.size > 0
-                                    ? [...typeReferencesInLogicInput.values()].sort().map((type) =>
-                                          ts.createTypeReferenceNode(ts.createIdentifier(type), undefined),
-                                      )
+                                    ? [...typeReferencesInLogicInput.values()]
+                                          .sort()
+                                          .map((type) =>
+                                              ts.createTypeReferenceNode(ts.createIdentifier(type), undefined),
+                                          )
                                     : undefined,
                             ),
                         ],
