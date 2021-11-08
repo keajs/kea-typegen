@@ -23,7 +23,7 @@ import { printReducerOptions } from './printReducerOptions'
 import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
-import { writeLogicTypeImports } from '../import/writeLogicTypeImports'
+import { writePaths, writeTypeImports } from '../write/write'
 import { printInternalExtraInput } from './printInternalExtraInput'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
@@ -46,7 +46,7 @@ export function printToFiles(
     program: ts.Program,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
-): { filesToWrite: number; writtenFiles: number; importsToModify: number } {
+): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
     const { log } = appOptions
 
     const groupedByFile: Record<string, ParsedLogic[]> = {}
@@ -62,7 +62,7 @@ export function printToFiles(
 
     let writtenFiles = 0
     let filesToWrite = 0
-    let importsToModify = 0
+    let filesToModify = 0
 
     Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
         const typeFileName = parsedLogics[0].typeFileName
@@ -129,19 +129,19 @@ export function printToFiles(
             }
         }
 
+        const parsedLogicNeedsTypeImport = (pl: ParsedLogic) =>
+            // reload if logic type not imported
+            (pl.logicTypeImported === false ||
+                // reload if don't have the right types in arguments
+                pl.logicTypeArguments.join(', ') !== [...pl.typeReferencesInLogicInput].sort().join(', ')) &&
+            pl.fileName.match(/\.tsx?$/)
+
         // write the type into the logic itself
-        const logicsNeedingImports = parsedLogics.filter(
-            (pl) =>
-                // reload if logic type not imported
-                (pl.logicTypeImported === false ||
-                    // reload if don't have the right types in arguments
-                    pl.logicTypeArguments.join(', ') !== [...pl.typeReferencesInLogicInput].sort().join(', ')) &&
-                pl.fileName.match(/\.tsx?$/),
-        )
+        const logicsNeedingImports = parsedLogics.filter(parsedLogicNeedsTypeImport)
         if (logicsNeedingImports.length > 0) {
             if (appOptions.write && !appOptions.noImport) {
-                writeLogicTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
-                importsToModify = logicsNeedingImports.length
+                writeTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
+                filesToModify += logicsNeedingImports.length
             } else {
                 log(
                     `❌ Will not write ${logicsNeedingImports.length} logic type import${
@@ -150,22 +150,37 @@ export function printToFiles(
                 )
             }
         }
+
+        const parsedLogicNeedsPath = appOptions.writePaths ? (pl: ParsedLogic) => !pl.hasPathInLogic : () => false
+        const logicsNeedingPaths = parsedLogics.filter(parsedLogicNeedsPath)
+        if (logicsNeedingPaths.length > 0) {
+            if (appOptions.write && !appOptions.noImport) {
+                writePaths(appOptions, program, fileName, logicsNeedingPaths)
+                filesToModify += logicsNeedingPaths.length
+            } else {
+                log(
+                    `❌ Will not write ${logicsNeedingPaths.length} logic path${
+                        logicsNeedingPaths.length === 1 ? '' : 's'
+                    }`,
+                )
+            }
+        }
     })
 
-    if (writtenFiles === 0 && importsToModify === 0) {
+    if (writtenFiles === 0 && filesToModify === 0) {
         if (appOptions.write) {
             log(`💚 ${parsedLogics.length} logic type${parsedLogics.length === 1 ? '' : 's'} up to date!`)
             log('')
-        } else if (filesToWrite > 0 || importsToModify > 0) {
+        } else if (filesToWrite > 0 || filesToModify > 0) {
             log(
-                `🚨 Run "kea-typegen write" to save ${filesToWrite + importsToModify} file${
+                `🚨 Run "kea-typegen write" to save ${filesToWrite + filesToModify} file${
                     filesToWrite === 1 ? '' : 's'
                 } to disk`,
             )
         }
     }
 
-    return { filesToWrite, writtenFiles, importsToModify }
+    return { filesToWrite, writtenFiles, filesToModify }
 }
 
 export function nodeToString(node: ts.Node): string {

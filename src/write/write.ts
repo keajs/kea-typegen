@@ -34,7 +34,7 @@ function addBackNewlines(oldText: string, newText: string) {
     return diff.applyPatch(oldText, patch)
 }
 
-export function writeLogicTypeImports(
+export function writeTypeImports(
     appOptions: AppOptions,
     program: ts.Program,
     filename: string,
@@ -154,6 +154,97 @@ export function writeLogicTypeImports(
         }
     }
 
+    writeFile(sourceFile, transformer, filename)
+
+    log(`🔥 Import added: ${path.relative(process.cwd(), filename)}`)
+}
+
+export function writePaths(appOptions: AppOptions, program: ts.Program, filename: string, parsedLogics: ParsedLogic[]) {
+    const { log } = appOptions
+    const sourceFile = program.getSourceFile(filename)
+    const checker = program.getTypeChecker()
+
+    const parsedLogicMapByNode = new Map<ts.Node, ParsedLogic>()
+    for (const parsedLogic of parsedLogics) {
+        parsedLogicMapByNode.set(parsedLogic.node, parsedLogic)
+    }
+
+    const transformer = <T extends ts.Node>(context: ts.TransformationContext) => {
+        return (rootNode: T) => {
+            function visit(node: ts.Node): ts.Node {
+                node = ts.visitEachChild(node, visit, context)
+                if (
+                    ts.isCallExpression(node) &&
+                    isKeaCall(node.expression, checker) &&
+                    parsedLogicMapByNode.has(node.expression)
+                ) {
+                    const { path, hasKeyInLogic } = parsedLogicMapByNode.get(node.expression)
+                    return ts.createCall(
+                        node.expression,
+                        node.typeArguments,
+                        node.arguments.map((argument, i) =>
+                            i === 0 && ts.isObjectLiteralExpression(argument)
+                                ? ts.createObjectLiteral(
+                                      [
+                                          hasKeyInLogic
+                                              ? ts.createPropertyAssignment(
+                                                    ts.createIdentifier('path'),
+                                                    ts.createArrowFunction(
+                                                        undefined,
+                                                        undefined,
+                                                        [
+                                                            ts.createParameter(
+                                                                undefined,
+                                                                undefined,
+                                                                undefined,
+                                                                ts.createIdentifier('key'),
+                                                                undefined,
+                                                                undefined,
+                                                                undefined,
+                                                            ),
+                                                        ],
+                                                        undefined,
+                                                        ts.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                                                        ts.createArrayLiteral(
+                                                            [
+                                                                ...path.map((str) => ts.createStringLiteral(str)),
+                                                                ts.createIdentifier('key'),
+                                                            ],
+                                                            false,
+                                                        ),
+                                                    ),
+                                                )
+                                              : ts.createPropertyAssignment(
+                                                    ts.createIdentifier('path'),
+                                                    ts.createArrayLiteral(
+                                                        path.map((str) => ts.createStringLiteral(str)),
+                                                        false,
+                                                    ),
+                                                ),
+                                          ...argument.properties,
+                                      ],
+                                      true,
+                                  )
+                                : argument,
+                        ),
+                    )
+                }
+                return node
+            }
+            return ts.visitNode(rootNode, visit)
+        }
+    }
+
+    writeFile(sourceFile, transformer, filename)
+
+    log(`🔥 Path added: ${path.relative(process.cwd(), filename)}`)
+}
+
+function writeFile<T>(
+    sourceFile: ts.SourceFile,
+    transformer: <T extends ts.Node>(context: ts.TransformationContext) => (rootNode: T) => T,
+    filename: string,
+) {
     const printer: ts.Printer = ts.createPrinter()
     const result: ts.TransformationResult<ts.SourceFile> = ts.transform<ts.SourceFile>(sourceFile, [transformer])
 
@@ -166,6 +257,4 @@ export function writeLogicTypeImports(
     const newestText = addBackNewlines(oldText, newText)
 
     fs.writeFileSync(filename, newestText)
-
-    log(`🔥 Import added: ${path.relative(process.cwd(), filename)}`)
 }

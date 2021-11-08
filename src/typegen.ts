@@ -105,7 +105,7 @@ export function runTypeGen(appOptions: AppOptions) {
     function goThroughAllTheFiles(
         program,
         appOptions,
-    ): { filesToWrite: number; writtenFiles: number; importsToModify: number } {
+    ): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
         const parsedLogics = visitProgram(program, appOptions)
         if (appOptions.verbose) {
             log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
@@ -115,7 +115,7 @@ export function runTypeGen(appOptions: AppOptions) {
 
         // running "kea-typegen check" and would write files?
         // exit with 1
-        if (!appOptions.write && !appOptions.watch && (response.filesToWrite > 0 || response.importsToModify > 0)) {
+        if (!appOptions.write && !appOptions.watch && (response.filesToWrite > 0 || response.filesToModify > 0)) {
             process.exit(1)
         }
 
@@ -126,9 +126,9 @@ export function runTypeGen(appOptions: AppOptions) {
         if (appOptions.write) {
             let round = 0
             while ((round += 1)) {
-                const { writtenFiles, importsToModify } = goThroughAllTheFiles(program, appOptions)
+                const { writtenFiles, filesToModify } = goThroughAllTheFiles(program, appOptions)
 
-                if (writtenFiles === 0 && importsToModify === 0) {
+                if (writtenFiles === 0 && filesToModify === 0) {
                     log(`👋 Finished writing files! Exiting.`)
                     process.exit(0)
                 }

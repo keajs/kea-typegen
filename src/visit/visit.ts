@@ -214,9 +214,11 @@ export function visitKeaCalls(
             propsType: undefined,
             path: pathString.split('.'),
             pathString: pathString,
+            hasKeyInLogic: false,
+            hasPathInLogic: false,
             typeReferencesToImportFromFiles: {},
             typeReferencesInLogicInput: new Set(),
-            extraInput: {}
+            extraInput: {},
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
@@ -232,6 +234,12 @@ export function visitKeaCalls(
             }
 
             const name = symbol.getName()
+            if (name === 'path') {
+                parsedLogic.hasPathInLogic = true
+            }
+            if (name === 'key') {
+                parsedLogic.hasKeyInLogic = true
+            }
 
             let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
             let typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null

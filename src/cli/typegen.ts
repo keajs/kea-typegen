@@ -46,6 +46,7 @@ yargs
     })
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
     .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
+    .option('write-paths', { describe: 'Write paths into logic files that have none', type: 'boolean' })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()
@@ -60,6 +61,7 @@ function parsedToAppOptions(parsedOptions) {
         quiet: parsedOptions.quiet,
         verbose: parsedOptions.verbose,
         noImport: parsedOptions.noImport,
+        writePaths: parsedOptions.writePaths,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),
     } as AppOptions
 

@@ -35,6 +35,8 @@ export interface ParsedLogic {
     logicTypeImported: boolean
     path: string[]
     pathString: string
+    hasPathInLogic: boolean
+    hasKeyInLogic: boolean
     logicTypeArguments: string[]
     constants: string[]
     events: Record<string, boolean>
@@ -50,7 +52,7 @@ export interface ParsedLogic {
     typeReferencesToImportFromFiles: Record<string, Set<string>>
     typeReferencesInLogicInput: Set<string>
     interfaceDeclaration?: ts.InterfaceDeclaration
-    extraInput: Record<string, { typeNode: ts.TypeNode, withLogicFunction: boolean }>
+    extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
 }
 
 export interface AppOptions {
@@ -63,6 +65,7 @@ export interface AppOptions {
     quiet?: boolean
     verbose?: boolean
     noImport?: boolean
+    writePaths?: boolean
 
     log: (message: string) => void
 }
