@@ -1,6 +1,6 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 
 export function printKey(parsedLogic: ParsedLogic) {
-    return parsedLogic.keyType || ts.createKeywordTypeNode(ts.SyntaxKind.UndefinedKeyword)
+    return parsedLogic.keyType || factory.createKeywordTypeNode(SyntaxKind.UndefinedKeyword)
 }

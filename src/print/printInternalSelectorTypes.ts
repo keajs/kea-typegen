@@ -1,24 +1,24 @@
 import { ParsedLogic } from '../types'
-import * as ts from 'typescript'
+import { factory } from 'typescript'
 
 export function printInternalSelectorTypes(parsedLogic: ParsedLogic) {
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         parsedLogic.selectors
             .filter((s) => s.functionTypes.length > 0)
             .map((selector) => {
-                return ts.createPropertySignature(
+                return factory.createPropertySignature(
                     undefined,
-                    ts.createIdentifier(selector.name),
+                    factory.createIdentifier(selector.name),
                     undefined,
 
-                    ts.createFunctionTypeNode(
+                    factory.createFunctionTypeNode(
                         undefined,
                         selector.functionTypes.map((functionType, index) =>
-                            ts.createParameter(
+                            factory.createParameterDeclaration(
                                 undefined,
                                 undefined,
                                 undefined,
-                                ts.createIdentifier(functionType.name),
+                                factory.createIdentifier(functionType.name),
                                 undefined,
                                 functionType.type,
                                 undefined,
@@ -26,7 +26,6 @@ export function printInternalSelectorTypes(parsedLogic: ParsedLogic) {
                         ),
                         selector.typeNode,
                     ),
-                    undefined,
                 )
             }),
     )

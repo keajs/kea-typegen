@@ -1,12 +1,12 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 
 export function printProps(parsedLogic: ParsedLogic) {
-    return parsedLogic.propsType || ts.createTypeReferenceNode(
-        ts.createIdentifier("Record"),
-        [
-            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-            ts.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword)
-        ]
+    return (
+        parsedLogic.propsType ||
+        factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
+            factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
+            factory.createKeywordTypeNode(SyntaxKind.UnknownKeyword),
+        ])
     )
 }

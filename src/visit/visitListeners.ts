@@ -47,20 +47,20 @@ export function visitListeners(type: ts.Type, inputProperty: ts.PropertyAssignme
                 parsedLogic.listeners.push({
                     name: action.name,
                     payload: action.returnTypeNode,
-                    action: ts.createTypeLiteralNode([
-                        ts.createPropertySignature(
+                    action: ts.factory.createTypeLiteralNode([
+                        ts.factory.createPropertySignature(
                             undefined,
-                            ts.createIdentifier('type'),
+                            ts.factory.createIdentifier('type'),
                             undefined,
-                            ts.createLiteralTypeNode(ts.createStringLiteral(getActionType(action.name))),
-                            undefined,
+                            ts.factory.createLiteralTypeNode(
+                                ts.factory.createStringLiteral(getActionType(action.name)),
+                            ),
                         ),
-                        ts.createPropertySignature(
+                        ts.factory.createPropertySignature(
                             undefined,
-                            ts.createIdentifier('payload'),
+                            ts.factory.createIdentifier('payload'),
                             undefined,
                             action.returnTypeNode,
-                            undefined,
                         ),
                     ]),
                 })

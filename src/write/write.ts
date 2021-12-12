@@ -5,6 +5,7 @@ import * as fs from 'fs'
 import { runThroughPrettier } from '../print/print'
 import * as diff from 'diff'
 import * as path from 'path'
+import { factory, SyntaxKind } from 'typescript'
 
 // NOTE:
 // This is an unfortunate workaround. The TS compiler strips all
@@ -55,18 +56,19 @@ export function writeTypeImports(
         importLocation = `./${importLocation}`
     }
     const createImportDeclaration = () =>
-        ts.createImportDeclaration(
+        factory.createImportDeclaration(
             undefined,
             undefined,
-            ts.createImportClause(
+            factory.createImportClause(
+                true,
                 undefined,
-                ts.createNamedImports(
+                factory.createNamedImports(
                     allParsedLogics.map((l) =>
-                        ts.createImportSpecifier(undefined, undefined, ts.createIdentifier(l.logicTypeName)),
+                        factory.createImportSpecifier(undefined, undefined, factory.createIdentifier(l.logicTypeName)),
                     ),
                 ),
             ),
-            ts.createLiteral(importLocation),
+            factory.createStringLiteral(importLocation),
         )
 
     const transformer = <T extends ts.Node>(context: ts.TransformationContext) => {
@@ -80,16 +82,19 @@ export function writeTypeImports(
                     parsedLogicMapByNode.has(node.expression)
                 ) {
                     const { logicTypeName, typeReferencesInLogicInput } = parsedLogicMapByNode.get(node.expression)
-                    return ts.createCall(
+                    return factory.createCallExpression(
                         node.expression,
                         [
-                            ts.createTypeReferenceNode(
-                                ts.createIdentifier(logicTypeName),
+                            factory.createTypeReferenceNode(
+                                factory.createIdentifier(logicTypeName),
                                 typeReferencesInLogicInput.size > 0
                                     ? [...typeReferencesInLogicInput.values()]
                                           .sort()
                                           .map((type) =>
-                                              ts.createTypeReferenceNode(ts.createIdentifier(type), undefined),
+                                              factory.createTypeReferenceNode(
+                                                  factory.createIdentifier(type),
+                                                  undefined,
+                                              ),
                                           )
                                     : undefined,
                             ),
@@ -179,45 +184,45 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
                     parsedLogicMapByNode.has(node.expression)
                 ) {
                     const { path, hasKeyInLogic } = parsedLogicMapByNode.get(node.expression)
-                    return ts.createCall(
+                    return factory.createCallExpression(
                         node.expression,
                         node.typeArguments,
                         node.arguments.map((argument, i) =>
                             i === 0 && ts.isObjectLiteralExpression(argument)
-                                ? ts.createObjectLiteral(
+                                ? factory.createObjectLiteralExpression(
                                       [
                                           hasKeyInLogic
-                                              ? ts.createPropertyAssignment(
-                                                    ts.createIdentifier('path'),
-                                                    ts.createArrowFunction(
+                                              ? factory.createPropertyAssignment(
+                                                    factory.createIdentifier('path'),
+                                                    factory.createArrowFunction(
                                                         undefined,
                                                         undefined,
                                                         [
-                                                            ts.createParameter(
+                                                            factory.createParameterDeclaration(
                                                                 undefined,
                                                                 undefined,
                                                                 undefined,
-                                                                ts.createIdentifier('key'),
+                                                                factory.createIdentifier('key'),
                                                                 undefined,
                                                                 undefined,
                                                                 undefined,
                                                             ),
                                                         ],
                                                         undefined,
-                                                        ts.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-                                                        ts.createArrayLiteral(
+                                                        factory.createToken(SyntaxKind.EqualsGreaterThanToken),
+                                                        factory.createArrayLiteralExpression(
                                                             [
-                                                                ...path.map((str) => ts.createStringLiteral(str)),
-                                                                ts.createIdentifier('key'),
+                                                                ...path.map((str) => factory.createStringLiteral(str)),
+                                                                factory.createIdentifier('key'),
                                                             ],
                                                             false,
                                                         ),
                                                     ),
                                                 )
-                                              : ts.createPropertyAssignment(
-                                                    ts.createIdentifier('path'),
-                                                    ts.createArrayLiteral(
-                                                        path.map((str) => ts.createStringLiteral(str)),
+                                              : factory.createPropertyAssignment(
+                                                    factory.createIdentifier('path'),
+                                                    factory.createArrayLiteralExpression(
+                                                        path.map((str) => factory.createStringLiteral(str)),
                                                         false,
                                                     ),
                                                 ),

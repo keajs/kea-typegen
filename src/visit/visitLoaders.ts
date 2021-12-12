@@ -1,5 +1,15 @@
 import { ParsedLogic } from '../types'
-import * as ts from 'typescript'
+import {
+    factory,
+    isArrayLiteralExpression,
+    isFunctionLike,
+    isObjectLiteralExpression,
+    isTypeReferenceNode,
+    PropertyAssignment,
+    SyntaxKind,
+    Type,
+    TypeNode,
+} from 'typescript'
 import {
     gatherImports,
     getParameterDeclaration,
@@ -9,22 +19,22 @@ import {
 } from '../utils'
 import { NodeBuilderFlags } from 'typescript'
 
-export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitLoaders(type: Type, inputProperty: PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {
         const loaderName = property.getName()
-        const value = (property.valueDeclaration as ts.PropertyAssignment).initializer
+        const value = (property.valueDeclaration as PropertyAssignment).initializer
 
         let defaultValue
         let objectLiteral
-        if (ts.isArrayLiteralExpression(value)) {
+        if (isArrayLiteralExpression(value)) {
             defaultValue = value.elements[0]
             objectLiteral = value.elements[1]
-        } else if (ts.isObjectLiteralExpression(value)) {
+        } else if (isObjectLiteralExpression(value)) {
             defaultValue = (value.properties.find(
                 (property) => checker.getSymbolAtLocation(property.name)?.getName() === '__default',
-            ) as ts.PropertyAssignment)?.initializer
+            ) as PropertyAssignment)?.initializer
             objectLiteral = value
         }
 
@@ -35,18 +45,18 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
         parsedLogic.reducers.push({ name: loaderName, typeNode: defaultValueTypeNode })
         parsedLogic.reducers.push({
             name: `${loaderName}Loading`,
-            typeNode: ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
+            typeNode: factory.createKeywordTypeNode(SyntaxKind.BooleanKeyword),
         })
 
         if (objectLiteral) {
-            ;(objectLiteral.properties || []).forEach((property: ts.PropertyAssignment) => {
+            ;(objectLiteral.properties || []).forEach((property: PropertyAssignment) => {
                 const loaderActionName = checker.getSymbolAtLocation(property.name)?.getName()
                 if (loaderActionName === '__default') {
                     return
                 }
 
                 const func = property.initializer
-                if (!ts.isFunctionLike(func)) {
+                if (!isFunctionLike(func)) {
                     return
                 }
 
@@ -54,14 +64,14 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                 const parameters = param ? [getParameterDeclaration(param)] : []
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}`)) {
-                    const returnTypeNode = param?.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                    const returnTypeNode = param?.type || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)
                     gatherImports(param, checker, parsedLogic)
 
                     parsedLogic.actions.push({ name: `${loaderActionName}`, parameters, returnTypeNode })
                 }
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}Success`)) {
-                    let returnTypeNode: ts.TypeNode
+                    let returnTypeNode: TypeNode
                     if (func) {
                         const funcType = checker.getTypeAtLocation(func)
                         const signature = funcType?.getCallSignatures()[0]
@@ -82,11 +92,11 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                     }
 
                     if (!returnTypeNode) {
-                        returnTypeNode = defaultValueTypeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                        returnTypeNode = defaultValueTypeNode || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)
                     }
 
                     if (
-                        ts.isTypeReferenceNode(returnTypeNode) &&
+                        isTypeReferenceNode(returnTypeNode) &&
                         (returnTypeNode.typeName as any)?.escapedText === 'Promise'
                     ) {
                         returnTypeNode = returnTypeNode.typeArguments?.[0]
@@ -95,39 +105,37 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
                     gatherImports(returnTypeNode, checker, parsedLogic)
 
                     const successParameters = [
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier(loaderName),
+                            factory.createIdentifier(loaderName),
                             undefined,
                             returnTypeNode,
                             undefined,
                         ),
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('payload'),
-                            ts.createToken(ts.SyntaxKind.QuestionToken),
+                            factory.createIdentifier('payload'),
+                            factory.createToken(SyntaxKind.QuestionToken),
                             parsedLogic.actions.find((a) => a.name === loaderActionName)?.returnTypeNode,
                             undefined,
                         ),
                     ]
-                    const successReturnTypeNode = ts.createTypeLiteralNode([
-                        ts.createPropertySignature(
+                    const successReturnTypeNode = factory.createTypeLiteralNode([
+                        factory.createPropertySignature(
                             undefined,
-                            ts.createIdentifier(loaderName),
+                            factory.createIdentifier(loaderName),
                             undefined,
                             returnTypeNode,
-                            undefined,
                         ),
-                        ts.createPropertySignature(
+                        factory.createPropertySignature(
                             undefined,
-                            ts.createIdentifier('payload'),
-                            ts.createToken(ts.SyntaxKind.QuestionToken),
+                            factory.createIdentifier('payload'),
+                            factory.createToken(SyntaxKind.QuestionToken),
                             parsedLogic.actions.find((a) => a.name === loaderActionName)?.returnTypeNode,
-                            undefined,
                         ),
                     ])
                     parsedLogic.actions.push({
@@ -139,39 +147,37 @@ export function visitLoaders(type: ts.Type, inputProperty: ts.PropertyAssignment
 
                 if (!parsedLogic.actions.find(({ name }) => name === `${loaderActionName}Failure`)) {
                     const failureParameters = [
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('error'),
+                            factory.createIdentifier('error'),
                             undefined,
-                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
                             undefined,
                         ),
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('errorObject'),
-                            ts.createToken(ts.SyntaxKind.QuestionToken),
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            factory.createIdentifier('errorObject'),
+                            factory.createToken(SyntaxKind.QuestionToken),
+                            factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                     ]
-                    const failureReturnTypeNode = ts.createTypeLiteralNode([
-                        ts.createPropertySignature(
+                    const failureReturnTypeNode = factory.createTypeLiteralNode([
+                        factory.createPropertySignature(
                             undefined,
-                            ts.createIdentifier('error'),
+                            factory.createIdentifier('error'),
                             undefined,
-                            ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                            undefined,
+                            factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
                         ),
-                        ts.createPropertySignature(
+                        factory.createPropertySignature(
                             undefined,
-                            ts.createIdentifier('errorObject'),
-                            ts.createToken(ts.SyntaxKind.QuestionToken),
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                            undefined,
+                            factory.createIdentifier('errorObject'),
+                            factory.createToken(SyntaxKind.QuestionToken),
+                            factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                         ),
                     ])
 

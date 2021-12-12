@@ -1,39 +1,36 @@
-import * as ts from 'typescript'
+import { factory } from 'typescript'
 import { AppOptions, ParsedLogic } from '../types'
 import { getActionTypeCreator } from '../utils'
 
 export function printActionCreators(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
     const getActionType = getActionTypeCreator(parsedLogic)
 
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         parsedLogic.actions.map(({ name, parameters, returnTypeNode }) => {
-            return ts.createPropertySignature(
+            return factory.createPropertySignature(
                 undefined,
-                ts.createIdentifier(name),
+                factory.createIdentifier(name),
                 undefined,
-                ts.createFunctionTypeNode(
+                factory.createFunctionTypeNode(
                     undefined,
                     parameters,
-                    ts.createParenthesizedType(
-                        ts.createTypeLiteralNode([
-                            ts.createPropertySignature(
+                    factory.createParenthesizedType(
+                        factory.createTypeLiteralNode([
+                            factory.createPropertySignature(
                                 undefined,
-                                ts.createIdentifier('type'),
+                                factory.createIdentifier('type'),
                                 undefined,
-                                ts.createLiteralTypeNode(ts.createStringLiteral(getActionType(name))),
-                                undefined,
+                                factory.createLiteralTypeNode(factory.createStringLiteral(getActionType(name))),
                             ),
-                            ts.createPropertySignature(
+                            factory.createPropertySignature(
                                 undefined,
-                                ts.createIdentifier('payload'),
+                                factory.createIdentifier('payload'),
                                 undefined,
                                 returnTypeNode,
-                                undefined,
                             ),
                         ]),
                     ),
                 ),
-                undefined,
             )
         }),
     )

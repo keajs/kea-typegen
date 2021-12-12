@@ -34,7 +34,7 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
                     }
                 }
             } else if (ts.isObjectLiteralExpression(value)) {
-                typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                typeNode = ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
             }
 
             parsedLogic.reducers.push({ name, typeNode, reducerOptions })

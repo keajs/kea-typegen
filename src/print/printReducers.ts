@@ -1,48 +1,47 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 import { cleanDuplicateAnyNodes } from '../utils'
 
 export function printReducers(parsedLogic: ParsedLogic) {
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         cleanDuplicateAnyNodes(parsedLogic.reducers).map((reducer) => {
-            return ts.createPropertySignature(
+            return factory.createPropertySignature(
                 undefined,
-                ts.createIdentifier(reducer.name),
+                factory.createIdentifier(reducer.name),
                 undefined,
-                ts.createFunctionTypeNode(
+                factory.createFunctionTypeNode(
                     undefined,
                     [
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('state'),
+                            factory.createIdentifier('state'),
                             undefined,
                             reducer.typeNode,
                             undefined,
                         ),
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('action'),
+                            factory.createIdentifier('action'),
                             undefined,
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('fullState'),
+                            factory.createIdentifier('fullState'),
                             undefined,
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                     ],
                     reducer.typeNode,
                 ),
-                undefined,
             )
         }),
     )

@@ -1,15 +1,17 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 
 export function printEvents(parsedLogic: ParsedLogic) {
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         Object.keys(parsedLogic.events).map((name) => {
-            return ts.createPropertySignature(
+            return factory.createPropertySignature(
                 undefined,
-                ts.createIdentifier(name),
+                factory.createIdentifier(name),
                 undefined,
-                ts.createFunctionTypeNode(undefined, [], { ...ts.createToken(ts.SyntaxKind.VoidKeyword), _typeNodeBrand: true }),
-                undefined,
+                factory.createFunctionTypeNode(undefined, [], {
+                    ...factory.createToken(SyntaxKind.VoidKeyword),
+                    _typeNodeBrand: true,
+                }),
             )
         }),
     )

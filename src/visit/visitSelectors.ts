@@ -34,7 +34,7 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
 
             if (selectorInputTypeNode && ts.isTupleTypeNode(selectorInputTypeNode)) {
                 let takenNames: Record<string, number> = {}
-                functionTypes = (selectorInputTypeNode.elements || ts.createNodeArray([]))
+                functionTypes = (selectorInputTypeNode.elements || ts.factory.createNodeArray([]))
                     .filter((e) => ts.isTypeNode(e))
                     .map((selectorTypeNode, index) => {
                         let name = functionNames[index] || 'arg'
@@ -49,7 +49,7 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
                             name,
                             type: ts.isFunctionTypeNode(selectorTypeNode)
                                 ? cloneNode(selectorTypeNode.type)
-                                : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                                : ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         }
                     })
             }
@@ -67,7 +67,7 @@ export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignme
                     typeNode = checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation)
                     gatherImports(typeNode, checker, parsedLogic)
                 } else {
-                    typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+                    typeNode = ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                 }
 
                 parsedLogic.selectors.push({

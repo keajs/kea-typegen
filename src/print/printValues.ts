@@ -1,16 +1,15 @@
-import * as ts from 'typescript'
+import { factory } from 'typescript'
 import { ParsedLogic } from '../types'
-import {cleanDuplicateAnyNodes} from "../utils";
+import { cleanDuplicateAnyNodes } from '../utils'
 
 export function printValues(parsedLogic: ParsedLogic) {
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) => {
-            return ts.createPropertySignature(
+            return factory.createPropertySignature(
                 undefined,
-                ts.createIdentifier(reducer.name),
+                factory.createIdentifier(reducer.name),
                 undefined,
                 reducer.typeNode,
-                undefined,
             )
         }),
     )

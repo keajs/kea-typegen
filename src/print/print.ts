@@ -1,4 +1,16 @@
-import * as ts from 'typescript'
+import {
+    createPrinter,
+    createSourceFile,
+    EmitHint,
+    factory,
+    Node,
+    NewLineKind,
+    Program,
+    ScriptKind,
+    ScriptTarget,
+    SyntaxKind,
+    TypeParameterDeclaration,
+} from 'typescript'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as prettier from 'prettier'
@@ -43,7 +55,7 @@ export function runThroughPrettier(sourceText: string, filePath: string): string
 
 // returns files to write
 export function printToFiles(
-    program: ts.Program,
+    program: Program,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
 ): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
@@ -56,7 +68,7 @@ export function printToFiles(
         }
         groupedByFile[parsedLogic.fileName].push(parsedLogic)
 
-        // create the ts.Nodes and gather referenced types
+        // create the Nodes and gather referenced types
         printLogicType(parsedLogic, appOptions)
     }
 
@@ -183,10 +195,10 @@ export function printToFiles(
     return { filesToWrite, writtenFiles, filesToModify }
 }
 
-export function nodeToString(node: ts.Node): string {
-    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
-    const sourceFile = ts.createSourceFile('logic.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)
-    return printer.printNode(ts.EmitHint.Unspecified, node, sourceFile)
+export function nodeToString(node: Node): string {
+    const printer = createPrinter({ newLine: NewLineKind.LineFeed })
+    const sourceFile = createSourceFile('logic.ts', '', ScriptTarget.Latest, false, ScriptKind.TS)
+    return printer.printNode(EmitHint.Unspecified, node, sourceFile)
 }
 
 export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: AppOptions): string {
@@ -194,15 +206,15 @@ export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: A
     return nodeToString(parsedLogic.interfaceDeclaration)
 }
 
-export function getLogicTypeArguments(parsedLogic: ParsedLogic): ts.TypeParameterDeclaration[] {
+export function getLogicTypeArguments(parsedLogic: ParsedLogic): TypeParameterDeclaration[] {
     return [...parsedLogic.typeReferencesInLogicInput]
         .sort()
-        .map((text) => ts.createTypeParameterDeclaration(ts.createIdentifier(text), undefined))
+        .map((text) => factory.createTypeParameterDeclaration(factory.createIdentifier(text), undefined))
 }
 
 export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions): void {
     const printProperty = (name, typeNode) =>
-        ts.createPropertySignature(undefined, ts.createIdentifier(name), undefined, typeNode, undefined)
+        factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, typeNode)
 
     const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
 
@@ -218,9 +230,11 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         printProperty('listeners', printListeners(parsedLogic)),
         printProperty(
             'path',
-            ts.createTupleTypeNode(parsedLogic.path.map((p) => ts.createLiteralTypeNode(ts.createStringLiteral(p)))),
+            factory.createTupleTypeNode(
+                parsedLogic.path.map((p) => factory.createLiteralTypeNode(factory.createStringLiteral(p))),
+            ),
         ),
-        printProperty('pathString', ts.createStringLiteral(parsedLogic.pathString)),
+        printProperty('pathString', factory.createStringLiteral(parsedLogic.pathString)),
         printProperty('props', printProps(parsedLogic)),
         printProperty('reducer', printReducer(parsedLogic)),
         printProperty('reducerOptions', printReducerOptions(parsedLogic)),
@@ -229,8 +243,8 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         printProperty('selectors', printSelectors(parsedLogic)),
         printProperty('sharedListeners', printSharedListeners(parsedLogic)),
         printProperty('values', printValues(parsedLogic)),
-        printProperty('_isKea', ts.createTrue()),
-        printProperty('_isKeaWithKey', parsedLogic.keyType ? ts.createTrue() : ts.createFalse()),
+        printProperty('_isKea', factory.createTrue()),
+        printProperty('_isKeaWithKey', parsedLogic.keyType ? factory.createTrue() : factory.createFalse()),
         addSelectorTypeHelp
             ? printProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
             : null,
@@ -244,14 +258,14 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
 
     const logicTypeArguments = getLogicTypeArguments(parsedLogic)
 
-    parsedLogic.interfaceDeclaration = ts.createInterfaceDeclaration(
+    parsedLogic.interfaceDeclaration = factory.createInterfaceDeclaration(
         undefined,
-        [ts.createModifier(ts.SyntaxKind.ExportKeyword)],
-        ts.createIdentifier(`${parsedLogic.logicName}Type`),
+        [factory.createModifier(SyntaxKind.ExportKeyword)],
+        factory.createIdentifier(`${parsedLogic.logicName}Type`),
         logicTypeArguments,
         [
-            ts.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, [
-                ts.createExpressionWithTypeArguments(undefined, ts.createIdentifier('Logic')),
+            factory.createHeritageClause(SyntaxKind.ExtendsKeyword, [
+                factory.createExpressionWithTypeArguments(factory.createIdentifier('Logic'), undefined),
             ]),
         ],
         logicProperties,

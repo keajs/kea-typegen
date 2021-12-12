@@ -1,47 +1,46 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 
 export function printListeners(parsedLogic: ParsedLogic) {
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         parsedLogic.listeners.map(({ name, payload, action }) =>
-            ts.createPropertySignature(
+            factory.createPropertySignature(
                 undefined,
-                ts.createStringLiteral(name),
+                factory.createStringLiteral(name),
                 undefined,
-                ts.createArrayTypeNode(
-                    ts.createParenthesizedType(
-                        ts.createFunctionTypeNode(
+                factory.createArrayTypeNode(
+                    factory.createParenthesizedType(
+                        factory.createFunctionTypeNode(
                             undefined,
                             [
-                                ts.createParameter(
+                                factory.createParameterDeclaration(
                                     undefined,
                                     undefined,
                                     undefined,
-                                    ts.createIdentifier('action'),
+                                    factory.createIdentifier('action'),
                                     undefined,
                                     action,
                                     undefined,
                                 ),
-                                ts.createParameter(
+                                factory.createParameterDeclaration(
                                     undefined,
                                     undefined,
                                     undefined,
-                                    ts.createIdentifier('previousState'),
+                                    factory.createIdentifier('previousState'),
                                     undefined,
-                                    ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                                    factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                                     undefined,
                                 ),
                             ],
-                            ts.createUnionTypeNode([
-                                { ...ts.createToken(ts.SyntaxKind.VoidKeyword), _typeNodeBrand: true },
-                                ts.createTypeReferenceNode(ts.createIdentifier('Promise'), [
-                                    { ...ts.createToken(ts.SyntaxKind.VoidKeyword), _typeNodeBrand: true },
+                            factory.createUnionTypeNode([
+                                { ...factory.createToken(SyntaxKind.VoidKeyword), _typeNodeBrand: true },
+                                factory.createTypeReferenceNode(factory.createIdentifier('Promise'), [
+                                    { ...factory.createToken(SyntaxKind.VoidKeyword), _typeNodeBrand: true },
                                 ]),
                             ]),
                         ),
                     ),
                 ),
-                undefined,
             ),
         ),
     )

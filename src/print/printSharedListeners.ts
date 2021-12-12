@@ -1,61 +1,60 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 
 export function printSharedListeners(parsedLogic: ParsedLogic) {
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         parsedLogic.sharedListeners.map(({ name, payload, action }) =>
-            ts.createPropertySignature(
+            factory.createPropertySignature(
                 undefined,
-                ts.createStringLiteral(name),
+                factory.createStringLiteral(name),
                 undefined,
-                ts.createFunctionTypeNode(
+                factory.createFunctionTypeNode(
                     undefined,
                     [
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('payload'),
+                            factory.createIdentifier('payload'),
                             undefined,
-                            payload || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                            undefined,
-                        ),
-                        ts.createParameter(
-                            undefined,
-                            undefined,
-                            undefined,
-                            ts.createIdentifier('breakpoint'),
-                            undefined,
-                            ts.createTypeReferenceNode(ts.createIdentifier('BreakPointFunction'), undefined),
+                            payload || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('action'),
+                            factory.createIdentifier('breakpoint'),
+                            undefined,
+                            factory.createTypeReferenceNode(factory.createIdentifier('BreakPointFunction'), undefined),
+                            undefined,
+                        ),
+                        factory.createParameterDeclaration(
+                            undefined,
+                            undefined,
+                            undefined,
+                            factory.createIdentifier('action'),
                             undefined,
                             action,
                             undefined,
                         ),
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('previousState'),
+                            factory.createIdentifier('previousState'),
                             undefined,
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                     ],
-                    ts.createUnionTypeNode([
-                        { ...ts.createToken(ts.SyntaxKind.VoidKeyword), _typeNodeBrand: true },
-                        ts.createTypeReferenceNode(ts.createIdentifier('Promise'), [
-                            { ...ts.createToken(ts.SyntaxKind.VoidKeyword), _typeNodeBrand: true },
+                    factory.createUnionTypeNode([
+                        { ...factory.createToken(SyntaxKind.VoidKeyword), _typeNodeBrand: true },
+                        factory.createTypeReferenceNode(factory.createIdentifier('Promise'), [
+                            { ...factory.createToken(SyntaxKind.VoidKeyword), _typeNodeBrand: true },
                         ]),
                     ]),
                 ),
-                undefined,
             ),
         ),
     )

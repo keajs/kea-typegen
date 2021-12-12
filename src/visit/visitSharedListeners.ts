@@ -23,21 +23,19 @@ export function visitSharedListeners(type: ts.Type, inputProperty: ts.PropertyAs
             parsedLogic.sharedListeners.push({
                 name,
                 payload: typeNode,
-                action: ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
+                action: ts.factory.createTypeLiteralNode([
+                    ts.factory.createPropertySignature(
                         undefined,
-                        ts.createIdentifier('type'),
+                        ts.factory.createIdentifier('type'),
                         undefined,
-                        ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        undefined,
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
                     ),
-                    ts.createPropertySignature(
+                    ts.factory.createPropertySignature(
                         undefined,
-                        ts.createIdentifier('payload'),
+                        ts.factory.createIdentifier('payload'),
                         undefined,
-                        typeNode || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                        // ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                        undefined,
+                        typeNode || ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        // ts.factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                     ),
                 ]),
             })

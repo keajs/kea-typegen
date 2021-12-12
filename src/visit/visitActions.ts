@@ -1,10 +1,10 @@
 import { ParsedLogic } from '../types'
-import * as ts from 'typescript'
+import { factory, isFunctionLike, isPropertyAssignment, PropertyAssignment, SyntaxKind, Type } from 'typescript'
 import { NodeBuilderFlags } from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
 import { gatherImports } from '../utils'
 
-export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitActions(type: Type, inputProperty: PropertyAssignment, parsedLogic: ParsedLogic) {
     const { checker } = parsedLogic
     const properties = checker.getPropertiesOfType(type)
 
@@ -15,24 +15,26 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
         let returnTypeNode
         let parameters
 
-        if (!ts.isPropertyAssignment(property.valueDeclaration)) {
+        if (!isPropertyAssignment(property.valueDeclaration)) {
             continue
         }
         const { initializer } = property.valueDeclaration
 
-        if (ts.isFunctionLike(initializer)) {
+        if (isFunctionLike(initializer)) {
             // action is a function action: () => ({ ... })
             parameters = initializer.parameters.map((param) => {
                 if (param.type) {
                     gatherImports(param.type, checker, parsedLogic)
                 }
-                return ts.createParameter(
+                return factory.createParameterDeclaration(
                     undefined,
                     undefined,
                     undefined,
-                    ts.createIdentifier(param.name.getText()),
-                    param.initializer || param.questionToken ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
-                    param.type ? cloneNode(param.type) : ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    factory.createIdentifier(param.name.getText()),
+                    param.initializer || param.questionToken
+                        ? factory.createToken(SyntaxKind.QuestionToken)
+                        : undefined,
+                    param.type ? cloneNode(param.type) : factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                     undefined,
                 )
             })
@@ -58,8 +60,8 @@ export function visitActions(type: ts.Type, inputProperty: ts.PropertyAssignment
             // action is a value (action: true)
             const typeNode = checker.typeToTypeNode(type, undefined, undefined)
             gatherImports(typeNode, checker, parsedLogic)
-            returnTypeNode = ts.createTypeLiteralNode([
-                ts.createPropertySignature(undefined, ts.createIdentifier('value'), undefined, typeNode, undefined),
+            returnTypeNode = factory.createTypeLiteralNode([
+                factory.createPropertySignature(undefined, factory.createIdentifier('value'), undefined, typeNode),
             ])
         }
         parsedLogic.actions.push({ name, parameters, returnTypeNode })

@@ -37,32 +37,32 @@ exports.default = {
             parsedLogic.reducers.push({
                 name: 'form',
                 typeNode: typeNode ||
-                    ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                        ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                     ]),
             });
             parsedLogic.extraInput['form'] = {
                 withLogicFunction: true,
-                typeNode: ts.createTypeLiteralNode([
-                    ts.createPropertySignature(undefined, ts.createIdentifier('default'), ts.createToken(ts.SyntaxKind.QuestionToken), ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                        ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                typeNode: ts.factory.createTypeLiteralNode([
+                    ts.factory.createPropertySignature(undefined, ts.factory.createIdentifier('default'), ts.factory.createToken(ts.SyntaxKind.QuestionToken), ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                     ])),
-                    ts.createPropertySignature(undefined, ts.createIdentifier('submit'), ts.createToken(ts.SyntaxKind.QuestionToken), ts.createFunctionTypeNode(undefined, [
-                        ts.createParameter(undefined, undefined, undefined, ts.createIdentifier('form'), undefined, typeNode ||
-                            ts.createTypeReferenceNode(ts.createIdentifier('Record'), [
-                                ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    ts.factory.createPropertySignature(undefined, ts.factory.createIdentifier('submit'), ts.factory.createToken(ts.SyntaxKind.QuestionToken), ts.factory.createFunctionTypeNode(undefined, [
+                        ts.factory.createParameterDeclaration(undefined, undefined, undefined, ts.factory.createIdentifier('form'), undefined, typeNode ||
+                            ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
+                                ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                                ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                             ]), undefined),
-                    ], ts.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword))),
+                    ], ts.factory.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword))),
                 ]),
             };
             parsedLogic.actions.push({
                 name: 'submitForm',
                 parameters: [],
-                returnTypeNode: ts.createTypeLiteralNode([
-                    ts.createPropertySignature(undefined, ts.createIdentifier('value'), undefined, ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword), undefined),
+                returnTypeNode: ts.factory.createTypeLiteralNode([
+                    ts.factory.createPropertySignature(undefined, ts.factory.createIdentifier('value'), undefined, ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)),
                 ]),
             });
         }

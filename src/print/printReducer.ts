@@ -1,47 +1,46 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 import { cleanDuplicateAnyNodes } from '../utils'
 
 export function printReducer(parsedLogic: ParsedLogic) {
-    return ts.createFunctionTypeNode(
+    return factory.createFunctionTypeNode(
         undefined,
         [
-            ts.createParameter(
+            factory.createParameterDeclaration(
                 undefined,
                 undefined,
                 undefined,
-                ts.createIdentifier('state'),
+                factory.createIdentifier('state'),
                 undefined,
-                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                undefined,
-            ),
-            ts.createParameter(
-                undefined,
-                undefined,
-                undefined,
-                ts.createIdentifier('action'),
-                undefined,
-                ts.createFunctionTypeNode(undefined, [], ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+                factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                 undefined,
             ),
-            ts.createParameter(
+            factory.createParameterDeclaration(
                 undefined,
                 undefined,
                 undefined,
-                ts.createIdentifier('fullState'),
+                factory.createIdentifier('action'),
                 undefined,
-                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                factory.createFunctionTypeNode(undefined, [], factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)),
+                undefined,
+            ),
+            factory.createParameterDeclaration(
+                undefined,
+                undefined,
+                undefined,
+                factory.createIdentifier('fullState'),
+                undefined,
+                factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                 undefined,
             ),
         ],
-        ts.createTypeLiteralNode(
+        factory.createTypeLiteralNode(
             cleanDuplicateAnyNodes(parsedLogic.reducers).map((reducer) =>
-                ts.createPropertySignature(
+                factory.createPropertySignature(
                     undefined,
-                    ts.createIdentifier(reducer.name),
+                    factory.createIdentifier(reducer.name),
                     undefined,
                     reducer.typeNode,
-                    undefined,
                 ),
             ),
         ),

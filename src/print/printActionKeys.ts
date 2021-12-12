@@ -1,18 +1,17 @@
-import * as ts from 'typescript'
+import { factory } from 'typescript'
 import { AppOptions, ParsedLogic } from '../types'
 import { getActionTypeCreator } from '../utils'
 
 export function printActionKeys(parsedLogic: ParsedLogic, appOptions?: AppOptions) {
     const getActionType = getActionTypeCreator(parsedLogic)
 
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         parsedLogic.actions.map(({ name, parameters, returnTypeNode }) => {
-            return ts.createPropertySignature(
+            return factory.createPropertySignature(
                 undefined,
-                ts.createStringLiteral(getActionType(name)),
+                factory.createStringLiteral(getActionType(name)),
                 undefined,
-                ts.createLiteralTypeNode(ts.createStringLiteral(name)),
-                undefined,
+                factory.createLiteralTypeNode(factory.createStringLiteral(name)),
             )
         }),
     )

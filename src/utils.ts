@@ -4,7 +4,7 @@ import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
 import { AppOptions, NameType, ParsedLogic } from './types'
-import { NodeBuilderFlags } from 'typescript'
+import { factory, NodeBuilderFlags, SyntaxKind } from 'typescript'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -54,19 +54,19 @@ export function getTypeNodeForNode(node: ts.Node, checker: ts.TypeChecker): ts.T
             if (ts.isParenthesizedTypeNode(typeNode)) {
                 typeNode = typeNode.type
             }
-        } else if (node?.kind === ts.SyntaxKind.TrueKeyword || node?.kind === ts.SyntaxKind.FalseKeyword) {
-            typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)
+        } else if (node?.kind === SyntaxKind.TrueKeyword || node?.kind === SyntaxKind.FalseKeyword) {
+            typeNode = factory.createKeywordTypeNode(SyntaxKind.BooleanKeyword)
         } else if (ts.isStringLiteralLike(node)) {
-            typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
+            typeNode = factory.createKeywordTypeNode(SyntaxKind.StringKeyword)
         } else if (ts.isNumericLiteral(node)) {
-            typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword)
+            typeNode = factory.createKeywordTypeNode(SyntaxKind.NumberKeyword)
         } else if (ts.isArrayLiteralExpression(node) && node.elements.length === 0) {
-            typeNode = ts.createArrayTypeNode(ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
+            typeNode = factory.createArrayTypeNode(factory.createKeywordTypeNode(SyntaxKind.AnyKeyword))
         } else {
             typeNode = checker.typeToTypeNode(checker.getTypeAtLocation(node), undefined, undefined)
         }
     } else {
-        typeNode = ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+        typeNode = factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)
     }
     return typeNode
 }
@@ -82,13 +82,13 @@ export function getAndGatherTypeNodeForDefaultValue(
 }
 
 export function getParameterDeclaration(param: ts.ParameterDeclaration) {
-    return ts.createParameter(
+    return factory.createParameterDeclaration(
         undefined,
         undefined,
         undefined,
-        ts.createIdentifier(param.name.getText()),
-        param.initializer || param.questionToken ? ts.createToken(ts.SyntaxKind.QuestionToken) : undefined,
-        cloneNode(param.type || ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)),
+        factory.createIdentifier(param.name.getText()),
+        param.initializer || param.questionToken ? factory.createToken(SyntaxKind.QuestionToken) : undefined,
+        cloneNode(param.type || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)),
         undefined,
     )
 }
@@ -230,7 +230,7 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
         let node = requestedNode
         if (ts.isTypeReferenceNode(node)) {
             let typeRootName: string | undefined
-            if (node.typeName?.kind === ts.SyntaxKind.FirstNode) {
+            if (node.typeName?.kind === SyntaxKind.FirstNode) {
                 try {
                     typeRootName = node.typeName.getFirstToken().getText()
                 } catch (e) {
@@ -334,8 +334,8 @@ export function isAnyUnknown(node?: ts.Node): boolean {
     const unPromised = unPromisify(node)
     return (
         !unPromised ||
-        unPromised.kind === ts.SyntaxKind.AnyKeyword ||
-        unPromised.kind === ts.SyntaxKind.UnknownKeyword ||
+        unPromised.kind === SyntaxKind.AnyKeyword ||
+        unPromised.kind === SyntaxKind.UnknownKeyword ||
         (ts.isTypeLiteralNode(unPromised) && unPromised.members.length === 0)
     )
 }

@@ -1,39 +1,38 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 import { cleanDuplicateAnyNodes } from '../utils'
 
 export function printSelectors(parsedLogic: ParsedLogic) {
-    return ts.createTypeLiteralNode(
+    return factory.createTypeLiteralNode(
         cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) => {
-            return ts.createPropertySignature(
+            return factory.createPropertySignature(
                 undefined,
-                ts.createIdentifier(reducer.name),
+                factory.createIdentifier(reducer.name),
                 undefined,
-                ts.createFunctionTypeNode(
+                factory.createFunctionTypeNode(
                     undefined,
                     [
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('state'),
+                            factory.createIdentifier('state'),
                             undefined,
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
-                        ts.createParameter(
+                        factory.createParameterDeclaration(
                             undefined,
                             undefined,
                             undefined,
-                            ts.createIdentifier('props'),
-                            ts.createToken(ts.SyntaxKind.QuestionToken),
-                            ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                            factory.createIdentifier('props'),
+                            factory.createToken(SyntaxKind.QuestionToken),
+                            factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                     ],
                     reducer.typeNode,
                 ),
-                undefined,
             )
         }),
     )

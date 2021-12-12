@@ -1,29 +1,28 @@
-import * as ts from 'typescript'
+import { factory, SyntaxKind } from 'typescript'
 import { ParsedLogic } from '../types'
 import { cleanDuplicateAnyNodes } from '../utils'
 
 export function printSelector(parsedLogic: ParsedLogic) {
-    return ts.createFunctionTypeNode(
+    return factory.createFunctionTypeNode(
         undefined,
         [
-            ts.createParameter(
+            factory.createParameterDeclaration(
                 undefined,
                 undefined,
                 undefined,
-                ts.createIdentifier('state'),
+                factory.createIdentifier('state'),
                 undefined,
-                ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                 undefined,
             ),
         ],
-        ts.createTypeLiteralNode(
+        factory.createTypeLiteralNode(
             cleanDuplicateAnyNodes(parsedLogic.reducers).map((reducer) =>
-                ts.createPropertySignature(
+                factory.createPropertySignature(
                     undefined,
-                    ts.createIdentifier(reducer.name),
+                    factory.createIdentifier(reducer.name),
                     undefined,
                     reducer.typeNode,
-                    undefined,
                 ),
             ),
         ),
