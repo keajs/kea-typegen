@@ -62,7 +62,7 @@ export function writeTypeImports(
                 undefined,
                 ts.createNamedImports(
                     allParsedLogics.map((l) =>
-                        ts.createImportSpecifier(undefined, ts.createIdentifier(l.logicTypeName)),
+                        ts.createImportSpecifier(undefined, undefined, ts.createIdentifier(l.logicTypeName)),
                     ),
                 ),
             ),

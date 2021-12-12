@@ -179,9 +179,9 @@ export function visitKeaCalls(
             // only if symbol resolves we mark the logic type as imported
             const symbol = checker.getSymbolAtLocation(keaTypeArgument.typeName)
             if (symbol) {
-                const declaration = symbol.getDeclarations()[0]
+                const declaration = symbol.getDeclarations()?.[0]
 
-                if (ts.isImportSpecifier(declaration)) {
+                if (declaration && ts.isImportSpecifier(declaration)) {
                     const filename = getFilenameForImportSpecifier(declaration, checker)
                     logicTypeImported = filename === typeFileName
                 }
