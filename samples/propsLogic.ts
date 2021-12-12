@@ -2,6 +2,7 @@ import { kea } from 'kea'
 import { propsLogicType } from './propsLogicType'
 
 const propsLogic = kea<propsLogicType>({
+    path: (key) => ['propsLogic', key],
     props: {
         /* TODO for 3.0: set default props here */
     } as {

@@ -216,7 +216,7 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
 }
 
 export function getFilenamesForSymbol(symbol: ts.Symbol): string[] | undefined {
-    return symbol?.declarations
+    return (symbol?.declarations || [])
         .map((d) => d.getSourceFile().fileName)
         .filter((str) => !str.includes('/node_modules/typescript/lib/lib'))
 }
@@ -254,9 +254,9 @@ export function storeExtractedSymbol(
     parsedLogic: ParsedLogic,
     typeRootName?: string,
 ) {
-    const declaration = symbol.getDeclarations()[0]
+    const declaration = symbol.getDeclarations()?.[0]
 
-    if (ts.isImportSpecifier(declaration)) {
+    if (declaration && ts.isImportSpecifier(declaration)) {
         const importFilename = getFilenameForImportSpecifier(declaration, checker)
         if (importFilename) {
             addTypeImport(parsedLogic, importFilename, typeRootName || declaration.getText())

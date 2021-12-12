@@ -5,6 +5,7 @@ import { Repository } from './types'
 const API_URL = 'https://api.github.com'
 
 export const githubLogic = kea<githubLogicType>({
+    path: ['githubLogic'],
     actions: {
         setUsername: (username: string) => ({ username }),
         setRepositories: (repositories: Repository[]) => ({ repositories }),

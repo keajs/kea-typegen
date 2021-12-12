@@ -3,6 +3,7 @@ import { kea, KeaPlugin } from 'kea'
 import { A1, A2, A3, A4, A5, A7, D1, D3, D6, EventIndex, ExportedApi, R1, R6, S6 } from './autoImportTypes'
 import { githubLogic } from './githubLogic'
 import { loadersLogic } from './loadersLogic'
+import { Bla } from './donotimport'
 import type { autoImportLogicType } from './autoImportLogicType'
 
 type L1 = 'haha'
@@ -12,6 +13,7 @@ type L2 = {
 interface RandomAPI extends ExportedApi.RandomThing {}
 
 export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
+    path: ['autoImportLogic'],
     props: {} as {
         asd: D3
     },
@@ -62,6 +64,7 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
     defaults: {
         bla: { bla: 'asd' } as D1,
         asd: {} as D6,
+        notimported: {} as Bla,
     },
     reducers: {
         rbla: [{ bla: 'asd' } as R1, {}],

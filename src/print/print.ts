@@ -72,6 +72,31 @@ export function printToFiles(
         printLogicType(parsedLogic, appOptions)
     }
 
+    // Automatically ignore imports from "node_modules/@types/node", if {types: ["node"]} in tsconfig.json
+    const defaultGlobalTypePaths = appOptions.importGlobalTypes
+        ? []
+        : program
+              .getCompilerOptions()
+              .types.map(
+                  (type) =>
+                      path.join(
+                          appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
+                          'node_modules',
+                          '@types',
+                          type,
+                      ) + path.sep,
+              )
+
+    // Manually ignored
+    const ignoredImportPaths = (appOptions.ignoreImportPaths || []).map((importPath) =>
+        path.resolve(appOptions.rootPath, importPath),
+    )
+
+    const doNotImportFromPaths = [...defaultGlobalTypePaths, ...ignoredImportPaths]
+
+    const shouldIgnore = (absolutePath: string) =>
+        !!doNotImportFromPaths.find((badPath) => absolutePath.startsWith(badPath))
+
     let writtenFiles = 0
     let filesToWrite = 0
     let filesToModify = 0
@@ -100,8 +125,14 @@ export function printToFiles(
                 if (!relativePath.startsWith('.')) {
                     relativePath = `./${relativePath}`
                 }
-                return `import { ${[...list].sort().join(', ')} } from '${relativePath}'`
+                return {
+                    list: [...list].sort(),
+                    fullPath: file,
+                    relativePath,
+                }
             })
+            .filter(({ fullPath }) => !shouldIgnore(fullPath))
+            .map(({ list, relativePath }) => `import { ${list.join(', ')} } from '${relativePath}'`)
             .join('\n')
 
         const finalOutput = [

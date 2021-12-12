@@ -4,6 +4,7 @@ import { loadersLogicType } from './loadersLogicType'
 import { Dashboard } from './types'
 
 export const loadersLogic = kea<loadersLogicType>({
+    path: ['loadersLogic'],
     actions: {
         addDashboard: (name: string) => ({ name }),
     },

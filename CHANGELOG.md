@@ -1,3 +1,8 @@
+## 1.4.1 - 2021-12-12
+
+-   Adds new option, `ignoreImportPaths`, to specify a list of files or folders that typegen will never import from, when adding imports inside `logicType.ts` files.
+-   Automatically skips adding imports for global types, as specified via the `types` array in `tsconfig.json`. Each entry in the array (e.g. `node`) will add an import ignore path for `./node_modules/@types/node`. To revert this, set `"importGlobalTypes": true` inside `.kearc` or via the CLI.
+
 ## 1.4.0 - 2021-12-12
 
 -   Support TypeScript 4.5+.

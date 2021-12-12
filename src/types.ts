@@ -57,6 +57,7 @@ export interface ParsedLogic {
 
 export interface AppOptions {
     tsConfigPath?: string
+    packageJsonPath?: string
     sourceFilePath?: string
     rootPath?: string
     typesPath?: string
@@ -64,7 +65,13 @@ export interface AppOptions {
     watch?: boolean
     quiet?: boolean
     verbose?: boolean
+    /** Do not write imports inside logic.ts files */
     noImport?: boolean
+    /** Add import statements in logicType.ts files for global types (e.g. @types/node) */
+    importGlobalTypes?: boolean
+    /** List of paths we will never import from inside logicType.ts files */
+    ignoreImportPaths?: string[]
+    /** Write paths inside logic.ts files */
     writePaths?: boolean
 
     log: (message: string) => void

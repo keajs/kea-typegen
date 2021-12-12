@@ -5,6 +5,7 @@ import { githubImportLogicType } from './githubImportLogicType'
 import { Repository } from './types'
 
 export const githubImportLogic = kea<githubImportLogicType>({
+    path: ['githubImportLogic'],
     reducers: () => ({
         repositoryReducerCopy: [
             [] as Repository[],

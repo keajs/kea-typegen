@@ -1,0 +1,3 @@
+{
+    "ignoreImportPaths": ["./donotimport.ts"]
+}

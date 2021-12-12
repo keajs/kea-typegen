@@ -47,6 +47,14 @@ yargs
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
     .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
     .option('write-paths', { describe: 'Write paths into logic files that have none', type: 'boolean' })
+    .option('import-global-types', {
+        describe: 'Add import statements in logicType.ts files for global types (e.g. @types/node)',
+        type: 'boolean',
+    })
+    .option('ignore-import-paths', {
+        describe: 'List of paths we will never import from inside logicType.ts files',
+        type: 'array',
+    })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()
@@ -62,18 +70,20 @@ function parsedToAppOptions(parsedOptions) {
         verbose: parsedOptions.verbose,
         noImport: parsedOptions.noImport,
         writePaths: parsedOptions.writePaths,
+        importGlobalTypes: parsedOptions.importGlobalTypes,
+        ignoreImportPaths: parsedOptions.ignoreImportPaths,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),
     } as AppOptions
 
     return appOptions
 }
 
-function findKeaConfig(): string {
-    return ts.findConfigFile('./', ts.sys.fileExists, '.kearc')
+function findKeaConfig(searchPath): string {
+    return ts.findConfigFile(searchPath, ts.sys.fileExists, '.kearc')
 }
 
 function includeKeaConfig(appOptions: AppOptions): AppOptions {
-    const configFilePath = findKeaConfig()
+    const configFilePath = findKeaConfig(appOptions.rootPath)
     const newOptions = { ...appOptions } as AppOptions
 
     let rawData, keaConfig
@@ -107,14 +117,16 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
                 // set all paths in .kearc to be relative from where the file is located
                 if (key.endsWith('Path')) {
                     newOptions[key] = path.resolve(process.cwd(), configDirPath, keaConfig[key])
+                } else if (key.endsWith('Paths')) {
+                    if (!Array.isArray(keaConfig[key])) {
+                        console.error(`Config "${key}" in ".kearc" is not an array`)
+                        process.exit(1)
+                    }
+                    newOptions[key] = keaConfig[key].map((value) => path.resolve(process.cwd(), configDirPath, value))
                 } else {
                     newOptions[key] = keaConfig[key]
                 }
             })
-    }
-
-    if (!newOptions.tsConfigPath) {
-        newOptions.tsConfigPath = ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')
     }
 
     if (!newOptions.rootPath) {
@@ -123,6 +135,18 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
 
     if (!newOptions.typesPath) {
         newOptions.typesPath = newOptions.rootPath
+    }
+
+    if (!newOptions.tsConfigPath) {
+        newOptions.tsConfigPath =
+            ts.findConfigFile(newOptions.rootPath, ts.sys.fileExists, 'tsconfig.json') ||
+            ts.findConfigFile('./', ts.sys.fileExists, 'tsconfig.json')
+    }
+
+    if (!newOptions.packageJsonPath) {
+        newOptions.packageJsonPath =
+            ts.findConfigFile(newOptions.rootPath, ts.sys.fileExists, 'package.json') ||
+            ts.findConfigFile('./', ts.sys.fileExists, 'package.json')
     }
 
     return newOptions
