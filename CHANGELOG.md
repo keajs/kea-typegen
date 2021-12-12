@@ -1,3 +1,9 @@
+## 1.4.0 - 2021-12-12
+
+-   Support TypeScript 4.5+.
+-   Now adds new type imports with `type`, such as: `import type { logicType } from './logicType`.
+-   Refactor internals to create nodes newer `ts.factory` methods.
+
 ## 1.3.0 - 2021-11-08
 
 -   Write paths into logics with `--write-paths`. Can be configured in `.kearc` with `writePaths: true`
