@@ -20,6 +20,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const ts = __importStar(require("typescript"));
+const typescript_1 = require("typescript");
 exports.default = {
     visitKeaProperty({ name, parsedLogic, node, getTypeNodeForNode, prepareForPrint }) {
         if (name === 'form') {
@@ -37,32 +38,32 @@ exports.default = {
             parsedLogic.reducers.push({
                 name: 'form',
                 typeNode: typeNode ||
-                    ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
-                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    typescript_1.factory.createTypeReferenceNode(typescript_1.factory.createIdentifier('Record'), [
+                        typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                        typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                     ]),
             });
             parsedLogic.extraInput['form'] = {
                 withLogicFunction: true,
-                typeNode: ts.factory.createTypeLiteralNode([
-                    ts.factory.createPropertySignature(undefined, ts.factory.createIdentifier('default'), ts.factory.createToken(ts.SyntaxKind.QuestionToken), ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
-                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                typeNode: typescript_1.factory.createTypeLiteralNode([
+                    typescript_1.factory.createPropertySignature(undefined, typescript_1.factory.createIdentifier('default'), typescript_1.factory.createToken(ts.SyntaxKind.QuestionToken), typescript_1.factory.createTypeReferenceNode(typescript_1.factory.createIdentifier('Record'), [
+                        typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                        typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                     ])),
-                    ts.factory.createPropertySignature(undefined, ts.factory.createIdentifier('submit'), ts.factory.createToken(ts.SyntaxKind.QuestionToken), ts.factory.createFunctionTypeNode(undefined, [
-                        ts.factory.createParameterDeclaration(undefined, undefined, undefined, ts.factory.createIdentifier('form'), undefined, typeNode ||
-                            ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
-                                ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                                ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    typescript_1.factory.createPropertySignature(undefined, typescript_1.factory.createIdentifier('submit'), typescript_1.factory.createToken(ts.SyntaxKind.QuestionToken), typescript_1.factory.createFunctionTypeNode(undefined, [
+                        typescript_1.factory.createParameterDeclaration(undefined, undefined, undefined, typescript_1.factory.createIdentifier('form'), undefined, typeNode ||
+                            typescript_1.factory.createTypeReferenceNode(typescript_1.factory.createIdentifier('Record'), [
+                                typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                                typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                             ]), undefined),
-                    ], ts.factory.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword))),
+                    ], typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword))),
                 ]),
             };
             parsedLogic.actions.push({
                 name: 'submitForm',
                 parameters: [],
-                returnTypeNode: ts.factory.createTypeLiteralNode([
-                    ts.factory.createPropertySignature(undefined, ts.factory.createIdentifier('value'), undefined, ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)),
+                returnTypeNode: typescript_1.factory.createTypeLiteralNode([
+                    typescript_1.factory.createPropertySignature(undefined, typescript_1.factory.createIdentifier('value'), undefined, typescript_1.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)),
                 ]),
             });
         }

@@ -10,7 +10,6 @@
         "outDir": "./lib",
         "baseUrl": "./src",
         "incremental": true,
-        "types": ["jest", "node"],
         "esModuleInterop": true,
         "resolveJsonModule": true,
         "jsx": "react"

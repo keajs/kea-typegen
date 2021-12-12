@@ -1,5 +1,6 @@
 import { Plugin } from '../../src/types'
 import * as ts from 'typescript'
+import { factory } from 'typescript'
 
 export default {
     visitKeaProperty({ name, parsedLogic, node, getTypeNodeForNode, prepareForPrint }) {
@@ -30,9 +31,9 @@ export default {
                     // the default given to us... or
                     typeNode ||
                     // ... Record<string, any>
-                    ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
-                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
+                        factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                        factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                     ]),
             })
 
@@ -41,40 +42,40 @@ export default {
                 // adds support for both { inline: (logic) => ({}) } and { inline: {} }
                 withLogicFunction: true,
                 // type applied in LogicInput
-                typeNode: ts.factory.createTypeLiteralNode([
+                typeNode: factory.createTypeLiteralNode([
                     // default?: Record<string, any>
-                    ts.factory.createPropertySignature(
+                    factory.createPropertySignature(
                         undefined,
-                        ts.factory.createIdentifier('default'),
-                        ts.factory.createToken(ts.SyntaxKind.QuestionToken),
-                        ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
-                            ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                            ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                        factory.createIdentifier('default'),
+                        factory.createToken(ts.SyntaxKind.QuestionToken),
+                        factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
+                            factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                            factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         ]),
                     ),
                     // submit?: (form: $typeNode || Record<string, any>) => void
-                    ts.factory.createPropertySignature(
+                    factory.createPropertySignature(
                         undefined,
-                        ts.factory.createIdentifier('submit'),
-                        ts.factory.createToken(ts.SyntaxKind.QuestionToken),
-                        ts.factory.createFunctionTypeNode(
+                        factory.createIdentifier('submit'),
+                        factory.createToken(ts.SyntaxKind.QuestionToken),
+                        factory.createFunctionTypeNode(
                             undefined,
                             [
-                                ts.factory.createParameterDeclaration(
+                                factory.createParameterDeclaration(
                                     undefined,
                                     undefined,
                                     undefined,
-                                    ts.factory.createIdentifier('form'),
+                                    factory.createIdentifier('form'),
                                     undefined,
                                     typeNode ||
-                                        ts.factory.createTypeReferenceNode(ts.factory.createIdentifier('Record'), [
-                                            ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                                            ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                                        factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
+                                            factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                                            factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                                         ]),
                                     undefined,
                                 ),
                             ],
-                            ts.factory.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword),
+                            factory.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword),
                         ),
                     ),
                 ]),
@@ -84,12 +85,12 @@ export default {
             parsedLogic.actions.push({
                 name: 'submitForm',
                 parameters: [],
-                returnTypeNode: ts.factory.createTypeLiteralNode([
-                    ts.factory.createPropertySignature(
+                returnTypeNode: factory.createTypeLiteralNode([
+                    factory.createPropertySignature(
                         undefined,
-                        ts.factory.createIdentifier('value'),
+                        factory.createIdentifier('value'),
                         undefined,
-                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
+                        factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
                     ),
                 ]),
             })

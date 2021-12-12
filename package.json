@@ -14,7 +14,7 @@
         "samples:write:paths": "ts-node ./src/cli/typegen.ts write -c ./samples/tsconfig.json --write-paths",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -c ./samples/tsconfig.json",
         "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json",
-        "form-plugin:build": "cd form-plugin && yarn build && cd ..",
+        "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },
     "main": "dist/src/index.js",
