@@ -1,9 +1,9 @@
 import { kea, KeaPlugin } from 'kea'
 
-import { autoImportLogicType } from './autoImportLogicType'
 import { A1, A2, A3, A4, A5, A7, D1, D3, D6, EventIndex, ExportedApi, R1, R6, S6 } from './autoImportTypes'
 import { githubLogic } from './githubLogic'
 import { loadersLogic } from './loadersLogic'
+import type { autoImportLogicType } from './autoImportLogicType'
 
 type L1 = 'haha'
 type L2 = {
@@ -40,10 +40,16 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
         complexAction: (element: HTMLElement, timeout: NodeJS.Timeout) => ({ element, timeout }),
         combinedA6Action: (filter: A5) => ({ a6: filter.a6, bla: filter.bla }),
         valueAction: [] as A7,
-        miscActionWithType: (randomThing: ExportedApi.RandomThing): { randomThing: ExportedApi.RandomThing } => ({
+        miscActionWithType: (
+            randomThing: ExportedApi.RandomThing,
+        ): {
+            randomThing: ExportedApi.RandomThing
+        } => ({
             randomThing,
         }),
-        miscActionWithTypeConstants: (): { color: 'green' | 'blue' } => ({
+        miscActionWithTypeConstants: (): {
+            color: 'green' | 'blue'
+        } => ({
             color: 'blue',
         }),
         miscActionWithoutType: (randomThing: ExportedApi.RandomThing) => ({ randomThing }),
