@@ -1,3 +1,7 @@
+## 1.4.2 - 2021-12-13
+
+-   Fix bug introduced with 1.4.1 if your `tsconfig.json` file does not contain a `types` array.
+
 ## 1.4.1 - 2021-12-12
 
 -   Adds new option, `ignoreImportPaths`, to specify a list of files or folders that typegen will never import from, when adding imports inside `logicType.ts` files.

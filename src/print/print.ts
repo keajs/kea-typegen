@@ -75,17 +75,15 @@ export function printToFiles(
     // Automatically ignore imports from "node_modules/@types/node", if {types: ["node"]} in tsconfig.json
     const defaultGlobalTypePaths = appOptions.importGlobalTypes
         ? []
-        : program
-              .getCompilerOptions()
-              .types.map(
-                  (type) =>
-                      path.join(
-                          appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
-                          'node_modules',
-                          '@types',
-                          type,
-                      ) + path.sep,
-              )
+        : (program.getCompilerOptions().types || []).map(
+              (type) =>
+                  path.join(
+                      appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
+                      'node_modules',
+                      '@types',
+                      type,
+                  ) + path.sep,
+          )
 
     // Manually ignored
     const ignoredImportPaths = (appOptions.ignoreImportPaths || []).map((importPath) =>
