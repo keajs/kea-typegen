@@ -1,6 +1,10 @@
-## 1.4.2 - 2022-03-18
+## 1.4.3 - 2022-03-18
 
 -   Internal: plugins can specify which types they want to import from 'kea'
+
+## 1.4.2 - 2021-12-13
+
+-   Fix bug introduced with 1.4.1 if your `tsconfig.json` file does not contain a `types` array.
 
 ## 1.4.1 - 2021-12-12
 
