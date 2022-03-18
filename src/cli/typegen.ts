@@ -117,7 +117,7 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
                 // set all paths in .kearc to be relative from where the file is located
                 if (key.endsWith('Path')) {
                     newOptions[key] = path.resolve(process.cwd(), configDirPath, keaConfig[key])
-                } else if (key.endsWith('Paths')) {
+                } else if (key.endsWith('Paths') && key !== 'writePaths') {
                     if (!Array.isArray(keaConfig[key])) {
                         console.error(`Config "${key}" in ".kearc" is not an array`)
                         process.exit(1)
