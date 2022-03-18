@@ -53,9 +53,11 @@ export interface ParsedLogic {
         typeNode: ts.TypeNode;
         withLogicFunction: boolean;
     }>;
+    importFromKeaInLogicType: Set<string>;
 }
 export interface AppOptions {
     tsConfigPath?: string;
+    packageJsonPath?: string;
     sourceFilePath?: string;
     rootPath?: string;
     typesPath?: string;
@@ -64,6 +66,8 @@ export interface AppOptions {
     quiet?: boolean;
     verbose?: boolean;
     noImport?: boolean;
+    importGlobalTypes?: boolean;
+    ignoreImportPaths?: string[];
     writePaths?: boolean;
     log: (message: string) => void;
 }

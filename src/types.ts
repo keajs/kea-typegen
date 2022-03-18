@@ -53,6 +53,7 @@ export interface ParsedLogic {
     typeReferencesInLogicInput: Set<string>
     interfaceDeclaration?: ts.InterfaceDeclaration
     extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
+    importFromKeaInLogicType: Set<string>
 }
 
 export interface AppOptions {

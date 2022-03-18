@@ -219,6 +219,7 @@ export function visitKeaCalls(
             typeReferencesToImportFromFiles: {},
             typeReferencesInLogicInput: new Set(),
             extraInput: {},
+            importFromKeaInLogicType: new Set([]),
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression

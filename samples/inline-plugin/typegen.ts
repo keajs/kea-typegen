@@ -4,6 +4,8 @@ import * as ts from 'typescript'
 export default {
     visitKeaProperty({ name, parsedLogic, type }) {
         if (name === 'inline') {
+            parsedLogic.importFromKeaInLogicType.add('NotReallyHereButImportedBecausePlugin')
+
             // add action "submitForm" to parsedLogic
             parsedLogic.actions.push({
                 name: 'inlineAction',

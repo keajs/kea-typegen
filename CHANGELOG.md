@@ -1,3 +1,7 @@
+## 1.4.2 - 2022-03-18
+
+-   Internal: plugins can specify which types they want to import from 'kea'
+
 ## 1.4.1 - 2021-12-12
 
 -   Adds new option, `ignoreImportPaths`, to specify a list of files or folders that typegen will never import from, when adding imports inside `logicType.ts` files.
