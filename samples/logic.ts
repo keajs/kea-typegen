@@ -13,7 +13,6 @@ export const logic = kea<logicType<Session>>({
     },
     key: (props) => props.id,
     path: (key) => ['scenes', 'homepage', 'index', key],
-    constants: () => ['SOMETHING', 'SOMETHING_ELSE'],
     actions: () => ({
         updateName: (name: string) => ({ name }),
         updateConst: (name: 'John' | 'Bill') => ({ name }),
@@ -39,7 +38,6 @@ export const logic = kea<logicType<Session>>({
             ],
             persistedNumber: [
                 1232,
-                { persist: true },
                 {
                     updateNumber: (_, { number }) => number,
                 },
