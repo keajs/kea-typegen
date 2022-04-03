@@ -203,7 +203,6 @@ export function visitKeaCalls(
             actions: [],
             reducers: [],
             selectors: [],
-            constants: [],
             listeners: [],
             sharedListeners: [],
             events: {},
