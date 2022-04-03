@@ -23,6 +23,7 @@ import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
 import { cloneNode } from '@wessberg/ts-clone-node'
+import {SymbolFlags} from "typescript";
 
 const visitFunctions = {
     actions: visitActions,
@@ -191,6 +192,8 @@ export function visitKeaCalls(
             typeFileName = path.resolve(appOptions.typesPath, relativePathFromRoot)
         }
 
+        const input = (node.parent as ts.CallExpression).arguments[0]
+
         const parsedLogic: ParsedLogic = {
             checker,
             node,
@@ -217,21 +220,41 @@ export function visitKeaCalls(
             typeReferencesInLogicInput: new Set(),
             extraInput: {},
             importFromKeaInLogicType: new Set([]),
+            inputBuilderArray: ts.isArrayLiteralExpression(input)
         }
 
-        const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
+        const calls: { name: string; type: ts.Type, typeNode: ts.TypeNode | null; expression: ts.Expression }[] = []
 
-        for (const inputProperty of input.properties) {
-            if (!ts.isPropertyAssignment(inputProperty)) {
-                continue
+        if (ts.isObjectLiteralExpression(input)) {
+            for (const inputProperty of input.properties) {
+                if (!ts.isPropertyAssignment(inputProperty)) {
+                    continue
+                }
+                const symbol = checker.getSymbolAtLocation(inputProperty.name)
+                if (!symbol) {
+                    continue
+                }
+                const name = symbol.getName()
+                const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
+                const typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                calls.push({ name, type, typeNode, expression: inputProperty.initializer })
             }
+        } else if (ts.isArrayLiteralExpression(input)) {
+            for (const callExpression of input.elements) {
+                if (!ts.isCallExpression(callExpression) || callExpression.arguments.length === 0) {
+                    continue
+                }
 
-            const symbol = checker.getSymbolAtLocation(inputProperty.name)
-            if (!symbol) {
-                continue
+                const name = callExpression.expression.getText()
+                const argument = callExpression.arguments[0]
+                const type = checker.getTypeAtLocation(argument)
+                const typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+
+                calls.push({ name, type, typeNode, expression: callExpression.arguments[0] })
             }
+        }
 
-            const name = symbol.getName()
+        for (let { name, type, typeNode, expression } of calls) {
             if (name === 'path') {
                 parsedLogic.hasPathInLogic = true
             }
@@ -239,15 +262,12 @@ export function visitKeaCalls(
                 parsedLogic.hasKeyInLogic = true
             }
 
-            let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
-            let typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
-
             if (typeNode && ts.isFunctionTypeNode(typeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()
                 typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
             }
 
-            visitFunctions[name]?.(type, inputProperty, parsedLogic)
+            visitFunctions[name]?.(parsedLogic, type, expression)
 
             const visitKeaPropertyArguments: VisitKeaPropertyArguments = {
                 name,
@@ -255,7 +275,7 @@ export function visitKeaCalls(
                 type,
                 typeNode,
                 parsedLogic,
-                node: inputProperty.initializer,
+                node: expression,
                 checker,
                 gatherImports: (input) => gatherImports(input, checker, parsedLogic),
                 cloneNode,
@@ -277,7 +297,6 @@ export function visitKeaCalls(
                 }
             }
         }
-
         parsedLogics.push(parsedLogic)
     }
 }

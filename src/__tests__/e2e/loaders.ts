@@ -25,7 +25,6 @@ test('loaders - with a function', () => {
     expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
 
-
 test('loaders - with an array and default', () => {
     const logicSource = `
         import { kea } from 'kea'

@@ -1,4 +1,4 @@
-import {logicSourceToLogicType} from "../../utils";
+import { logicSourceToLogicType } from '../../utils'
 
 test('connect actions from another logic', () => {
     const logicSource = `
@@ -45,7 +45,6 @@ test('connect actions from another logic', () => {
     `
     expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
-
 
 test('connect actions from multiple other logics', () => {
     const logicSource = `

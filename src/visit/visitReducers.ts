@@ -1,9 +1,9 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { extractImportedActions, getAndGatherTypeNodeForDefaultValue } from '../utils'
-import { cloneNode } from '@wessberg/ts-clone-node'
+import { Expression, Type } from 'typescript'
 
-export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitReducers(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {

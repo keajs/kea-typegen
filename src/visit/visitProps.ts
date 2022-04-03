@@ -1,8 +1,8 @@
 import { ParsedLogic } from '../types'
-import * as ts from 'typescript'
 import { getAndGatherTypeNodeForDefaultValue } from '../utils'
+import { Expression, Type } from 'typescript'
 
-export function visitProps(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitProps(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
-    parsedLogic.propsType = getAndGatherTypeNodeForDefaultValue(inputProperty.initializer, checker, parsedLogic)
+    parsedLogic.propsType = getAndGatherTypeNodeForDefaultValue(expression, checker, parsedLogic)
 }

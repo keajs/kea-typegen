@@ -2,8 +2,9 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { gatherImports, getParameterDeclaration } from '../utils'
 import { cloneNode } from '@wessberg/ts-clone-node'
+import { Expression, Type } from 'typescript'
 
-export function visitConnect(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {

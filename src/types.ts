@@ -12,8 +12,7 @@ export interface NameType {
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
-export interface ReducerTransform extends NameType {
-}
+export interface ReducerTransform extends NameType {}
 
 export interface SelectorTransform extends NameType {
     functionTypes?: { name: string; type: ts.TypeNode }[]
@@ -52,6 +51,7 @@ export interface ParsedLogic {
     interfaceDeclaration?: ts.InterfaceDeclaration
     extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
     importFromKeaInLogicType: Set<string>
+    inputBuilderArray: boolean
 }
 
 export interface AppOptions {

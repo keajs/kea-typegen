@@ -1,13 +1,14 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { extractImportedActions, getActionTypeCreator } from '../utils'
+import { Expression, Type } from 'typescript'
 
-export function visitListeners(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitListeners(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const getActionType = getActionTypeCreator(parsedLogic)
     const { checker } = parsedLogic
     let extraActions = {}
 
-    let objectLiteral = inputProperty.initializer
+    let objectLiteral = expression
 
     if (ts.isFunctionLike(objectLiteral)) {
         objectLiteral = (objectLiteral as any).body
@@ -33,9 +34,11 @@ export function visitListeners(type: ts.Type, inputProperty: ts.PropertyAssignme
             if (actionCreator && ts.isFunctionLike(actionCreator)) {
                 const actionReturnType = actionCreator.type
                 if (actionReturnType && ts.isTypeLiteralNode(actionReturnType)) {
-                    const payload = (actionReturnType.members.find(
-                        (m) => (m.name as ts.Identifier)?.escapedText === 'payload',
-                    ) as ts.PropertySignature)?.type
+                    const payload = (
+                        actionReturnType.members.find(
+                            (m) => (m.name as ts.Identifier)?.escapedText === 'payload',
+                        ) as ts.PropertySignature
+                    )?.type
                     if (payload) {
                         parsedLogic.listeners.push({ name, action: actionReturnType, payload })
                     }
