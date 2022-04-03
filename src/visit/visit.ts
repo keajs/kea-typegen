@@ -19,7 +19,6 @@ import { visitProps } from './visitProps'
 import { visitKey } from './visitKey'
 import { visitPath } from './visitPath'
 import { visitListeners } from './visitListeners'
-import { visitConstants } from './visitConstants'
 import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
@@ -28,7 +27,6 @@ import { cloneNode } from '@wessberg/ts-clone-node'
 const visitFunctions = {
     actions: visitActions,
     connect: visitConnect,
-    constants: visitConstants,
     defaults: visitDefaults,
     events: visitEvents,
     key: visitKey,

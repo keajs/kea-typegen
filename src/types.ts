@@ -13,7 +13,6 @@ export interface NameType {
 }
 
 export interface ReducerTransform extends NameType {
-    reducerOptions?: ts.TypeNode | ts.ParenthesizedTypeNode
 }
 
 export interface SelectorTransform extends NameType {
@@ -38,7 +37,6 @@ export interface ParsedLogic {
     hasPathInLogic: boolean
     hasKeyInLogic: boolean
     logicTypeArguments: string[]
-    constants: string[]
     events: Record<string, boolean>
     checker: ts.TypeChecker
     actions: ActionTransform[]

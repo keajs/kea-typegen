@@ -30,8 +30,6 @@ import { printActionCreators } from './printActionCreators'
 import { printProps } from './printProps'
 import { printKey } from './printKey'
 import { printDefaults } from './printDefaults'
-import { printConstants } from './printConstants'
-import { printReducerOptions } from './printReducerOptions'
 import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
@@ -254,7 +252,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
         printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
         printProperty('actions', printActions(parsedLogic, appOptions)),
-        printProperty('constants', printConstants(parsedLogic)),
         printProperty('defaults', printDefaults(parsedLogic)),
         printProperty('events', printEvents(parsedLogic)),
         printProperty('key', printKey(parsedLogic)),
@@ -268,7 +265,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         printProperty('pathString', factory.createStringLiteral(parsedLogic.pathString)),
         printProperty('props', printProps(parsedLogic)),
         printProperty('reducer', printReducer(parsedLogic)),
-        printProperty('reducerOptions', printReducerOptions(parsedLogic)),
         printProperty('reducers', printReducers(parsedLogic)),
         printProperty('selector', printSelector(parsedLogic)),
         printProperty('selectors', printSelectors(parsedLogic)),
