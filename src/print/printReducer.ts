@@ -21,7 +21,7 @@ export function printReducer(parsedLogic: ParsedLogic) {
                 undefined,
                 factory.createIdentifier('action'),
                 undefined,
-                factory.createFunctionTypeNode(undefined, [], factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)),
+                factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                 undefined,
             ),
             factory.createParameterDeclaration(
