@@ -46,7 +46,6 @@ exports[`loaders - with a function 1`] = `
         loadSessionsSuccess: (sessions: Session[], payload?: string) => void;
         loadSessionsFailure: (error: string, errorObject?: any) => void;
     };
-    constants: {};
     defaults: {
         sessions: Session[];
         sessionsLoading: boolean;
@@ -59,11 +58,10 @@ exports[`loaders - with a function 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         sessions: Session[];
         sessionsLoading: boolean;
     };
-    reducerOptions: {};
     reducers: {
         sessions: (state: Session[], action: any, fullState: any) => Session[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
@@ -132,7 +130,6 @@ exports[`loaders - with an array and default 1`] = `
         loadSessionsSuccess: (sessions: Session[], payload?: string) => void;
         loadSessionsFailure: (error: string, errorObject?: any) => void;
     };
-    constants: {};
     defaults: {
         sessions: Session[];
         sessionsLoading: boolean;
@@ -145,11 +142,10 @@ exports[`loaders - with an array and default 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         sessions: Session[];
         sessionsLoading: boolean;
     };
-    reducerOptions: {};
     reducers: {
         sessions: (state: Session[], action: any, fullState: any) => Session[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;
@@ -236,7 +232,6 @@ exports[`loaders - with no param 1`] = `
         loadResultsSuccess: (sessions: string[], payload?: any) => void;
         loadResultsFailure: (error: string, errorObject?: any) => void;
     };
-    constants: {};
     defaults: {
         sessions: string[];
         sessionsLoading: boolean;
@@ -249,11 +244,10 @@ exports[`loaders - with no param 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         sessions: string[];
         sessionsLoading: boolean;
     };
-    reducerOptions: {};
     reducers: {
         sessions: (state: string[], action: any, fullState: any) => string[];
         sessionsLoading: (state: boolean, action: any, fullState: any) => boolean;

@@ -28,7 +28,6 @@ exports[`reducers - as a function returning a object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -42,12 +41,11 @@ exports[`reducers - as a function returning a object 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherNameNoDefault: (state: any, action: any, fullState: any) => any;
@@ -102,7 +100,6 @@ exports[`reducers - as an object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -116,12 +113,11 @@ exports[`reducers - as an object 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherNameNoDefault: (state: any, action: any, fullState: any) => any;
@@ -176,7 +172,6 @@ exports[`reducers - with a function 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -190,12 +185,11 @@ exports[`reducers - with a function 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         name: string;
         otherNameNoDefault: any;
         yetAnotherNameWithNullDefault: string | null;
     };
-    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherNameNoDefault: (state: any, action: any, fullState: any) => any;
@@ -241,7 +235,6 @@ exports[`reducers - with bool default 1`] = `
     actions: {
         updateName: () => void;
     };
-    constants: {};
     defaults: {
         name: boolean;
     };
@@ -253,10 +246,9 @@ exports[`reducers - with bool default 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         name: boolean;
     };
-    reducerOptions: {};
     reducers: {
         name: (state: boolean, action: any, fullState: any) => boolean;
     };

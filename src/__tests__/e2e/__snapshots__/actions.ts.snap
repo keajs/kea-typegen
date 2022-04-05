@@ -28,7 +28,6 @@ exports[`actions - as a function returning a object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {};
     events: {};
     key: undefined;
@@ -38,8 +37,7 @@ exports[`actions - as a function returning a object 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {};
-    reducerOptions: {};
+    reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
@@ -78,7 +76,6 @@ exports[`actions - as an object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {};
     events: {};
     key: undefined;
@@ -88,8 +85,7 @@ exports[`actions - as an object 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {};
-    reducerOptions: {};
+    reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
@@ -128,7 +124,6 @@ exports[`actions - with a function 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {};
     events: {};
     key: undefined;
@@ -138,8 +133,7 @@ exports[`actions - with a function 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {};
-    reducerOptions: {};
+    reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
@@ -205,7 +199,6 @@ exports[`actions - with random values instead of functions 1`] = `
         withBool: () => void;
         withRandomPayload: () => void;
     };
-    constants: {};
     defaults: {};
     events: {};
     key: undefined;
@@ -215,8 +208,7 @@ exports[`actions - with random values instead of functions 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {};
-    reducerOptions: {};
+    reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
     selector: (state: any) => {};
     selectors: {};
