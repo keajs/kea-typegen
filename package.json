@@ -27,6 +27,7 @@
         "@wessberg/ts-clone-node": "0.3.19",
         "diff": "^5.0.0",
         "prettier": "^2.5.1",
+        "ts-morph": "^14.0.0",
         "yargs": "^16.2.0"
     },
     "devDependencies": {
@@ -41,7 +42,7 @@
         "form-plugin": "file:./form-plugin",
         "husky": ">=4",
         "jest": "^27.0.5",
-        "kea": "^3.0.0-alpha.0",
+        "kea": "file:.yalc/kea",
         "lint-staged": ">=12.1.2",
         "react": "^16.13.1",
         "react-redux": "^7.2.6",

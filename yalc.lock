@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "packages": {
+    "kea": {
+      "signature": "57be3b411adeb01a1f7e84d9fc96db1d",
+      "file": true,
+      "replaced": "^3.0.0-alpha.0"
+    }
+  }
+}

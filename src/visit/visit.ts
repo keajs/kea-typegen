@@ -1,4 +1,4 @@
-import * as ts from 'typescript'
+import { factory, NodeBuilderFlags, SymbolFlags, TypeFormatFlags } from 'typescript'
 import * as path from 'path'
 import { AppOptions, ParsedLogic, PluginModule, VisitKeaPropertyArguments } from '../types'
 import {
@@ -23,7 +23,7 @@ import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
 import { cloneNode } from '@wessberg/ts-clone-node'
-import {SymbolFlags} from "typescript";
+import { createWrappedNode, printNode, ts } from "ts-morph";
 
 const visitFunctions = {
     actions: visitActions,
@@ -220,10 +220,10 @@ export function visitKeaCalls(
             typeReferencesInLogicInput: new Set(),
             extraInput: {},
             importFromKeaInLogicType: new Set([]),
-            inputBuilderArray: ts.isArrayLiteralExpression(input)
+            inputBuilderArray: ts.isArrayLiteralExpression(input),
         }
 
-        const calls: { name: string; type: ts.Type, typeNode: ts.TypeNode | null; expression: ts.Expression }[] = []
+        const calls: { name: string; type: ts.Type; typeNode: ts.TypeNode | null; expression: ts.Expression }[] = []
 
         if (ts.isObjectLiteralExpression(input)) {
             for (const inputProperty of input.properties) {
@@ -240,17 +240,129 @@ export function visitKeaCalls(
                 calls.push({ name, type, typeNode, expression: inputProperty.initializer })
             }
         } else if (ts.isArrayLiteralExpression(input)) {
+            if (ts.isCallExpression(node.parent)) {
+                const args = node.parent.typeArguments
+                debugger
+            }
+
+
             for (const callExpression of input.elements) {
                 if (!ts.isCallExpression(callExpression) || callExpression.arguments.length === 0) {
                     continue
                 }
 
+                // array element is `actions({...})`, but we need the type of `actions({...})(logic as any)`
+
+                const deeperCall = factory.createCallExpression(cloneNode(callExpression), undefined, [
+                    factory.createAsExpression(
+                        factory.createNull(),
+                        factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                    ),
+                ])
+                const deeperTypeee = checker.getResolvedSignature(deeperCall)
+
+                const deepSymbol = checker.getSymbolAtLocation(deeperCall)
+                const deepType = checker.getTypeAtLocation(deeperCall)
+                const deepTypeNode = deepType ? checker.typeToTypeNode(deepType, undefined, undefined) : null
+
                 const name = callExpression.expression.getText()
                 const argument = callExpression.arguments[0]
-                const type = checker.getTypeAtLocation(argument)
-                const typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                const argType = checker.getTypeAtLocation(argument)
+                const argTypeNode = argType ? checker.typeToTypeNode(argType, undefined, undefined) : null
 
-                calls.push({ name, type, typeNode, expression: callExpression.arguments[0] })
+                if (name === 'actions') {
+                    const actionsCall = createWrappedNode(callExpression, { typeChecker: checker }).asKindOrThrow(
+                        ts.SyntaxKind.CallExpression,
+                    )
+                    const actionsReturn = actionsCall.getReturnType()
+                    const retrr = actionsReturn.getText(actionsCall)
+                    const txtx = actionsCall.getText()
+                    const a = printNode(callExpression)
+
+                    const newCode = `${actionsCall.getText()}(null as any)`
+
+
+
+                    debugger
+
+                    const type3 = checker.getTypeAtLocation(callExpression)
+                    const argTypeNode3 = type3
+                        ? checker.typeToTypeNode(type3, undefined, NodeBuilderFlags.NoTruncation)
+                        : null
+
+                    if (ts.isTypeReferenceNode(argTypeNode3)) {
+                        const otherReference = argTypeNode3.typeArguments[1]
+                        if (ts.isTypeReferenceNode(otherReference)) {
+                            const ttc = checker.getTypeFromTypeNode(otherReference)
+                        }
+                    }
+
+                    const signature = type3.getCallSignatures()[0]
+                    const returnType = signature.getReturnType()
+
+                    const ret = checker.typeToString(
+                        returnType,
+                        undefined,
+                        TypeFormatFlags.NoTruncation |
+                            TypeFormatFlags.NoTypeReduction |
+                            TypeFormatFlags.UseFullyQualifiedType,
+                    )
+                    debugger
+
+                    const props = checker.getPropertiesOfType(returnType)
+                    for (const propertySymbol of props) {
+                        if (propertySymbol.name === 'actionCreators') {
+                            const a = checker.symbolToEntityName(propertySymbol, SymbolFlags.None, undefined, undefined)
+                            const b = checker.symbolToExpression(propertySymbol, SymbolFlags.None, undefined, undefined)
+                            const c = checker.symbolToTypeParameterDeclarations(propertySymbol, undefined, undefined)
+                            const d = checker.symbolToParameterDeclaration(propertySymbol, undefined, undefined)
+                            debugger
+
+                            const string = checker.symbolToString(propertySymbol)
+                            const tt = checker.getDeclaredTypeOfSymbol(propertySymbol)
+                            const type = checker.getTypeOfSymbolAtLocation(propertySymbol, undefined)
+                            const ttypenode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                            debugger
+                        }
+                    }
+
+                    debugger
+
+                    const symbol = checker.getSymbolAtLocation(callExpression.expression)
+                    if (symbol) {
+                        const a = checker.symbolToEntityName(symbol, SymbolFlags.None, undefined, undefined)
+                        const b = checker.symbolToExpression(symbol, SymbolFlags.None, undefined, undefined)
+                        const c = checker.symbolToTypeParameterDeclarations(symbol, undefined, undefined)
+                        const d = checker.symbolToParameterDeclaration(symbol, undefined, undefined)
+                        debugger
+                    }
+
+                    const typeNode3 = checker.typeToTypeNode(signature.getReturnType(), input, undefined)
+
+                    if (ts.isTypeReferenceNode(typeNode3)) {
+                        debugger
+                        const sym4 = checker.getSymbolAtLocation(typeNode3.typeName)
+                        const sym5 = checker.getSymbolOfExpando(typeNode3.typeName, true)
+                        // sym4.members.get('actionCreators')
+                        debugger
+                    }
+                }
+                calls.push({ name, type: argType, typeNode: argTypeNode, expression: callExpression.arguments[0] })
+
+                // if (typeNode && ts.isFunctionTypeNode(typeNode)) {
+                //     type = callExpression.getCallSignatures()[0].getReturnType()
+                //     typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                // }
+                //
+                // const signature = type.getCallSignatures()[0]
+                // if (signature) {
+                //     const sigReturnType = signature.getReturnType()
+                //     const sigReturnTypeNode = checker.typeToTypeNode(
+                //       sigReturnType,
+                //       undefined,
+                //       NodeBuilderFlags.NoTruncation,
+                //     )
+                // }
             }
         }
 
