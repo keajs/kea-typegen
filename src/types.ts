@@ -90,11 +90,18 @@ export interface VisitKeaPropertyArguments {
     prepareForPrint<T extends ts.Node>(node: T): T
 }
 
+export type TypeBuilder = (args: VisitKeaPropertyArguments) => void
+export interface TypeBuilderModule {
+    name: string
+    file: string
+    typeBuilder?: TypeBuilder
+}
+
 export interface Plugin {
     visitKeaProperty?: (args: VisitKeaPropertyArguments) => void
 }
-
 export interface PluginModule extends Plugin {
     name: string
     file: string
+    typeBuilder?: (args: VisitKeaPropertyArguments) => void
 }
