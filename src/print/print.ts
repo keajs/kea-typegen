@@ -192,7 +192,7 @@ export function printToFiles(
             }
         }
 
-        const parsedLogicNeedsPath = appOptions.writePaths ? (pl: ParsedLogic) => !pl.hasPathInLogic && !pl.inputBuilderArray : () => false
+        const parsedLogicNeedsPath = appOptions.writePaths ? (pl: ParsedLogic) => !pl.hasPathInLogic : () => false
         const logicsNeedingPaths = parsedLogics.filter(parsedLogicNeedsPath)
         if (logicsNeedingPaths.length > 0) {
             if (appOptions.write && !appOptions.noImport) {
