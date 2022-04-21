@@ -6,6 +6,10 @@ import { runThroughPrettier } from '../print/print'
 import * as diff from 'diff'
 import * as path from 'path'
 import { factory, SyntaxKind } from 'typescript'
+import { parse, print, visit, types } from 'recast'
+
+const t = types.namedTypes
+const b = types.builders
 
 // NOTE:
 // This is an unfortunate workaround. The TS compiler strips all
@@ -167,80 +171,60 @@ export function writeTypeImports(
 export function writePaths(appOptions: AppOptions, program: ts.Program, filename: string, parsedLogics: ParsedLogic[]) {
     const { log } = appOptions
     const sourceFile = program.getSourceFile(filename)
-    const checker = program.getTypeChecker()
+    const rawCode = sourceFile.getText()
 
-    const parsedLogicMapByNode = new Map<ts.Node, ParsedLogic>()
-    for (const parsedLogic of parsedLogics) {
-        parsedLogicMapByNode.set(parsedLogic.node, parsedLogic)
+    const logics: Record<string, ParsedLogic> = {}
+    for (const l of parsedLogics) {
+        logics[l.logicName] = l
     }
 
-    const transformer = <T extends ts.Node>(context: ts.TransformationContext) => {
-        return (rootNode: T) => {
-            function visit(node: ts.Node): ts.Node {
-                node = ts.visitEachChild(node, visit, context)
-                if (
-                    ts.isCallExpression(node) &&
-                    isKeaCall(node.expression, checker) &&
-                    parsedLogicMapByNode.has(node.expression)
-                ) {
-                    const { path, hasKeyInLogic } = parsedLogicMapByNode.get(node.expression)
-                    return factory.createCallExpression(
-                        node.expression,
-                        node.typeArguments,
-                        node.arguments.map((argument, i) =>
-                            i === 0 && ts.isObjectLiteralExpression(argument)
-                                ? factory.createObjectLiteralExpression(
-                                      [
-                                          hasKeyInLogic
-                                              ? factory.createPropertyAssignment(
-                                                    factory.createIdentifier('path'),
-                                                    factory.createArrowFunction(
-                                                        undefined,
-                                                        undefined,
-                                                        [
-                                                            factory.createParameterDeclaration(
-                                                                undefined,
-                                                                undefined,
-                                                                undefined,
-                                                                factory.createIdentifier('key'),
-                                                                undefined,
-                                                                undefined,
-                                                                undefined,
-                                                            ),
-                                                        ],
-                                                        undefined,
-                                                        factory.createToken(SyntaxKind.EqualsGreaterThanToken),
-                                                        factory.createArrayLiteralExpression(
-                                                            [
-                                                                ...path.map((str) => factory.createStringLiteral(str)),
-                                                                factory.createIdentifier('key'),
-                                                            ],
-                                                            false,
-                                                        ),
-                                                    ),
-                                                )
-                                              : factory.createPropertyAssignment(
-                                                    factory.createIdentifier('path'),
-                                                    factory.createArrayLiteralExpression(
-                                                        path.map((str) => factory.createStringLiteral(str)),
-                                                        false,
-                                                    ),
-                                                ),
-                                          ...argument.properties,
-                                      ],
-                                      true,
-                                  )
-                                : argument,
-                        ),
-                    )
+    const ast = parse(rawCode, {
+        parser: require('recast/parsers/typescript'),
+    })
+    visit(ast, {
+        visitCallExpression: function (path) {
+            var stmt = path.node
+            if (
+                t.Identifier.check(stmt.callee) &&
+                stmt.callee.name === 'kea' &&
+                stmt.arguments[0] &&
+                (t.ObjectExpression.check(stmt.arguments[0]) || t.ArrayExpression.check(stmt.arguments[0])) &&
+                t.VariableDeclarator.check(path.parentPath.value) &&
+                t.Identifier.check(path.parentPath.value.id)
+            ) {
+                const logicName = path.parentPath.value.id.name
+                if (logics[logicName]) {
+                    const arg = stmt.arguments[0]
+                    const { path } = logics[logicName]
+
+                    if (t.ObjectExpression.check(arg)) {
+                        const pathProperty = arg.properties.find(
+                            (property) =>
+                                t.ObjectProperty.check(property) &&
+                                t.Identifier.check(property.key) &&
+                                property.key.name === 'path',
+                        )
+                        if (!pathProperty) {
+                            arg.properties = [
+                                b.objectProperty(
+                                    b.identifier('path'),
+                                    b.arrayExpression(path.map((str) => b.stringLiteral(str))),
+                                ),
+                                ...arg.properties,
+                            ]
+                        }
+                    } else if (t.ArrayExpression.check(arg)) {
+                    }
                 }
-                return node
             }
-            return ts.visitNode(rootNode, visit)
-        }
-    }
 
-    writeFile(sourceFile, transformer, filename)
+            this.traverse(path)
+        },
+    })
+
+    const newText = runThroughPrettier(print(ast).code, filename)
+
+    fs.writeFileSync(filename, newText)
 
     log(`🔥 Path added: ${path.relative(process.cwd(), filename)}`)
 }

@@ -27,6 +27,7 @@
         "@wessberg/ts-clone-node": "0.3.19",
         "diff": "^5.0.0",
         "prettier": "^2.5.1",
+        "recast": "^0.20.5",
         "yargs": "^16.2.0"
     },
     "devDependencies": {
