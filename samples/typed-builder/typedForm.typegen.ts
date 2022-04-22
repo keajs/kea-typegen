@@ -35,9 +35,23 @@ export function typedForm({ parsedLogic, node, getTypeNodeForNode, prepareForPri
             ]),
     })
 
-    // add extra type for logic input
+    // add action "submitForm" to parsedLogic
+    parsedLogic.actions.push({
+        name: 'submitForm',
+        parameters: [],
+        returnTypeNode: factory.createTypeLiteralNode([
+            factory.createPropertySignature(
+                undefined,
+                factory.createIdentifier('value'),
+                undefined,
+                factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
+            ),
+        ]),
+    })
+
+    // add extra type for logic input (kea v2 style)
     parsedLogic.extraInput['form'] = {
-        // adds support for both { inline: (logic) => ({}) } and { inline: {} }
+        // adds support for both { form: (logic) => ({}) } and { form: {} }
         withLogicFunction: true,
         // type applied in LogicInput
         typeNode: factory.createTypeLiteralNode([
@@ -78,18 +92,4 @@ export function typedForm({ parsedLogic, node, getTypeNodeForNode, prepareForPri
             ),
         ]),
     }
-
-    // add action "submitForm" to parsedLogic
-    parsedLogic.actions.push({
-        name: 'submitForm',
-        parameters: [],
-        returnTypeNode: factory.createTypeLiteralNode([
-            factory.createPropertySignature(
-                undefined,
-                factory.createIdentifier('value'),
-                undefined,
-                factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
-            ),
-        ]),
-    })
 }
