@@ -338,7 +338,7 @@ export function visitKeaCalls(
         }
 
         for (let { name, type, typeNode, expression, typeBuilders } of calls) {
-            if (name === 'path') {
+            if (name === 'path' || name === 'logicPath') {
                 parsedLogic.hasPathInLogic = true
             }
             if (name === 'key') {

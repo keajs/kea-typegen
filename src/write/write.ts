@@ -182,34 +182,39 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
         parser: require('recast/parsers/typescript'),
     })
 
-    let keaPathImportedAs: string | undefined
-    let hasKeaImportLine = false
-    let otherPackageImportsPath = false
+    let logicPathImportedAs: string | undefined
+    let hasImportFromKea = false
+    let someOtherPackageImportsPath = false
 
+    // gather information about what is imported
     visit(ast, {
         visitImportDeclaration(path) {
             const isKeaImport =
                 path.value.source && t.StringLiteral.check(path.value.source) && path.value.source.value === 'kea'
 
             if (isKeaImport) {
-                hasKeaImportLine = true
+                hasImportFromKea = true
             }
             for (const specifier of path.value.specifiers) {
-                if (specifier.local.name === 'path' && !isKeaImport) {
-                    otherPackageImportsPath = true
-                }
-                if (specifier.imported.name === 'path') {
-                    keaPathImportedAs = specifier.local.name
+                if (isKeaImport) {
+                    if (specifier.imported.name === 'path') {
+                        logicPathImportedAs = specifier.local.name
+                    }
+                } else {
+                    if (specifier.local.name === 'path') {
+                        someOtherPackageImportsPath = true
+                    }
                 }
             }
             return false
         },
     })
 
+    // add `import { path } from 'kea'` if not yet imported
     const mustImportPath = !!parsedLogics.find((l) => l.inputBuilderArray && !l.hasPathInLogic)
-    if (mustImportPath && !keaPathImportedAs) {
-        keaPathImportedAs = otherPackageImportsPath ? 'keaPath' : 'path'
-        if (hasKeaImportLine) {
+    if (mustImportPath && !logicPathImportedAs) {
+        logicPathImportedAs = someOtherPackageImportsPath ? 'logicPath' : 'path'
+        if (hasImportFromKea) {
             visit(ast, {
                 visitImportDeclaration(path) {
                     if (
@@ -218,7 +223,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
                         path.value.source.value === 'kea'
                     ) {
                         path.value.specifiers.push(
-                            b.importSpecifier(b.identifier('path'), b.identifier(keaPathImportedAs)),
+                            b.importSpecifier(b.identifier('path'), b.identifier(logicPathImportedAs)),
                         )
                     }
                     return false
@@ -227,7 +232,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
         } else {
             ast.program.body = [
                 b.importDeclaration(
-                    [b.importSpecifier(b.identifier('path'), b.identifier(keaPathImportedAs))],
+                    [b.importSpecifier(b.identifier('path'), b.identifier(logicPathImportedAs))],
                     b.stringLiteral('kea'),
                 ),
                 ...ast.program.body,
@@ -235,6 +240,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
         }
     }
 
+    // find all kea calls, add `path([])` or `path: []` if needed
     visit(ast, {
         visitCallExpression: function (path) {
             const stmt = path.node
@@ -251,7 +257,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
                 const parsedLogic = logics[logicName]
                 if (!parsedLogic) {
                     console.error(
-                        `Could not find logicName "${logicName}" in the list of logicNames (${Object.keys(logics).join(
+                        `[KEA-TYPEGEN] While trying to add a path path, could not find logicName "${logicName}" in the list of logicNames (${Object.keys(logics).join(
                             ', ',
                         )}) in the file: ${filename}`,
                     )
@@ -278,7 +284,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
                     }
                 } else if (t.ArrayExpression.check(arg)) {
                     arg.elements = [
-                      b.callExpression(b.identifier(keaPathImportedAs), [b.arrayExpression(logicPath.map((str) => b.stringLiteral(str))),]),
+                      b.callExpression(b.identifier(logicPathImportedAs), [b.arrayExpression(logicPath.map((str) => b.stringLiteral(str))),]),
                       ...arg.elements
                     ]
                 }
