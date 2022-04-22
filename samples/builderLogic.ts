@@ -1,6 +1,7 @@
-import { actions, events, kea, listeners, path, reducers, selectors } from 'kea'
-import { builderLogicType } from './builderLogicType'
+import { actions, events, kea, listeners, reducers, selectors, path } from 'kea'
 import { Repository } from './types'
+
+import type { builderLogicType } from './builderLogicType'
 
 const API_URL = 'https://api.github.com'
 
