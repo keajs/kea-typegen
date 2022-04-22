@@ -78,12 +78,12 @@ function parsedToAppOptions(parsedOptions) {
     return appOptions
 }
 
-function findKeaConfig(searchPath): string {
+function findKeaConfig(searchPath): string | undefined {
     return ts.findConfigFile(searchPath, ts.sys.fileExists, '.kearc')
 }
 
 function includeKeaConfig(appOptions: AppOptions): AppOptions {
-    const configFilePath = findKeaConfig(appOptions.rootPath)
+    const configFilePath = appOptions.rootPath ? findKeaConfig(appOptions.rootPath) : undefined
     const newOptions = { ...appOptions } as AppOptions
 
     let rawData, keaConfig
