@@ -33,7 +33,8 @@ import { printDefaults } from './printDefaults'
 import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
-import { writePaths, writeTypeImports } from '../write/write'
+import { writePaths } from '../write/writePaths'
+import { writeTypeImports } from '../write/writeTypeImports'
 import { printInternalExtraInput } from './printInternalExtraInput'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
