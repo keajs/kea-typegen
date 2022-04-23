@@ -36,6 +36,7 @@ import { printListeners } from './printListeners'
 import { writePaths } from '../write/writePaths'
 import { writeTypeImports } from '../write/writeTypeImports'
 import { printInternalExtraInput } from './printInternalExtraInput'
+import { convertToBuilders } from '../write/convertToBuilders'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -193,6 +194,7 @@ export function printToFiles(
             }
         }
 
+        // add a path if needed
         const parsedLogicNeedsPath = appOptions.writePaths ? (pl: ParsedLogic) => !pl.hasPathInLogic : () => false
         const logicsNeedingPaths = parsedLogics.filter(parsedLogicNeedsPath)
         if (logicsNeedingPaths.length > 0) {
@@ -203,6 +205,24 @@ export function printToFiles(
                 log(
                     `❌ Will not write ${logicsNeedingPaths.length} logic path${
                         logicsNeedingPaths.length === 1 ? '' : 's'
+                    }`,
+                )
+            }
+        }
+
+        // convert to logic builder
+        const parsedLogicNeedsConversion = appOptions.convertToBuilders
+            ? (pl: ParsedLogic) => !pl.inputBuilderArray
+            : () => false
+        const logicsNeedingConversion = parsedLogics.filter(parsedLogicNeedsConversion)
+        if (logicsNeedingConversion.length > 0) {
+            if (appOptions.write && !appOptions.noImport) {
+                convertToBuilders(appOptions, program, fileName, logicsNeedingConversion)
+                filesToModify += logicsNeedingConversion.length
+            } else {
+                log(
+                    `❌ Will not write ${logicsNeedingConversion.length} logic path${
+                        logicsNeedingConversion.length === 1 ? '' : 's'
                     }`,
                 )
             }
