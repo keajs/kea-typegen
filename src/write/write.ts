@@ -72,11 +72,11 @@ export function writeTypeImports(
         })
     }
 
-    // find all kea calls, add `path([])` or `path: []` if needed
+    // find all kea calls, add `<logicType<a,b>>` type parameters if needed
     visitAllKeaCalls(ast, logicsNeedingImports, filename, ({ path, parsedLogic }) => {
         const { logicTypeName, typeReferencesInLogicInput } = parsedLogic
 
-        path.node.typeArguments = b.tsTypeParameterInstantiation([
+        path.node.typeParameters = b.tsTypeParameterInstantiation([
             b.tsTypeReference(
                 b.identifier(logicTypeName),
                 typeReferencesInLogicInput.size > 0 ? b.tsTypeParameterInstantiation(
