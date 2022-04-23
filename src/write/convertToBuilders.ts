@@ -88,8 +88,8 @@ export function convertToBuilders(
 
                     newEntries.push(b.callExpression(b.identifier(renameTo), [propertiesMap[key].value]))
                     neededImports[importFrom] ??= []
-                    if (!neededImports[importFrom].find(([l]) => l === key)) {
-                        neededImports[importFrom].push([key, key])
+                    if (!neededImports[importFrom].find(([l]) => l === renameTo)) {
+                        neededImports[importFrom].push([renameTo, renameTo])
                     }
                 }
             }
@@ -116,6 +116,8 @@ export function convertToBuilders(
         for (const [importName, localName] of neededImportsFromThisKey) {
             if (!imports[importFrom] || !imports[importFrom].find(([i, l]) => i === importName && l === localName)) {
                 assureImport(ast, importFrom, importName, localName, !!imports[importFrom])
+                imports[importFrom] ??= []
+                imports[importFrom].push([importName, localName])
             }
         }
     }

@@ -4156,10 +4156,10 @@ json5@2.x, json5@^2.1.2:
   dependencies:
     minimist "^1.2.5"
 
-kea@^3.0.0-alpha.0:
-  version "3.0.0-alpha.0"
-  resolved "https://registry.yarnpkg.com/kea/-/kea-3.0.0-alpha.0.tgz#5a46022db25a7db6f139f684598ad2adc5215d10"
-  integrity sha512-KzDnHi9ova+y5RlOUMpN7SD9G3eRNCpiByEfo+5Ew1H32s0u3Lb7kVaSgQYeSx9F1eqeTC2o7s3OeITSi0/Wjg==
+kea@^3.0.0-alpha.6:
+  version "3.0.0-alpha.6"
+  resolved "https://registry.yarnpkg.com/kea/-/kea-3.0.0-alpha.6.tgz#fef0b7f9c66a15df6437ed33a97dd152f2e0e20e"
+  integrity sha512-uKsuQezYIWW16TB5hTztC7VPsrT9fg0kKz5cy+WS6QPvDE6eMpeuTF6vNdG/WlHKJTKj5E54rp0dk+gcR+KKMA==
 
 kind-of@^3.0.2, kind-of@^3.0.3, kind-of@^3.2.0:
   version "3.2.2"
