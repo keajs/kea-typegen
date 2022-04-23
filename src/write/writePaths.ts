@@ -4,7 +4,7 @@ import { parse, print, visit } from 'recast'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import * as osPath from 'path'
-import { t, b, visitAllKeaCalls } from "./utils";
+import { t, b, visitAllKeaCalls, assureImport } from "./utils";
 
 export function writePaths(appOptions: AppOptions, program: ts.Program, filename: string, parsedLogics: ParsedLogic[]) {
     const { log } = appOptions
@@ -47,30 +47,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
     const mustImportPath = !!parsedLogics.find((l) => l.inputBuilderArray && !l.hasPathInLogic)
     if (mustImportPath && !logicPathImportedAs) {
         logicPathImportedAs = someOtherPackageImportsPath ? 'logicPath' : 'path'
-        if (hasImportFromKea) {
-            visit(ast, {
-                visitImportDeclaration(path) {
-                    if (
-                        path.value.source &&
-                        t.StringLiteral.check(path.value.source) &&
-                        path.value.source.value === 'kea'
-                    ) {
-                        path.value.specifiers.push(
-                            b.importSpecifier(b.identifier('path'), b.identifier(logicPathImportedAs)),
-                        )
-                    }
-                    return false
-                },
-            })
-        } else {
-            ast.program.body = [
-                b.importDeclaration(
-                    [b.importSpecifier(b.identifier('path'), b.identifier(logicPathImportedAs))],
-                    b.stringLiteral('kea'),
-                ),
-                ...ast.program.body,
-            ]
-        }
+        assureImport(ast, 'kea', 'path', logicPathImportedAs, hasImportFromKea)
     }
 
     // find all kea calls, add `path([])` or `path: []` if needed

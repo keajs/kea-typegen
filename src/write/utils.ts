@@ -28,7 +28,7 @@ export function visitAllKeaCalls(
             if (!isKeaCall(path)) {
                 this.traverse(path)
             }
-            const logicName = path.parentPath.value.id.name
+            const logicName = path.parentPath.value.id?.name
             if (!logicName) {
                 console.warn(
                     `[KEA-TYPEGEN] Can not add path to logic in "${filename}:${path.node.loc.start}" because it's not stored as a variable.`,
@@ -48,4 +48,29 @@ export function visitAllKeaCalls(
             return false
         },
     })
+}
+
+export function assureImport(ast: any, importFrom: string, importName: string, localName: string, hasImport: boolean) {
+    if (hasImport) {
+        visit(ast, {
+            visitImportDeclaration(path) {
+                if (
+                    path.value.source &&
+                    t.StringLiteral.check(path.value.source) &&
+                    path.value.source.value === importFrom
+                ) {
+                    path.value.specifiers.push(b.importSpecifier(b.identifier(importName), b.identifier(localName)))
+                }
+                return false
+            },
+        })
+    } else {
+        ast.program.body = [
+            b.importDeclaration(
+                [b.importSpecifier(b.identifier(importName), b.identifier(localName))],
+                b.stringLiteral(importFrom),
+            ),
+            ...ast.program.body,
+        ]
+    }
 }

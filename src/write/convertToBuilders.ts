@@ -4,8 +4,8 @@ import { parse, print, visit } from 'recast'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import * as osPath from 'path'
-import { t, b, visitAllKeaCalls } from './utils'
-import { ExpressionKind } from "ast-types/gen/kinds";
+import { t, b, visitAllKeaCalls, assureImport } from './utils'
+import { ExpressionKind } from 'ast-types/gen/kinds'
 
 const supportedProperties = {
     props: 'kea',
@@ -36,10 +36,6 @@ export function convertToBuilders(
     const ast = parse(rawCode, {
         parser: require('recast/parsers/typescript'),
     })
-
-    let logicPathImportedAs: string | undefined
-    let hasImportFromKea = false
-    let someOtherPackageImportsPath = false
 
     // gather information about what is imported
     const imports: Record<string, [string, string][]> = {}
@@ -97,10 +93,14 @@ export function convertToBuilders(
             stmt.arguments[0] = b.arrayExpression(newEntries)
         }
     })
-    console.log('imports', imports)
-    console.log('neededImports', neededImports)
 
-    // TODO: add imports
+    for (const [importFrom, neededImportsFromThisKey] of Object.entries(neededImports)) {
+        for (const [importName, localName] of neededImportsFromThisKey) {
+            if (!imports[importFrom] || !imports[importFrom].find(([i, l]) => i === importName && l === localName)) {
+                assureImport(ast, importFrom, importName, localName, !!imports[importFrom])
+            }
+        }
+    }
 
     const newText = runThroughPrettier(print(ast).code, filename)
     fs.writeFileSync(filename, newText)
