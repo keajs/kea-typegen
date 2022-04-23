@@ -5,7 +5,6 @@ import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import * as osPath from 'path'
 import { t, b, visitAllKeaCalls, assureImport } from './utils'
-import { ExpressionKind } from 'ast-types/gen/kinds'
 
 const supportedProperties = {
     props: 'kea',
@@ -15,11 +14,22 @@ const supportedProperties = {
     actions: 'kea',
     defaults: 'kea',
     loaders: 'kea-loaders',
+    forms: 'kea-forms',
+    subscriptions: 'kea-subscriptions',
     windowValues: 'kea-windowvalues',
     reducers: 'kea',
     selectors: 'kea',
     sharedListeners: 'kea',
+    thunks: 'kea-thunk',
     listeners: 'kea',
+    start: ['kea-saga', 'saga'],
+    stop: ['kea-saga', 'cancelled'],
+    saga: 'kea-saga',
+    workers: 'kea-saga',
+    takeEvery: 'kea-saga',
+    takeLatest: 'kea-saga',
+    actionToUrl: 'kea-router',
+    urlToAction: 'kea-router',
     events: 'kea',
 }
 
@@ -68,25 +78,33 @@ export function convertToBuilders(
             )
             const propertyKeys = Object.keys(propertiesMap)
 
-            const unsupported = propertyKeys.filter((p) => !supportedProperties[p])
-            if (unsupported.length > 0) {
-                console.error(
-                    `Can not convert logic ${
-                        parsedLogic.logicName
-                    } to Kea 3.0 builders due to unsupported input keys: ${unsupported.join(', ')}. Skipping.`,
-                )
-                return
-            }
-
             const newEntries = []
 
-            for (const [key, importFrom] of Object.entries(supportedProperties)) {
+            for (const [key, importFromOrArray] of Object.entries(supportedProperties)) {
                 if (propertiesMap[key] && t.ObjectProperty.check(propertiesMap[key])) {
-                    newEntries.push(b.callExpression(b.identifier(key), [propertiesMap[key].value]))
+                    const importFrom = Array.isArray(importFromOrArray) ? importFromOrArray[0] : importFromOrArray
+                    const renameTo =
+                        Array.isArray(importFromOrArray) && importFromOrArray.length > 1 ? importFromOrArray[1] : key
+
+                    newEntries.push(b.callExpression(b.identifier(renameTo), [propertiesMap[key].value]))
                     neededImports[importFrom] ??= []
                     if (!neededImports[importFrom].find(([l]) => l === key)) {
                         neededImports[importFrom].push([key, key])
                     }
+                }
+            }
+
+            const unsupported = propertyKeys.filter((p) => !supportedProperties[p])
+            if (unsupported.length > 0) {
+                console.warn(
+                    `❗ Logic "${parsedLogic.logicName}", converted unsupported keys (${unsupported.join(
+                        ', ',
+                    )}) to builders without imports`,
+                )
+            }
+            for (const key of unsupported) {
+                if (propertiesMap[key] && t.ObjectProperty.check(propertiesMap[key])) {
+                    newEntries.push(b.callExpression(b.identifier(key), [propertiesMap[key].value]))
                 }
             }
 

@@ -27,18 +27,19 @@ export function visitAllKeaCalls(
         visitCallExpression: function (path) {
             if (!isKeaCall(path)) {
                 this.traverse(path)
+                return
             }
             const logicName = path.parentPath.value.id?.name
             if (!logicName) {
                 console.warn(
-                    `[KEA-TYPEGEN] Can not add path to logic in "${filename}:${path.node.loc.start}" because it's not stored as a variable.`,
+                    `❗ Can not visit logic in "${filename}:${JSON.stringify(path.node.loc)}" because it's not stored as a variable.`,
                 )
                 return
             }
             const parsedLogic = parsedLogics.find((l) => l.logicName === logicName)
             if (!parsedLogic) {
                 console.error(
-                    `[KEA-TYPEGEN] While trying to add a path, could not find logicName "${logicName}" in the list of logicNames (${Object.keys(
+                    `❗ While trying to visit a logic, could not find logicName "${logicName}" in the list of logicNames (${Object.keys(
                         parsedLogics.map((l) => l.logicName),
                     ).join(', ')}) in the file: ${filename}`,
                 )
