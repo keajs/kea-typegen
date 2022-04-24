@@ -1,19 +1,17 @@
 import { AppOptions, ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { parse, print, visit } from 'recast'
+import { print, visit } from 'recast'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import * as osPath from 'path'
-import { t, b, visitAllKeaCalls, assureImport } from "./utils";
+import { t, b, visitAllKeaCalls, assureImport, getAst } from "./utils";
 
 export function writePaths(appOptions: AppOptions, program: ts.Program, filename: string, parsedLogics: ParsedLogic[]) {
     const { log } = appOptions
     const sourceFile = program.getSourceFile(filename)
     const rawCode = sourceFile.getText()
 
-    const ast = parse(rawCode, {
-        parser: require('recast/parsers/typescript'),
-    })
+    const ast = getAst(filename, rawCode)
 
     let logicPathImportedAs: string | undefined
     let hasImportFromKea = false

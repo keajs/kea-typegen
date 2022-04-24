@@ -1,10 +1,10 @@
 import { AppOptions, ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { parse, print, visit } from 'recast'
+import { print, visit } from 'recast'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import * as osPath from 'path'
-import { t, b, visitAllKeaCalls, assureImport } from './utils'
+import { t, b, visitAllKeaCalls, assureImport, getAst } from "./utils";
 
 const supportedProperties = {
     props: 'kea',
@@ -43,9 +43,7 @@ export function convertToBuilders(
     const sourceFile = program.getSourceFile(filename)
     const rawCode = sourceFile.getText()
 
-    const ast = parse(rawCode, {
-        parser: require('recast/parsers/typescript'),
-    })
+    const ast = getAst(filename, rawCode)
 
     // gather information about what is imported
     const imports: Record<string, [string, string][]> = {}

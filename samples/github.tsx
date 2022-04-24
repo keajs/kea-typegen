@@ -1,6 +1,10 @@
 import * as React from 'react'
-import { useActions, useValues } from 'kea'
+import { kea, useActions, useValues, path } from 'kea'
 import { githubLogic } from './githubLogic'
+
+import type { blaLogicType } from './githubType'
+
+const blaLogic = kea<blaLogicType>([path(['github'])])
 
 function Github() {
     const { username, isLoading, sortedRepositories, error } = useValues(githubLogic)

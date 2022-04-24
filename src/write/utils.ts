@@ -1,8 +1,25 @@
 import { ParsedLogic } from '../types'
-import { visit, types } from 'recast'
+import { visit, types, parse } from 'recast'
 
 export const t = types.namedTypes
 export const b = types.builders
+
+import { parseSync } from '@babel/core'
+
+export function getAst(filename: string, source: string): any {
+    return parse(source, {
+        parser: {
+            parse: (source) =>
+                parseSync(source, {
+                    presets: ['@babel/preset-env', '@babel/preset-typescript'],
+                    filename: filename,
+                    parserOpts: {
+                        tokens: true, // recast uses this
+                    },
+                }),
+        },
+    })
+}
 
 export function isKeaCall(path: any): boolean {
     const stmt = path.node
@@ -32,7 +49,9 @@ export function visitAllKeaCalls(
             const logicName = path.parentPath.value.id?.name
             if (!logicName) {
                 console.warn(
-                    `❗ Can not visit logic in "${filename}:${JSON.stringify(path.node.loc)}" because it's not stored as a variable.`,
+                    `❗ Can not visit logic in "${filename}:${JSON.stringify(
+                        path.node.loc,
+                    )}" because it's not stored as a variable.`,
                 )
                 return
             }

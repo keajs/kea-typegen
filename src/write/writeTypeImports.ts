@@ -1,10 +1,10 @@
 import { AppOptions, ParsedLogic } from "../types";
 import * as ts from "typescript";
-import { parse, print, visit } from "recast";
+import { print, visit } from "recast";
 import * as osPath from "path";
 import { runThroughPrettier } from "../print/print";
 import * as fs from "fs";
-import { t, b, visitAllKeaCalls } from "./utils";
+import { t, b, visitAllKeaCalls, getAst } from "./utils";
 
 export function writeTypeImports(
     appOptions: AppOptions,
@@ -17,9 +17,7 @@ export function writeTypeImports(
     const sourceFile = program.getSourceFile(filename)
     const rawCode = sourceFile.getText()
 
-    const ast = parse(rawCode, {
-        parser: require('recast/parsers/typescript'),
-    })
+    const ast = getAst(filename, rawCode)
 
     let importLocation = osPath
         .relative(osPath.dirname(filename), logicsNeedingImports[0].typeFileName)
