@@ -47,6 +47,7 @@ yargs
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
     .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
     .option('write-paths', { describe: 'Write paths into logic files that have none', type: 'boolean' })
+    .option('add-ts-nocheck', { describe: 'Add @ts-nocheck to top of logicType.ts files', type: 'boolean' })
     .option('convert-to-builders', { describe: 'Convert Kea 2.0 inputs to Kea 3.0 logic builders', type: 'boolean' })
     .option('import-global-types', {
         describe: 'Add import statements in logicType.ts files for global types (e.g. @types/node)',
