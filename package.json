@@ -11,7 +11,6 @@
         "test": "jest",
         "samples:check": "ts-node ./src/cli/typegen.ts check -r ./samples",
         "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths",
-        "samples:write:paths": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples",
         "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",

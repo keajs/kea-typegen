@@ -47,6 +47,7 @@ yargs
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
     .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
     .option('write-paths', { describe: 'Write paths into logic files that have none', type: 'boolean' })
+    .option('add-ts-nocheck', { describe: 'Add @ts-nocheck to top of logicType.ts files', type: 'boolean' })
     .option('import-global-types', {
         describe: 'Add import statements in logicType.ts files for global types (e.g. @types/node)',
         type: 'boolean',
@@ -70,6 +71,7 @@ function parsedToAppOptions(parsedOptions) {
         verbose: parsedOptions.verbose,
         noImport: parsedOptions.noImport,
         writePaths: parsedOptions.writePaths,
+        addTsNocheck: parsedOptions.addTsNocheck,
         importGlobalTypes: parsedOptions.importGlobalTypes,
         ignoreImportPaths: parsedOptions.ignoreImportPaths,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),

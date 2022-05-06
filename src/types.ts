@@ -74,6 +74,8 @@ export interface AppOptions {
     ignoreImportPaths?: string[]
     /** Write paths inside logic.ts files */
     writePaths?: boolean
+    /** Add @ts-nocheck inside logicType.ts files */
+    addTsNocheck?: boolean
 
     log: (message: string) => void
 }

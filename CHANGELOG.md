@@ -1,3 +1,7 @@
+## 1.4.4 - 2022-05-07
+
+- Add `--add-ts-nocheck` option.
+
 ## 1.4.3 - 2022-03-18
 
 -   Internal: plugins can specify which types they want to import from 'kea'
