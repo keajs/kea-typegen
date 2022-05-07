@@ -222,7 +222,7 @@ exports[`reducers - with bool default 1`] = `
         updateName: () => ({
             type: \\"update name (logic)\\";
             payload: {
-                value: boolean;
+                value: true;
             };
         });
     };
