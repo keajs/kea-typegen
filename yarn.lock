@@ -4101,6 +4101,13 @@ json5@^2.2.1:
   resolved "https://registry.yarnpkg.com/json5/-/json5-2.2.1.tgz#655d50ed1e6f95ad1a3caababd2b0efda10b395c"
   integrity sha512-1hqLFMSrGHRHxav9q9gNjJ5EXznIxGVO09xQRrwplcS8qs28pZ8s8hupZAmqDwZUmVZ2Qb2jnyPOWcDH8m8dlA==
 
+kea-router@^3.0.0-alpha.0:
+  version "3.0.0-alpha.0"
+  resolved "https://registry.yarnpkg.com/kea-router/-/kea-router-3.0.0-alpha.0.tgz#9df5d60e608e14b4881d6c2c785de6243ffe5f7c"
+  integrity sha512-gGai3mPQtZRljVHimCJuVgFTNmtrtUtNcrxFjrRrbQMLjJqQglIUODcNWIhppw1J/A6Hx6kFg+DHfSLAV+Q+LA==
+  dependencies:
+    url-pattern "^1.0.3"
+
 kea@^3.0.0-alpha.6:
   version "3.0.0-alpha.6"
   resolved "https://registry.yarnpkg.com/kea/-/kea-3.0.0-alpha.6.tgz#fef0b7f9c66a15df6437ed33a97dd152f2e0e20e"
@@ -5549,6 +5556,11 @@ urix@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/urix/-/urix-0.1.0.tgz#da937f7a62e21fec1fd18d49b35c2935067a6c72"
   integrity sha1-2pN/emLiH+wf0Y1Js1wpNQZ6bHI=
+
+url-pattern@^1.0.3:
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/url-pattern/-/url-pattern-1.0.3.tgz#0409292471b24f23c50d65a47931793d2b5acfc1"
+  integrity sha1-BAkpJHGyTyPFDWWkeTF5PStaz8E=
 
 use@^3.1.0:
   version "3.1.1"
