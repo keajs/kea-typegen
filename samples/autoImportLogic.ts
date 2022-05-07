@@ -41,7 +41,6 @@ export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
         }),
         complexAction: (element: HTMLElement, timeout: NodeJS.Timeout) => ({ element, timeout }),
         combinedA6Action: (filter: A5) => ({ a6: filter.a6, bla: filter.bla }),
-        valueAction: [] as A7,
         miscActionWithType: (
             randomThing: ExportedApi.RandomThing,
         ): {
