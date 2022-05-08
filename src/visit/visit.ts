@@ -380,14 +380,16 @@ export function visitKeaCalls(
                 }
             }
 
-            for (const pluginModule of Object.values(pluginModules)) {
-                try {
-                    pluginModule.visitKeaProperty?.(visitKeaPropertyArguments)
-                } catch (e) {
-                    console.error(
-                        `!! Problem running "visitKeaProperty" on plugin "${pluginModule.name}" (${pluginModule.file})`,
-                    )
-                    console.error(e)
+            if (typeBuilders.length === 0) {
+                for (const pluginModule of Object.values(pluginModules)) {
+                    try {
+                        pluginModule.visitKeaProperty?.(visitKeaPropertyArguments)
+                    } catch (e) {
+                        console.error(
+                            `!! Problem running "visitKeaProperty" on plugin "${pluginModule.name}" (${pluginModule.file})`,
+                        )
+                        console.error(e)
+                    }
                 }
             }
         }
