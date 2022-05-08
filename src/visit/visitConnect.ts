@@ -7,9 +7,9 @@ import { Expression, Type } from 'typescript'
 export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
-    // not getting an object, so it's likely an array of logic, or a logic
-    // in either case, no actions/props to import
-    if (!ts.isObjectLiteralExpression(expression)) {
+    // passing just one argument, connect(otherLogic)
+    const objectTypeAlias = type.aliasSymbol?.name
+    if (objectTypeAlias === 'LogicWrapper' || objectTypeAlias === 'BuiltLogic') {
         return
     }
 
