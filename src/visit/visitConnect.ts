@@ -7,6 +7,12 @@ import { Expression, Type } from 'typescript'
 export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
+    // not getting an object, so it's likely an array of logic, or a logic
+    // in either case, no actions/props to import
+    if (!ts.isObjectLiteralExpression(expression)) {
+        return
+    }
+
     for (const property of type.getProperties()) {
         const loaderName = property.getName()
         const value = (property.valueDeclaration as ts.PropertyAssignment).initializer
