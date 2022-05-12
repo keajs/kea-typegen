@@ -28,7 +28,6 @@ exports[`selectors - as a function returning a object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {
         name: string;
         otherName: any;
@@ -41,11 +40,10 @@ exports[`selectors - as a function returning a object 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         name: string;
         otherName: any;
     };
-    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherName: (state: any, action: any, fullState: any) => any;
@@ -100,7 +98,6 @@ exports[`selectors - as an object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {
         name: string;
         otherName: any;
@@ -113,11 +110,10 @@ exports[`selectors - as an object 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         name: string;
         otherName: any;
     };
-    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherName: (state: any, action: any, fullState: any) => any;
@@ -172,7 +168,6 @@ exports[`selectors - with a function 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
-    constants: {};
     defaults: {
         name: string;
         otherName: any;
@@ -185,11 +180,10 @@ exports[`selectors - with a function 1`] = `
     ];
     pathString: \\"logic\\";
     props: Record<string, unknown>;
-    reducer: (state: any, action: () => any, fullState: any) => {
+    reducer: (state: any, action: any, fullState: any) => {
         name: string;
         otherName: any;
     };
-    reducerOptions: {};
     reducers: {
         name: (state: string, action: any, fullState: any) => string;
         otherName: (state: any, action: any, fullState: any) => any;

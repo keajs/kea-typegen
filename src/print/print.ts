@@ -30,13 +30,13 @@ import { printActionCreators } from './printActionCreators'
 import { printProps } from './printProps'
 import { printKey } from './printKey'
 import { printDefaults } from './printDefaults'
-import { printConstants } from './printConstants'
-import { printReducerOptions } from './printReducerOptions'
 import { printEvents } from './printEvents'
 import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
-import { writePaths, writeTypeImports } from '../write/write'
+import { writePaths } from '../write/writePaths'
+import { writeTypeImports } from '../write/writeTypeImports'
 import { printInternalExtraInput } from './printInternalExtraInput'
+import { convertToBuilders } from '../write/convertToBuilders'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -199,6 +199,7 @@ export function printToFiles(
             }
         }
 
+        // add a path if needed
         const parsedLogicNeedsPath = appOptions.writePaths ? (pl: ParsedLogic) => !pl.hasPathInLogic : () => false
         const logicsNeedingPaths = parsedLogics.filter(parsedLogicNeedsPath)
         if (logicsNeedingPaths.length > 0) {
@@ -209,6 +210,24 @@ export function printToFiles(
                 log(
                     `❌ Will not write ${logicsNeedingPaths.length} logic path${
                         logicsNeedingPaths.length === 1 ? '' : 's'
+                    }`,
+                )
+            }
+        }
+
+        // convert to logic builder
+        const parsedLogicNeedsConversion = appOptions.convertToBuilders
+            ? (pl: ParsedLogic) => !pl.inputBuilderArray
+            : () => false
+        const logicsNeedingConversion = parsedLogics.filter(parsedLogicNeedsConversion)
+        if (logicsNeedingConversion.length > 0) {
+            if (appOptions.write && !appOptions.noImport) {
+                convertToBuilders(appOptions, program, fileName, logicsNeedingConversion)
+                filesToModify += logicsNeedingConversion.length
+            } else {
+                log(
+                    `❌ Will not write ${logicsNeedingConversion.length} logic path${
+                        logicsNeedingConversion.length === 1 ? '' : 's'
                     }`,
                 )
             }
@@ -259,7 +278,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
         printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
         printProperty('actions', printActions(parsedLogic, appOptions)),
-        printProperty('constants', printConstants(parsedLogic)),
         printProperty('defaults', printDefaults(parsedLogic)),
         printProperty('events', printEvents(parsedLogic)),
         printProperty('key', printKey(parsedLogic)),
@@ -273,7 +291,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         printProperty('pathString', factory.createStringLiteral(parsedLogic.pathString)),
         printProperty('props', printProps(parsedLogic)),
         printProperty('reducer', printReducer(parsedLogic)),
-        printProperty('reducerOptions', printReducerOptions(parsedLogic)),
         printProperty('reducers', printReducers(parsedLogic)),
         printProperty('selector', printSelector(parsedLogic)),
         printProperty('selectors', printSelectors(parsedLogic)),

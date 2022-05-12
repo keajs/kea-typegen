@@ -1,6 +1,6 @@
 {
     "name": "kea-typegen",
-    "version": "1.4.4",
+    "version": "3.0.0-alpha.11",
     "description": "Generate type definitions for kea logic",
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
@@ -11,6 +11,7 @@
         "test": "jest",
         "samples:check": "ts-node ./src/cli/typegen.ts check -r ./samples",
         "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths",
+        "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples",
         "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
@@ -24,13 +25,13 @@
     },
     "dependencies": {
         "@wessberg/ts-clone-node": "0.3.19",
-        "diff": "^5.0.0",
         "prettier": "^2.5.1",
+        "recast": "^0.20.5",
         "yargs": "^16.2.0"
     },
     "devDependencies": {
-        "@babel/core": "^7.16.0",
-        "@babel/preset-env": "^7.16.4",
+        "@babel/core": "^7.17.9",
+        "@babel/preset-env": "^7.16.11",
         "@babel/preset-typescript": "^7.16.0",
         "@types/jest": "^26.0.20",
         "@types/node": "^14.14.31",
@@ -40,16 +41,17 @@
         "form-plugin": "file:./form-plugin",
         "husky": ">=4",
         "jest": "^27.0.5",
-        "kea": "^2.5.6",
+        "kea": "^3.0.0-alpha.6",
+        "kea-router": "^3.0.0-alpha.0",
         "lint-staged": ">=12.1.2",
         "react": "^16.13.1",
         "react-redux": "^7.2.6",
-        "redux": "^4.1.2",
+        "redux": "^4.2.0",
         "reselect": "^4.1.5",
         "rimraf": "^3.0.2",
-        "ts-jest": "^27.0.3",
-        "ts-node": "^10.4.0",
-        "typescript": "^4.3.2"
+        "ts-jest": "^27.1.4",
+        "ts-node": "^10.7.0",
+        "typescript": "^4.6.3"
     },
     "peerDependencies": {
         "typescript": ">=4.5.3"

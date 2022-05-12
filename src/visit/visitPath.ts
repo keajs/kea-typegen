@@ -1,10 +1,9 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
+import { Expression, Type } from 'typescript'
 
-export function visitPath(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
-    const { checker } = parsedLogic
-
-    let objectLiteral = inputProperty.initializer
+export function visitPath(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
+    let objectLiteral = expression
     let path
 
     if (ts.isFunctionLike(objectLiteral)) {
@@ -16,7 +15,7 @@ export function visitPath(type: ts.Type, inputProperty: ts.PropertyAssignment, p
     }
 
     if (ts.isArrayLiteralExpression(objectLiteral)) {
-        path = objectLiteral.elements.map(element => {
+        path = objectLiteral.elements.map((element) => {
             if (ts.isStringLiteral(element)) {
                 return element.text
             } else {

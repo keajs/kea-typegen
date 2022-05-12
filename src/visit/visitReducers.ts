@@ -1,9 +1,9 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { extractImportedActions, getAndGatherTypeNodeForDefaultValue } from '../utils'
-import { cloneNode } from '@wessberg/ts-clone-node'
+import { Expression, Type } from 'typescript'
 
-export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitReducers(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {
@@ -13,7 +13,6 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
         if (value) {
             let extraActions = {}
             let typeNode
-            let reducerOptions
 
             if (ts.isArrayLiteralExpression(value)) {
                 let defaultValue = value.elements[0]
@@ -22,22 +21,15 @@ export function visitReducers(type: ts.Type, inputProperty: ts.PropertyAssignmen
                     typeNode = typeNode.type
                 }
 
-                const actionObjects = value.elements[value.elements.length - 1]
-                extraActions = extractImportedActions(actionObjects, checker, parsedLogic)
-
-                if (value.elements.length > 2) {
-                    const options = value.elements[value.elements.length - 2]
-                    if (ts.isObjectLiteralExpression(options)) {
-                        reducerOptions = cloneNode(
-                            checker.typeToTypeNode(checker.getTypeAtLocation(options), undefined, undefined),
-                        )
-                    }
+                if (value.elements.length > 1) {
+                    const actionObjects = value.elements[value.elements.length - 1]
+                    extraActions = extractImportedActions(actionObjects, checker, parsedLogic)
                 }
             } else if (ts.isObjectLiteralExpression(value)) {
                 typeNode = ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
             }
 
-            parsedLogic.reducers.push({ name, typeNode, reducerOptions })
+            parsedLogic.reducers.push({ name, typeNode })
 
             if (Object.keys(extraActions).length > 0) {
                 Object.assign(parsedLogic.extraActions, extraActions)

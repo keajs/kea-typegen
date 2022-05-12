@@ -1,5 +1,6 @@
 import { ParsedLogic } from '../types'
 import {
+    Expression,
     factory,
     isArrayLiteralExpression,
     isFunctionLike,
@@ -19,7 +20,7 @@ import {
 } from '../utils'
 import { NodeBuilderFlags } from 'typescript'
 
-export function visitLoaders(type: Type, inputProperty: PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitLoaders(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {
@@ -32,9 +33,11 @@ export function visitLoaders(type: Type, inputProperty: PropertyAssignment, pars
             defaultValue = value.elements[0]
             objectLiteral = value.elements[1]
         } else if (isObjectLiteralExpression(value)) {
-            defaultValue = (value.properties.find(
-                (property) => checker.getSymbolAtLocation(property.name)?.getName() === '__default',
-            ) as PropertyAssignment)?.initializer
+            defaultValue = (
+                value.properties.find(
+                    (property) => checker.getSymbolAtLocation(property.name)?.getName() === '__default',
+                ) as PropertyAssignment
+            )?.initializer
             objectLiteral = value
         }
 

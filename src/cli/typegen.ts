@@ -48,6 +48,7 @@ yargs
     .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
     .option('write-paths', { describe: 'Write paths into logic files that have none', type: 'boolean' })
     .option('add-ts-nocheck', { describe: 'Add @ts-nocheck to top of logicType.ts files', type: 'boolean' })
+    .option('convert-to-builders', { describe: 'Convert Kea 2.0 inputs to Kea 3.0 logic builders', type: 'boolean' })
     .option('import-global-types', {
         describe: 'Add import statements in logicType.ts files for global types (e.g. @types/node)',
         type: 'boolean',
@@ -62,30 +63,28 @@ yargs
     .wrap(80).argv
 
 function parsedToAppOptions(parsedOptions) {
+    const { root, types, config, file, ...rest } = parsedOptions
     const appOptions = {
-        rootPath: parsedOptions.root,
-        typesPath: parsedOptions.types,
-        tsConfigPath: parsedOptions.config,
-        sourceFilePath: parsedOptions.file,
-        quiet: parsedOptions.quiet,
-        verbose: parsedOptions.verbose,
-        noImport: parsedOptions.noImport,
-        writePaths: parsedOptions.writePaths,
-        addTsNocheck: parsedOptions.addTsNocheck,
-        importGlobalTypes: parsedOptions.importGlobalTypes,
-        ignoreImportPaths: parsedOptions.ignoreImportPaths,
+        rootPath: root,
+        typesPath: types,
+        tsConfigPath: config,
+        sourceFilePath: file,
+        ...rest,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),
     } as AppOptions
 
     return appOptions
 }
 
-function findKeaConfig(searchPath): string {
+function findKeaConfig(searchPath): string | undefined {
     return ts.findConfigFile(searchPath, ts.sys.fileExists, '.kearc')
 }
 
 function includeKeaConfig(appOptions: AppOptions): AppOptions {
-    const configFilePath = findKeaConfig(appOptions.rootPath)
+    const configFilePath =
+        (appOptions.tsConfigPath ? findKeaConfig(path.dirname(appOptions.tsConfigPath)) : undefined) ??
+        (appOptions.rootPath ? findKeaConfig(appOptions.rootPath) : undefined) ??
+        findKeaConfig('.')
     const newOptions = { ...appOptions } as AppOptions
 
     let rawData, keaConfig

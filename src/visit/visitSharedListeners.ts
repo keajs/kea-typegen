@@ -2,8 +2,9 @@ import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
 import { gatherImports } from '../utils'
+import { Expression, Type } from 'typescript'
 
-export function visitSharedListeners(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitSharedListeners(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {

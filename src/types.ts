@@ -12,9 +12,7 @@ export interface NameType {
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
-export interface ReducerTransform extends NameType {
-    reducerOptions?: ts.TypeNode | ts.ParenthesizedTypeNode
-}
+export interface ReducerTransform extends NameType {}
 
 export interface SelectorTransform extends NameType {
     functionTypes?: { name: string; type: ts.TypeNode }[]
@@ -38,7 +36,6 @@ export interface ParsedLogic {
     hasPathInLogic: boolean
     hasKeyInLogic: boolean
     logicTypeArguments: string[]
-    constants: string[]
     events: Record<string, boolean>
     checker: ts.TypeChecker
     actions: ActionTransform[]
@@ -54,6 +51,7 @@ export interface ParsedLogic {
     interfaceDeclaration?: ts.InterfaceDeclaration
     extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
     importFromKeaInLogicType: Set<string>
+    inputBuilderArray: boolean
 }
 
 export interface AppOptions {
@@ -76,6 +74,8 @@ export interface AppOptions {
     writePaths?: boolean
     /** Add @ts-nocheck inside logicType.ts files */
     addTsNocheck?: boolean
+    /** Convert kea 2.0 logic input to kea 3.0 builders */
+    convertToBuilders?: boolean
 
     log: (message: string) => void
 }
@@ -94,11 +94,18 @@ export interface VisitKeaPropertyArguments {
     prepareForPrint<T extends ts.Node>(node: T): T
 }
 
+export type TypeBuilder = (args: VisitKeaPropertyArguments) => void
+export interface TypeBuilderModule {
+    name: string
+    file: string
+    typeBuilder?: TypeBuilder
+}
+
 export interface Plugin {
     visitKeaProperty?: (args: VisitKeaPropertyArguments) => void
 }
-
 export interface PluginModule extends Plugin {
     name: string
     file: string
+    typeBuilder?: (args: VisitKeaPropertyArguments) => void
 }

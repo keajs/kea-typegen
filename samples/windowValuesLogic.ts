@@ -6,4 +6,17 @@ export const windowValuesLogic = kea<windowValuesLogicType>({
         windowHeight: (window) => window.innerHeight,
         windowWidth: (window) => Math.min(window.innerWidth, window.document.body.clientWidth),
     }),
+    // some kea-saga as well, because why not
+    start: function * () {
+        console.log('haha')
+    },
+    stop: function * () {
+        console.log('haha')
+    },
+    saga: function * () {
+        console.log('haha')
+    },
+    workers: {
+        a: () => {}
+    }
 })

@@ -1,10 +1,10 @@
 import { ParsedLogic } from '../types'
-import { factory, isFunctionLike, isPropertyAssignment, PropertyAssignment, SyntaxKind, Type } from 'typescript'
+import { factory, isFunctionLike, isPropertyAssignment, Expression, SyntaxKind, Type, TrueLiteral } from 'typescript'
 import { NodeBuilderFlags } from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
 import { gatherImports } from '../utils'
 
-export function visitActions(type: Type, inputProperty: PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitActions(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
     const properties = checker.getPropertiesOfType(type)
 
@@ -58,10 +58,13 @@ export function visitActions(type: Type, inputProperty: PropertyAssignment, pars
             returnTypeNode = cloneNode(returnTypeNode)
         } else {
             // action is a value (action: true)
-            const typeNode = checker.typeToTypeNode(type, undefined, undefined)
-            gatherImports(typeNode, checker, parsedLogic)
             returnTypeNode = factory.createTypeLiteralNode([
-                factory.createPropertySignature(undefined, factory.createIdentifier('value'), undefined, typeNode),
+                factory.createPropertySignature(
+                    undefined,
+                    factory.createIdentifier('value'),
+                    undefined,
+                    factory.createLiteralTypeNode(factory.createTrue()),
+                ),
             ])
         }
         parsedLogic.actions.push({ name, parameters, returnTypeNode })

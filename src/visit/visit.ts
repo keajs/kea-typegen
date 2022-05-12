@@ -1,6 +1,6 @@
 import * as ts from 'typescript'
 import * as path from 'path'
-import { AppOptions, ParsedLogic, PluginModule, VisitKeaPropertyArguments } from '../types'
+import { AppOptions, ParsedLogic, PluginModule, TypeBuilderModule, VisitKeaPropertyArguments } from '../types'
 import {
     gatherImports,
     getFilenameForImportDeclaration,
@@ -19,7 +19,6 @@ import { visitProps } from './visitProps'
 import { visitKey } from './visitKey'
 import { visitPath } from './visitPath'
 import { visitListeners } from './visitListeners'
-import { visitConstants } from './visitConstants'
 import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
@@ -28,7 +27,6 @@ import { cloneNode } from '@wessberg/ts-clone-node'
 const visitFunctions = {
     actions: visitActions,
     connect: visitConnect,
-    constants: visitConstants,
     defaults: visitDefaults,
     events: visitEvents,
     key: visitKey,
@@ -46,6 +44,7 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
     const checker = program.getTypeChecker()
     const parsedLogics: ParsedLogic[] = []
     const pluginModules: PluginModule[] = []
+    const typeBuilderModules: TypeBuilderModule[] = []
 
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
@@ -58,7 +57,10 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
             if (appOptions?.verbose) {
                 appOptions.log(`👀 Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
             }
-            ts.forEachChild(sourceFile, visitKeaCalls(checker, parsedLogics, sourceFile, appOptions, pluginModules))
+            ts.forEachChild(
+                sourceFile,
+                visitKeaCalls(checker, parsedLogics, sourceFile, appOptions, pluginModules, typeBuilderModules),
+            )
         }
     }
 
@@ -145,6 +147,7 @@ export function visitKeaCalls(
     sourceFile: ts.SourceFile,
     appOptions: AppOptions,
     pluginModules: PluginModule[],
+    typeBuilderModules: TypeBuilderModule[],
 ) {
     return function visit(node: ts.Node) {
         if (!isKeaCall(node, checker)) {
@@ -193,6 +196,8 @@ export function visitKeaCalls(
             typeFileName = path.resolve(appOptions.typesPath, relativePathFromRoot)
         }
 
+        const input = (node.parent as ts.CallExpression).arguments[0]
+
         const parsedLogic: ParsedLogic = {
             checker,
             node,
@@ -205,7 +210,6 @@ export function visitKeaCalls(
             actions: [],
             reducers: [],
             selectors: [],
-            constants: [],
             listeners: [],
             sharedListeners: [],
             events: {},
@@ -220,37 +224,133 @@ export function visitKeaCalls(
             typeReferencesInLogicInput: new Set(),
             extraInput: {},
             importFromKeaInLogicType: new Set([]),
+            inputBuilderArray: ts.isArrayLiteralExpression(input),
         }
 
-        const input = (node.parent as ts.CallExpression).arguments[0] as ts.ObjectLiteralExpression
+        const calls: {
+            name: string
+            type: ts.Type
+            typeNode: ts.TypeNode | null
+            expression: ts.Expression
+            typeBuilders: PluginModule[]
+        }[] = []
 
-        for (const inputProperty of input.properties) {
-            if (!ts.isPropertyAssignment(inputProperty)) {
-                continue
+        if (ts.isObjectLiteralExpression(input)) {
+            for (const inputProperty of input.properties) {
+                if (!ts.isPropertyAssignment(inputProperty)) {
+                    continue
+                }
+                const symbol = checker.getSymbolAtLocation(inputProperty.name)
+                if (!symbol) {
+                    continue
+                }
+                const name = symbol.getName()
+                const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
+                const typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                calls.push({ name, type, typeNode, expression: inputProperty.initializer, typeBuilders: [] })
             }
+        } else if (ts.isArrayLiteralExpression(input)) {
+            for (const callExpression of input.elements) {
+                if (!ts.isCallExpression(callExpression) || callExpression.arguments.length === 0) {
+                    continue
+                }
 
-            const symbol = checker.getSymbolAtLocation(inputProperty.name)
-            if (!symbol) {
-                continue
+                const builderName = callExpression.expression.getText()
+                const argument = callExpression.arguments[0]
+                const type = checker.getTypeAtLocation(argument)
+                const typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+
+                const identifier = callExpression.expression
+                const symbol = checker.getSymbolAtLocation(identifier)
+
+                let typeBuilders: TypeBuilderModule[] = []
+
+                if (symbol) {
+                    declarations: for (let declaration of symbol.getDeclarations()) {
+                        let decNode: ts.Node = declaration
+                        while (decNode) {
+                            // find if it's an imported builder
+                            if (ts.isImportDeclaration(decNode)) {
+                                const filename = getFilenameForImportDeclaration(checker, decNode)
+                                if (!filename) {
+                                    break
+                                }
+                                let typeBuilderModule = typeBuilderModules.find(
+                                    ({ file, name }) => file === filename && name === builderName,
+                                )
+                                if (typeBuilderModule) {
+                                    if (typeBuilderModule.typeBuilder) {
+                                        typeBuilders.push(typeBuilderModule)
+                                    }
+                                    break declarations
+                                }
+
+                                const folder = path.dirname(filename)
+                                const fileNoExt = path.basename(filename, path.extname(filename))
+                                const pathsToTry = [
+                                    'typegen.js',
+                                    'typegen.ts',
+                                    `${fileNoExt}.typegen.js`,
+                                    `${fileNoExt}.typegen.ts`,
+                                ].map((filename) => path.resolve(folder, filename))
+
+                                for (const typegenFile of pathsToTry) {
+                                    try {
+                                        let typeBuilder = require(typegenFile)?.[builderName]
+                                        typeBuilderModule = {
+                                            name: builderName,
+                                            file: filename,
+                                            typeBuilder: typeBuilder,
+                                        }
+                                        typeBuilders.push(typeBuilderModule)
+                                        typeBuilderModules.push(typeBuilderModule)
+                                        break declarations
+                                    } catch (error) {
+                                        if (error.code !== 'MODULE_NOT_FOUND') {
+                                            console.error(
+                                                `[KEA] Error loading type builder "${builderName}" in "${typegenFile}"`,
+                                            )
+                                            console.error(error)
+                                        }
+                                    }
+                                }
+                                typeBuilderModule = {
+                                    name: builderName,
+                                    file: filename,
+                                    typeBuilder: null,
+                                }
+                                typeBuilderModules.push(typeBuilderModule)
+                                break declarations
+                            }
+                            decNode = decNode.parent
+                        }
+                    }
+                }
+
+                calls.push({
+                    name: builderName,
+                    type,
+                    typeNode,
+                    expression: callExpression.arguments[0],
+                    typeBuilders: typeBuilders,
+                })
             }
+        }
 
-            const name = symbol.getName()
-            if (name === 'path') {
+        for (let { name, type, typeNode, expression, typeBuilders } of calls) {
+            if (name === 'path' || name === 'logicPath') {
                 parsedLogic.hasPathInLogic = true
             }
             if (name === 'key') {
                 parsedLogic.hasKeyInLogic = true
             }
 
-            let type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
-            let typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
-
             if (typeNode && ts.isFunctionTypeNode(typeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()
                 typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
             }
 
-            visitFunctions[name]?.(type, inputProperty, parsedLogic)
+            visitFunctions[name]?.(parsedLogic, type, expression)
 
             const visitKeaPropertyArguments: VisitKeaPropertyArguments = {
                 name,
@@ -258,7 +358,7 @@ export function visitKeaCalls(
                 type,
                 typeNode,
                 parsedLogic,
-                node: inputProperty.initializer,
+                node: expression,
                 checker,
                 gatherImports: (input) => gatherImports(input, checker, parsedLogic),
                 cloneNode,
@@ -269,18 +369,30 @@ export function visitKeaCalls(
                 },
             }
 
-            for (const pluginModule of Object.values(pluginModules)) {
+            for (const pluginModule of typeBuilders) {
                 try {
-                    pluginModule.visitKeaProperty?.(visitKeaPropertyArguments)
+                    pluginModule.typeBuilder?.(visitKeaPropertyArguments)
                 } catch (e) {
                     console.error(
-                        `!! Problem running "visitKeaProperty" on plugin "${pluginModule.name}" (${pluginModule.file})`,
+                        `!! Problem running "typeBuilder" on plugin "${pluginModule.name}" (${pluginModule.file})`,
                     )
                     console.error(e)
                 }
             }
-        }
 
+            if (typeBuilders.length === 0) {
+                for (const pluginModule of Object.values(pluginModules)) {
+                    try {
+                        pluginModule.visitKeaProperty?.(visitKeaPropertyArguments)
+                    } catch (e) {
+                        console.error(
+                            `!! Problem running "visitKeaProperty" on plugin "${pluginModule.name}" (${pluginModule.file})`,
+                        )
+                        console.error(e)
+                    }
+                }
+            }
+        }
         parsedLogics.push(parsedLogic)
     }
 }

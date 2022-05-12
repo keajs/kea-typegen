@@ -1,10 +1,10 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { NodeBuilderFlags } from 'typescript'
+import { Expression, NodeBuilderFlags, Type } from 'typescript'
 import { cloneNode } from '@wessberg/ts-clone-node'
 import { gatherImports } from '../utils'
 
-export function visitSelectors(type: ts.Type, inputProperty: ts.PropertyAssignment, parsedLogic: ParsedLogic) {
+export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
 
     for (const property of type.getProperties()) {

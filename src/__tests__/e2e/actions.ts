@@ -53,8 +53,7 @@ test('actions - with random values instead of functions', () => {
                 updateName: (name?: string) => ({ name }),
                 withDefaultValue: (name = "john") => ({ name }),
                 withDefaultValueAndType: (name: string = "john") => ({ name }),
-                withBool: true,
-                withRandomPayload: { bla: 123 },
+                withTrue: true,
             }
         })
     `
