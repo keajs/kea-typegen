@@ -81,7 +81,10 @@ function findKeaConfig(searchPath): string | undefined {
 }
 
 function includeKeaConfig(appOptions: AppOptions): AppOptions {
-    const configFilePath = appOptions.rootPath ? findKeaConfig(appOptions.rootPath) : undefined
+    const configFilePath =
+        (appOptions.tsConfigPath ? findKeaConfig(path.dirname(appOptions.tsConfigPath)) : undefined) ??
+        (appOptions.rootPath ? findKeaConfig(appOptions.rootPath) : undefined) ??
+        findKeaConfig('.')
     const newOptions = { ...appOptions } as AppOptions
 
     let rawData, keaConfig
