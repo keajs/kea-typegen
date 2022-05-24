@@ -1,10 +1,10 @@
-import { AppOptions, ParsedLogic } from "../types";
-import * as ts from "typescript";
-import { print, visit } from "recast";
-import * as osPath from "path";
-import { runThroughPrettier } from "../print/print";
-import * as fs from "fs";
-import { t, b, visitAllKeaCalls, getAst } from "./utils";
+import { AppOptions, ParsedLogic } from '../types'
+import * as ts from 'typescript'
+import { print, visit } from 'recast'
+import * as osPath from 'path'
+import { runThroughPrettier } from '../print/print'
+import * as fs from 'fs'
+import { t, b, visitAllKeaCalls, getAst } from './utils'
 
 export function writeTypeImports(
     appOptions: AppOptions,
@@ -68,19 +68,10 @@ export function writeTypeImports(
         })
     }
 
-    // find all kea calls, add `<logicType<a,b>>` type parameters if needed
+    // find all kea calls, add `<logicType>` type parameters if needed
     visitAllKeaCalls(ast, logicsNeedingImports, filename, ({ path, parsedLogic }) => {
-        const { logicTypeName, typeReferencesInLogicInput } = parsedLogic
-
         path.node.typeParameters = b.tsTypeParameterInstantiation([
-            b.tsTypeReference(
-                b.identifier(logicTypeName),
-                typeReferencesInLogicInput.size > 0 ? b.tsTypeParameterInstantiation(
-                    [...typeReferencesInLogicInput.values()]
-                        .sort()
-                        .map((type) => b.tsTypeReference(b.identifier(type))),
-                ) : null,
-            ),
+            b.tsTypeReference(b.identifier(parsedLogic.logicTypeName)),
         ])
     })
 

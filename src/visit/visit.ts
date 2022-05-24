@@ -4,7 +4,7 @@ import { AppOptions, ParsedLogic, PluginModule, TypeBuilderModule, VisitKeaPrope
 import {
     gatherImports,
     getFilenameForImportDeclaration,
-    getFilenameForImportSpecifier,
+    getFilenameForNode,
     getLogicPathString,
     getTypeNodeForNode,
     isKeaCall,
@@ -185,7 +185,7 @@ export function visitKeaCalls(
                 const declaration = symbol.getDeclarations()?.[0]
 
                 if (declaration && ts.isImportSpecifier(declaration)) {
-                    const filename = getFilenameForImportSpecifier(declaration, checker)
+                    const filename = getFilenameForNode(declaration, checker)
                     logicTypeImported = filename === typeFileName
                 }
             }
@@ -221,7 +221,6 @@ export function visitKeaCalls(
             hasKeyInLogic: false,
             hasPathInLogic: false,
             typeReferencesToImportFromFiles: {},
-            typeReferencesInLogicInput: new Set(),
             extraInput: {},
             importFromKeaInLogicType: new Set([]),
             inputBuilderArray: ts.isArrayLiteralExpression(input),

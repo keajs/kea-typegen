@@ -47,7 +47,6 @@ export interface ParsedLogic {
     propsType?: ts.TypeNode
     keyType?: ts.TypeNode
     typeReferencesToImportFromFiles: Record<string, Set<string>>
-    typeReferencesInLogicInput: Set<string>
     interfaceDeclaration?: ts.InterfaceDeclaration
     extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
     importFromKeaInLogicType: Set<string>

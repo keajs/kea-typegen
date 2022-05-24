@@ -4,7 +4,7 @@ import { cloneNode } from '@wessberg/ts-clone-node'
 import { visitProgram } from './visit/visit'
 import { parsedLogicToTypeString } from './print/print'
 import { AppOptions, NameType, ParsedLogic } from './types'
-import { factory, NodeBuilderFlags, SyntaxKind } from 'typescript'
+import { factory, isSourceFile, NodeBuilderFlags, SyntaxKind } from 'typescript'
 
 export function logicSourceToLogicType(logicSource: string, appOptions?: AppOptions) {
     const program = programFromSource(logicSource)
@@ -21,6 +21,13 @@ export function programFromSource(sourceCode: string) {
     const compilerHost = ts.createCompilerHost(options)
     compilerHost.getSourceFile = (fileName) => (fileName === 'logic.ts' ? sourceToSourceFile(sourceCode) : undefined)
     return ts.createProgram(['logic.ts'], options, compilerHost)
+}
+
+function rejectImportPath(path: string): boolean {
+    if (path.includes('/node_modules/typescript/')) {
+        return true
+    }
+    return false
 }
 
 export function isKeaCall(node: ts.Node, checker: ts.TypeChecker) {
@@ -216,9 +223,7 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
 }
 
 export function getFilenamesForSymbol(symbol: ts.Symbol): string[] | undefined {
-    return (symbol?.declarations || [])
-        .map((d) => d.getSourceFile().fileName)
-        .filter((str) => !str.includes('/node_modules/typescript/lib/lib'))
+    return (symbol?.declarations || []).map((d) => d.getSourceFile().fileName).filter((f) => !rejectImportPath(f))
 }
 
 /** gathers onto parsedLogic the TypeReference nodes that are declared in a different sourceFile */
@@ -237,7 +242,6 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
                     typeRootName = (node.typeName.left as any)?.escapedText
                 }
             }
-
             const symbol = checker.getSymbolAtLocation(node.typeName) || (node.typeName as any).symbol
             if (symbol) {
                 storeExtractedSymbol(symbol, checker, parsedLogic, typeRootName)
@@ -255,32 +259,23 @@ export function storeExtractedSymbol(
     typeRootName?: string,
 ) {
     const declaration = symbol.getDeclarations()?.[0]
+    let typeName = typeRootName
 
-    if (declaration && ts.isImportSpecifier(declaration)) {
-        const importFilename = getFilenameForImportSpecifier(declaration, checker)
-        if (importFilename) {
-            addTypeImport(parsedLogic, importFilename, typeRootName || declaration.getText())
-        } else {
-            parsedLogic.typeReferencesInLogicInput.add(typeRootName || declaration.getText())
-        }
-        return
-    }
-
-    const files = getFilenamesForSymbol(symbol)
-    if (files[0]) {
-        // same file, add to logicType<...>
-        if (
+    if (
+        declaration &&
+        (ts.isImportSpecifier(declaration) ||
             ts.isTypeAliasDeclaration(declaration) ||
             ts.isInterfaceDeclaration(declaration) ||
             ts.isEnumDeclaration(declaration) ||
-            ts.isClassDeclaration(declaration)
-        ) {
-            if (files[0] === parsedLogic.fileName) {
-                parsedLogic.typeReferencesInLogicInput.add(typeRootName || declaration.name.getText())
-            } else {
-                // but is it exported?
-                addTypeImport(parsedLogic, files[0], typeRootName || declaration.name.getText())
-            }
+            ts.isClassDeclaration(declaration))
+    ) {
+        typeName = typeName || declaration.name.getText()
+    }
+
+    if (typeName) {
+        const importFilename = getFilenameForNode(declaration, checker)
+        if (importFilename && !rejectImportPath(importFilename)) {
+            addTypeImport(parsedLogic, importFilename, typeName)
         }
     }
 }
@@ -293,13 +288,16 @@ export function getFilenameForImportDeclaration(checker: ts.TypeChecker, importN
     }
 }
 
-export function getFilenameForImportSpecifier(declaration: ts.ImportSpecifier, checker: ts.TypeChecker): string | void {
-    let importNode: ts.Node = declaration
-    while (importNode && !ts.isImportDeclaration(importNode)) {
+export function getFilenameForNode(node: ts.Node, checker: ts.TypeChecker): string | void {
+    let importNode: ts.Node = node
+    while (importNode) {
+        if (ts.isImportDeclaration(importNode)) {
+            return getFilenameForImportDeclaration(checker, importNode)
+        }
+        if (isSourceFile(importNode)) {
+            return importNode.fileName
+        }
         importNode = importNode.parent
-    }
-    if (ts.isImportDeclaration(importNode)) {
-        return getFilenameForImportDeclaration(checker, importNode)
     }
 }
 
@@ -308,16 +306,6 @@ function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string)
         parsedLogic.typeReferencesToImportFromFiles[file] = new Set()
     }
     parsedLogic.typeReferencesToImportFromFiles[file].add(typeName.split('.')[0])
-}
-
-export function arrayContainsSet(array: string[], setToContain: Set<string>): boolean {
-    const arraySet = new Set(array)
-    for (const str of setToContain) {
-        if (!arraySet.has(str)) {
-            return false
-        }
-    }
-    return true
 }
 
 export function unPromisify(node: ts.Node): ts.Node {

@@ -1,3 +1,13 @@
+## 3.1.0 - 2022-05-24
+
+- Remove support for importing local types by adding to the end of `logicType` in `kea<logicType<Something, Other, Another>>(...)`
+- Instead, `export` all local types, and typegen will import them in `logicType.ts` just like other types, even if they're declared in `logic.ts`. 
+- This will bring a circular import in your code `logic.ts <-> logicType.ts`, but `tsc` seems not to care.   
+
+## 3.0.0 - 2022-05-12
+
+- Works with Kea 3.0
+
 ## 1.4.4 - 2022-05-07
 
 - Add `--add-ts-nocheck` option.

@@ -132,7 +132,7 @@ export function printToFiles(
                 }
             })
             .filter(({ fullPath }) => !shouldIgnore(fullPath))
-            .map(({ list, relativePath }) => `import { ${list.join(', ')} } from '${relativePath}'`)
+            .map(({ list, relativePath }) => `import type { ${list.join(', ')} } from '${relativePath}'`)
             .join('\n')
 
         const finalOutput = [
@@ -142,7 +142,7 @@ export function printToFiles(
             ]
                 .filter((a) => !!a)
                 .join('\n'),
-            `import { ${[...requiredKeys.values()].join(', ')} } from 'kea'`,
+            `import type { ${[...requiredKeys.values()].join(', ')} } from 'kea'`,
             otherimports,
             output,
         ]
@@ -181,7 +181,7 @@ export function printToFiles(
             // reload if logic type not imported
             (pl.logicTypeImported === false ||
                 // reload if don't have the right types in arguments
-                pl.logicTypeArguments.join(', ') !== [...pl.typeReferencesInLogicInput].sort().join(', ')) &&
+                pl.logicTypeArguments.length > 0) &&
             pl.fileName.match(/\.tsx?$/)
 
         // write the type into the logic itself
@@ -261,12 +261,6 @@ export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: A
     return nodeToString(parsedLogic.interfaceDeclaration)
 }
 
-export function getLogicTypeArguments(parsedLogic: ParsedLogic): TypeParameterDeclaration[] {
-    return [...parsedLogic.typeReferencesInLogicInput]
-        .sort()
-        .map((text) => factory.createTypeParameterDeclaration(factory.createIdentifier(text), undefined))
-}
-
 export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions): void {
     const printProperty = (name, typeNode) =>
         factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, typeNode)
@@ -309,13 +303,11 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             : null,
     ].filter((a) => !!a)
 
-    const logicTypeArguments = getLogicTypeArguments(parsedLogic)
-
     parsedLogic.interfaceDeclaration = factory.createInterfaceDeclaration(
         undefined,
         [factory.createModifier(SyntaxKind.ExportKeyword)],
         factory.createIdentifier(`${parsedLogic.logicName}Type`),
-        logicTypeArguments,
+        undefined,
         [
             factory.createHeritageClause(SyntaxKind.ExtendsKeyword, [
                 factory.createExpressionWithTypeArguments(factory.createIdentifier('Logic'), undefined),
