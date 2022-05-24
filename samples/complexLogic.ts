@@ -1,20 +1,20 @@
 import { kea } from 'kea'
-import { complexLogicType } from './complexLogicType'
+import type { complexLogicType } from './complexLogicType'
 
-type FormInstance = {}
-type AntdFieldData = {
+export type FormInstance = {}
+export type AntdFieldData = {
     name: number
     key: number
 }
-type ActionType = {
+export type ActionType = {
     name?: string
     steps?: string[]
 }
-type ActionForm = {
+export type ActionForm = {
     name?: string
     steps?: string[]
 }
-type DashboardItemType = {
+export type DashboardItemType = {
     key1: string
     key2: string
     key3: string
@@ -42,9 +42,7 @@ function newAction(element: HTMLElement | null): Partial<ActionType> {
     }
 }
 
-export const complexLogic = kea<
-    complexLogicType<ActionForm, ActionType, AntdFieldData, DashboardItemType, FormInstance>
->({
+export const complexLogic = kea<complexLogicType>({
     path: ['complexLogic'],
     props: {} as AntdFieldData,
 

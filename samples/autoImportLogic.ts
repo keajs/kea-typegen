@@ -6,13 +6,13 @@ import { loadersLogic } from './loadersLogic'
 import { Bla } from './donotimport'
 import type { autoImportLogicType } from './autoImportLogicType'
 
-type L1 = 'haha'
-type L2 = {
+export type L1 = 'haha'
+export type L2 = {
     bla: string
 }
-interface RandomAPI extends ExportedApi.RandomThing {}
+export interface RandomAPI extends ExportedApi.RandomThing {}
 
-export const autoImportLogic = kea<autoImportLogicType<L1, L2, RandomAPI>>({
+export const autoImportLogic = kea<autoImportLogicType>({
     path: ['autoImportLogic'],
     props: {} as {
         asd: D3

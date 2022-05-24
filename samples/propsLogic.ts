@@ -1,5 +1,5 @@
 import { kea } from 'kea'
-import { propsLogicType } from './propsLogicType'
+import type { propsLogicType } from './propsLogicType'
 
 const propsLogic = kea<propsLogicType>({
     path: (key) => ['propsLogic', key],

@@ -1,13 +1,13 @@
 import { kea, useValues } from 'kea'
-import { logicType } from './logicType'
+import type { logicType } from './logicType'
 import { githubLogic } from './githubLogic'
 
-interface Session {
+export interface Session {
     user: number
     type: string
 }
 
-export const logic = kea<logicType<Session>>({
+export const logic = kea<logicType>({
     props: {} as {
         id: number
     },
