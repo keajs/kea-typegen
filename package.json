@@ -24,15 +24,15 @@
         "kea-typegen": "dist/src/cli/typegen.js"
     },
     "dependencies": {
+        "@babel/core": "^7.17.9",
+        "@babel/preset-env": "^7.16.11",
+        "@babel/preset-typescript": "^7.16.0",
         "@wessberg/ts-clone-node": "0.3.19",
         "prettier": "^2.5.1",
         "recast": "^0.20.5",
         "yargs": "^16.2.0"
     },
     "devDependencies": {
-        "@babel/core": "^7.17.9",
-        "@babel/preset-env": "^7.16.11",
-        "@babel/preset-typescript": "^7.16.0",
         "@types/jest": "^26.0.20",
         "@types/node": "^14.14.31",
         "@types/yargs": "^16.0.0",

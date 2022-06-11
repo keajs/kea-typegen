@@ -1,3 +1,7 @@
+## 3.1.1 - 2022-06-11
+
+- Fix babel import error.
+
 ## 3.1.0 - 2022-05-24
 
 - Remove support for importing local types by adding to the end of `logicType` in `kea<logicType<Something, Other, Another>>(...)`
