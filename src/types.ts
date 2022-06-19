@@ -1,5 +1,5 @@
 import * as ts from 'typescript'
-import { CloneNodeOptions } from '@wessberg/ts-clone-node'
+import { CloneNodeOptions } from 'ts-clone-node'
 
 export interface ActionTransform {
     name: string

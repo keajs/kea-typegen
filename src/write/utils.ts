@@ -1,10 +1,9 @@
 import { ParsedLogic } from '../types'
 import { visit, types, parse } from 'recast'
+import { parseSync } from '@babel/core'
 
 export const t = types.namedTypes
 export const b = types.builders
-
-import { parseSync } from '@babel/core'
 
 export function getAst(filename: string, source: string): any {
     return parse(source, {
