@@ -92,4 +92,14 @@ export function typedForm({ parsedLogic, node, getTypeNodeForNode, prepareForPri
             ),
         ]),
     }
+
+    parsedLogic.extraLogicFields['custom'] = factory.createTypeLiteralNode([
+        // default?: Record<string, any>
+        factory.createPropertySignature(
+            undefined,
+            factory.createIdentifier('hello'),
+            factory.createToken(ts.SyntaxKind.QuestionToken),
+            factory.createLiteralTypeNode(factory.createStringLiteral('world')),
+        ),
+    ])
 }

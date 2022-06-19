@@ -264,7 +264,7 @@ export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: A
 export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions): void {
     const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
 
-    const logicProperties = {
+    const logicProperties: Record<string, TypeNode | null> = {
         actionCreators: printActionCreators(parsedLogic, appOptions),
         actionKeys: printActionKeys(parsedLogic, appOptions),
         actionTypes: printActionTypes(parsedLogic, appOptions),
@@ -276,7 +276,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         path: factory.createTupleTypeNode(
             parsedLogic.path.map((p) => factory.createLiteralTypeNode(factory.createStringLiteral(p))),
         ),
-        pathString: factory.createStringLiteral(parsedLogic.pathString),
+        pathString: factory.createLiteralTypeNode(factory.createStringLiteral(parsedLogic.pathString)),
         props: printProps(parsedLogic),
         reducer: printReducer(parsedLogic),
         reducers: printReducers(parsedLogic),
@@ -292,9 +292,11 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
             logicProperties[name] = typeNode
         }
     }
-    const logicMetaProperties = {
-        _isKea: factory.createTrue(),
-        _isKeaWithKey: parsedLogic.keyType ? factory.createTrue() : factory.createFalse(),
+    const logicMetaProperties: Record<string, TypeNode | null> = {
+        _isKea: factory.createLiteralTypeNode(factory.createTrue()),
+        _isKeaWithKey: factory.createLiteralTypeNode(
+            parsedLogic.keyType ? factory.createTrue() : factory.createFalse(),
+        ),
         __keaTypeGenInternalSelectorTypes: addSelectorTypeHelp ? printInternalSelectorTypes(parsedLogic) : null,
         __keaTypeGenInternalReducerActions:
             Object.keys(parsedLogic.extraActions).length > 0 ? printInternalReducerActions(parsedLogic) : null,
@@ -322,12 +324,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         Object.entries(sortedLogicProperties)
             .filter(([_, value]) => !!value)
             .map(([name, typeNode]) =>
-                factory.createPropertySignature(
-                    undefined,
-                    factory.createIdentifier(name),
-                    undefined,
-                    typeNode as TypeNode,
-                ),
+                factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, typeNode),
             ),
     )
 }
