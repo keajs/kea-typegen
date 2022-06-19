@@ -286,7 +286,10 @@ export function visitKeaCalls(
                                 }
 
                                 const folder = path.dirname(filename)
-                                const fileNoExt = path.basename(filename, path.extname(filename))
+                                let fileNoExt = path.basename(filename, path.extname(filename))
+                                if (fileNoExt.endsWith('.d')) {
+                                    fileNoExt = fileNoExt.slice(0, -2)
+                                }
                                 const pathsToTry = [
                                     'typegen.js',
                                     'typegen.ts',
