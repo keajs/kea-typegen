@@ -213,7 +213,6 @@ export function visitKeaCalls(
             listeners: [],
             sharedListeners: [],
             events: {},
-            extraActions: {},
             keyType: undefined,
             propsType: undefined,
             path: pathString.split('.'),
@@ -221,7 +220,9 @@ export function visitKeaCalls(
             hasKeyInLogic: false,
             hasPathInLogic: false,
             typeReferencesToImportFromFiles: {},
+            extraActions: {},
             extraInput: {},
+            extraLogicFields: {},
             importFromKeaInLogicType: new Set([]),
             inputBuilderArray: ts.isArrayLiteralExpression(input),
         }

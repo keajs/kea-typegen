@@ -9,7 +9,7 @@ import {
     ScriptKind,
     ScriptTarget,
     SyntaxKind,
-    TypeParameterDeclaration,
+    TypeNode,
 } from 'typescript'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -262,46 +262,52 @@ export function parsedLogicToTypeString(parsedLogic: ParsedLogic, appOptions?: A
 }
 
 export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions): void {
-    const printProperty = (name, typeNode) =>
-        factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, typeNode)
-
     const addSelectorTypeHelp = parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
 
-    const logicProperties = [
-        printProperty('actionCreators', printActionCreators(parsedLogic, appOptions)),
-        printProperty('actionKeys', printActionKeys(parsedLogic, appOptions)),
-        printProperty('actionTypes', printActionTypes(parsedLogic, appOptions)),
-        printProperty('actions', printActions(parsedLogic, appOptions)),
-        printProperty('defaults', printDefaults(parsedLogic)),
-        printProperty('events', printEvents(parsedLogic)),
-        printProperty('key', printKey(parsedLogic)),
-        printProperty('listeners', printListeners(parsedLogic)),
-        printProperty(
-            'path',
-            factory.createTupleTypeNode(
-                parsedLogic.path.map((p) => factory.createLiteralTypeNode(factory.createStringLiteral(p))),
-            ),
+    const logicProperties = {
+        actionCreators: printActionCreators(parsedLogic, appOptions),
+        actionKeys: printActionKeys(parsedLogic, appOptions),
+        actionTypes: printActionTypes(parsedLogic, appOptions),
+        actions: printActions(parsedLogic, appOptions),
+        defaults: printDefaults(parsedLogic),
+        events: printEvents(parsedLogic),
+        key: printKey(parsedLogic),
+        listeners: printListeners(parsedLogic),
+        path: factory.createTupleTypeNode(
+            parsedLogic.path.map((p) => factory.createLiteralTypeNode(factory.createStringLiteral(p))),
         ),
-        printProperty('pathString', factory.createStringLiteral(parsedLogic.pathString)),
-        printProperty('props', printProps(parsedLogic)),
-        printProperty('reducer', printReducer(parsedLogic)),
-        printProperty('reducers', printReducers(parsedLogic)),
-        printProperty('selector', printSelector(parsedLogic)),
-        printProperty('selectors', printSelectors(parsedLogic)),
-        printProperty('sharedListeners', printSharedListeners(parsedLogic)),
-        printProperty('values', printValues(parsedLogic)),
-        printProperty('_isKea', factory.createTrue()),
-        printProperty('_isKeaWithKey', parsedLogic.keyType ? factory.createTrue() : factory.createFalse()),
-        addSelectorTypeHelp
-            ? printProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
-            : null,
-        Object.keys(parsedLogic.extraActions).length > 0
-            ? printProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
-            : null,
-        Object.keys(parsedLogic.extraInput).length > 0
-            ? printProperty('__keaTypeGenInternalExtraInput', printInternalExtraInput(parsedLogic))
-            : null,
-    ].filter((a) => !!a)
+        pathString: factory.createStringLiteral(parsedLogic.pathString),
+        props: printProps(parsedLogic),
+        reducer: printReducer(parsedLogic),
+        reducers: printReducers(parsedLogic),
+        selector: printSelector(parsedLogic),
+        selectors: printSelectors(parsedLogic),
+        sharedListeners: printSharedListeners(parsedLogic),
+        values: printValues(parsedLogic),
+    }
+    for (const [name, typeNode] of Object.entries(parsedLogic.extraLogicFields)) {
+        if (name in logicProperties) {
+            console.error(`❗ Can not add extra logic field ${name} because this field is already in the logic.`)
+        } else {
+            logicProperties[name] = typeNode
+        }
+    }
+    const logicMetaProperties = {
+        _isKea: factory.createTrue(),
+        _isKeaWithKey: parsedLogic.keyType ? factory.createTrue() : factory.createFalse(),
+        __keaTypeGenInternalSelectorTypes: addSelectorTypeHelp ? printInternalSelectorTypes(parsedLogic) : null,
+        __keaTypeGenInternalReducerActions:
+            Object.keys(parsedLogic.extraActions).length > 0 ? printInternalReducerActions(parsedLogic) : null,
+        __keaTypeGenInternalExtraInput:
+            Object.keys(parsedLogic.extraInput).length > 0 ? printInternalExtraInput(parsedLogic) : null,
+    }
+
+    const sortedLogicProperties = {
+        ...Object.fromEntries(
+            Object.entries(logicProperties).sort((a, b) => (a[0] === b[0] ? 0 : a[0] < b[0] ? -1 : 1)),
+        ),
+        ...logicMetaProperties,
+    }
 
     parsedLogic.interfaceDeclaration = factory.createInterfaceDeclaration(
         undefined,
@@ -313,10 +319,15 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
                 factory.createExpressionWithTypeArguments(factory.createIdentifier('Logic'), undefined),
             ]),
         ],
-        logicProperties,
+        Object.entries(sortedLogicProperties)
+            .filter(([_, value]) => !!value)
+            .map(([name, typeNode]) =>
+                factory.createPropertySignature(
+                    undefined,
+                    factory.createIdentifier(name),
+                    undefined,
+                    typeNode as TypeNode,
+                ),
+            ),
     )
 }
-
-// haha
-let i = 0
-const smiles = ['/', ']', '[', ')', '(', '\\', 'D', '|', 'O']

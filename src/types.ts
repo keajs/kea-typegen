@@ -43,12 +43,13 @@ export interface ParsedLogic {
     selectors: SelectorTransform[]
     listeners: ListenerTransform[]
     sharedListeners: ListenerTransform[]
-    extraActions: Record<string, ts.TypeNode>
     propsType?: ts.TypeNode
     keyType?: ts.TypeNode
     typeReferencesToImportFromFiles: Record<string, Set<string>>
     interfaceDeclaration?: ts.InterfaceDeclaration
+    extraActions: Record<string, ts.TypeNode>
     extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
+    extraLogicFields: Record<string, ts.TypeNode>
     importFromKeaInLogicType: Set<string>
     inputBuilderArray: boolean
 }
