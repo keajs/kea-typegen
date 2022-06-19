@@ -1,3 +1,8 @@
+
+## 3.1.2 - 2022-06-19
+
+- Support `extraLogicFields` in parsedLogic to add any type to the generated logicType.ts
+
 ## 3.1.1 - 2022-06-11
 
 - Fix babel import error.
