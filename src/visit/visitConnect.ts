@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { gatherImports, getParameterDeclaration } from '../utils'
-import { cloneNode } from 'ts-clone-node'
+import { cloneNode } from '@wessberg/ts-clone-node'
 import { Expression, Type } from 'typescript'
 
 export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: Expression) {

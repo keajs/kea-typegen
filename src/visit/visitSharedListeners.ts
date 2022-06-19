@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { cloneNode } from 'ts-clone-node'
+import { cloneNode } from '@wessberg/ts-clone-node'
 import { gatherImports } from '../utils'
 import { Expression, Type } from 'typescript'
 
