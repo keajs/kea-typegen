@@ -76,6 +76,8 @@ export interface AppOptions {
     addTsNocheck?: boolean
     /** Convert kea 2.0 logic input to kea 3.0 builders */
     convertToBuilders?: boolean
+    /** Show TypeScript errors */
+    showTsErrors?: boolean
 
     log: (message: string) => void
 }

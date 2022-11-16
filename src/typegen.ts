@@ -3,7 +3,7 @@ import * as path from 'path'
 import { visitProgram } from './visit/visit'
 import { printToFiles } from './print/print'
 import { AppOptions } from './types'
-import { Program } from 'typescript'
+import { formatDiagnosticsWithColorAndContext, Program } from 'typescript'
 import { version } from '../package.json'
 
 export function runTypeGen(appOptions: AppOptions) {
@@ -59,13 +59,8 @@ export function runTypeGen(appOptions: AppOptions) {
             }
 
             function reportDiagnostic(diagnostic: ts.Diagnostic) {
-                if (appOptions.verbose) {
-                    console.error(
-                        'Error',
-                        diagnostic.code,
-                        ':',
-                        ts.flattenDiagnosticMessageText(diagnostic.messageText, formatHost.getNewLine()),
-                    )
+                if (appOptions.verbose || appOptions.showTsErrors) {
+                    log('💔 ' + ts.formatDiagnosticsWithColorAndContext([diagnostic], formatHost))
                 }
             }
 

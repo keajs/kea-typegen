@@ -57,6 +57,10 @@ yargs
         describe: 'List of paths we will never import from inside logicType.ts files',
         type: 'array',
     })
+    .option('show-ts-errors', {
+        describe: 'Show TypeScript errors',
+        type: 'boolean',
+    })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()
@@ -64,14 +68,14 @@ yargs
 
 function parsedToAppOptions(parsedOptions) {
     const { root, types, config, file, ...rest } = parsedOptions
-    const appOptions = {
+    const appOptions: AppOptions = {
         rootPath: root,
         typesPath: types,
         tsConfigPath: config,
         sourceFilePath: file,
         ...rest,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),
-    } as AppOptions
+    }
 
     return appOptions
 }
