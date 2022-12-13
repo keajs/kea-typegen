@@ -15,7 +15,7 @@ export function printAsyncActions(parsedLogic: ParsedLogic, appOptions?: AppOpti
                     undefined,
                     parameters,
                     factory.createTypeReferenceNode(factory.createIdentifier('Promise'), [
-                        factory.createToken(SyntaxKind.VoidKeyword),
+                        factory.createToken(SyntaxKind.AnyKeyword),
                     ]),
                 ),
             )
