@@ -17,6 +17,7 @@ import * as prettier from 'prettier'
 
 import { AppOptions, ParsedLogic } from '../types'
 import { printActions } from './printActions'
+import { printAsyncActions } from './printAsyncActions'
 import { printReducers } from './printReducers'
 import { printReducer } from './printReducer'
 import { printSelector } from './printSelector'
@@ -269,6 +270,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
         actionKeys: printActionKeys(parsedLogic, appOptions),
         actionTypes: printActionTypes(parsedLogic, appOptions),
         actions: printActions(parsedLogic, appOptions),
+        asyncActions: printAsyncActions(parsedLogic, appOptions),
         defaults: printDefaults(parsedLogic),
         events: printEvents(parsedLogic),
         key: printKey(parsedLogic),
