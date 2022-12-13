@@ -28,6 +28,10 @@ exports[`actions - as a function returning a object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
+    };
     defaults: {};
     events: {};
     key: undefined;
@@ -76,6 +80,10 @@ exports[`actions - as an object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
+    };
     defaults: {};
     events: {};
     key: undefined;
@@ -123,6 +131,10 @@ exports[`actions - with a function 1`] = `
     actions: {
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
+    };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
     };
     defaults: {};
     events: {};
@@ -189,6 +201,12 @@ exports[`actions - with random values instead of functions 1`] = `
         withDefaultValue: (name?: any) => void;
         withDefaultValueAndType: (name?: string) => void;
         withTrue: () => void;
+    };
+    asyncActions: {
+        updateName: (name?: string) => Promise<any>;
+        withDefaultValue: (name?: any) => Promise<any>;
+        withDefaultValueAndType: (name?: string) => Promise<any>;
+        withTrue: () => Promise<any>;
     };
     defaults: {};
     events: {};

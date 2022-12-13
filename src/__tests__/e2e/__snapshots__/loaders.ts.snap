@@ -46,6 +46,12 @@ exports[`loaders - with a function 1`] = `
         loadSessionsSuccess: (sessions: Session[], payload?: string) => void;
         loadSessionsFailure: (error: string, errorObject?: any) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        loadSessions: (query: string) => Promise<any>;
+        loadSessionsSuccess: (sessions: Session[], payload?: string) => Promise<any>;
+        loadSessionsFailure: (error: string, errorObject?: any) => Promise<any>;
+    };
     defaults: {
         sessions: Session[];
         sessionsLoading: boolean;
@@ -129,6 +135,12 @@ exports[`loaders - with an array and default 1`] = `
         loadSessions: (query: string) => void;
         loadSessionsSuccess: (sessions: Session[], payload?: string) => void;
         loadSessionsFailure: (error: string, errorObject?: any) => void;
+    };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        loadSessions: (query: string) => Promise<any>;
+        loadSessionsSuccess: (sessions: Session[], payload?: string) => Promise<any>;
+        loadSessionsFailure: (error: string, errorObject?: any) => Promise<any>;
     };
     defaults: {
         sessions: Session[];
@@ -231,6 +243,14 @@ exports[`loaders - with no param 1`] = `
         loadResults: () => void;
         loadResultsSuccess: (sessions: string[], payload?: any) => void;
         loadResultsFailure: (error: string, errorObject?: any) => void;
+    };
+    asyncActions: {
+        loadSessions: () => Promise<any>;
+        loadSessionsSuccess: (sessions: string[], payload?: any) => Promise<any>;
+        loadSessionsFailure: (error: string, errorObject?: any) => Promise<any>;
+        loadResults: () => Promise<any>;
+        loadResultsSuccess: (sessions: string[], payload?: any) => Promise<any>;
+        loadResultsFailure: (error: string, errorObject?: any) => Promise<any>;
     };
     defaults: {
         sessions: string[];

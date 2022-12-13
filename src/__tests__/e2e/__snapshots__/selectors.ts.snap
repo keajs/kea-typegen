@@ -28,6 +28,10 @@ exports[`selectors - as a function returning a object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
+    };
     defaults: {
         name: string;
         otherName: any;
@@ -98,6 +102,10 @@ exports[`selectors - as an object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
+    };
     defaults: {
         name: string;
         otherName: any;
@@ -167,6 +175,10 @@ exports[`selectors - with a function 1`] = `
     actions: {
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
+    };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
     };
     defaults: {
         name: string;

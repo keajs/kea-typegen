@@ -28,6 +28,10 @@ exports[`connect actions and rename 1`] = `
         firstAction: (name: string) => void;
         secondAction: (otherName: string) => void;
     };
+    asyncActions: {
+        firstAction: (name: string) => Promise<any>;
+        secondAction: (otherName: string) => Promise<any>;
+    };
     defaults: {};
     events: {};
     key: undefined;
@@ -75,6 +79,10 @@ exports[`connect actions from another logic 1`] = `
     actions: {
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
+    };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
     };
     defaults: {};
     events: {};
@@ -124,6 +132,10 @@ exports[`connect actions from multiple other logics 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
+    };
     defaults: {};
     events: {};
     key: undefined;
@@ -150,6 +162,7 @@ exports[`connect props from another logic 1`] = `
     actionKeys: {};
     actionTypes: {};
     actions: {};
+    asyncActions: {};
     defaults: {};
     events: {};
     key: undefined;
@@ -182,6 +195,7 @@ exports[`connect values and rename 1`] = `
     actionKeys: {};
     actionTypes: {};
     actions: {};
+    asyncActions: {};
     defaults: {};
     events: {};
     key: undefined;
@@ -214,6 +228,7 @@ exports[`connect values from another logic 1`] = `
     actionKeys: {};
     actionTypes: {};
     actions: {};
+    asyncActions: {};
     defaults: {};
     events: {};
     key: undefined;

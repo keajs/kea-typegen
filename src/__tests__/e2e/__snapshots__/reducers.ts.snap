@@ -28,6 +28,10 @@ exports[`reducers - as a function returning a object 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
+    };
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -99,6 +103,10 @@ exports[`reducers - as an object 1`] = `
     actions: {
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
+    };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
     };
     defaults: {
         name: string;
@@ -172,6 +180,10 @@ exports[`reducers - with a function 1`] = `
         updateName: (name: string) => void;
         updateOtherName: (otherName: string) => void;
     };
+    asyncActions: {
+        updateName: (name: string) => Promise<any>;
+        updateOtherName: (otherName: string) => Promise<any>;
+    };
     defaults: {
         name: string;
         otherNameNoDefault: any;
@@ -234,6 +246,9 @@ exports[`reducers - with bool default 1`] = `
     };
     actions: {
         updateName: () => void;
+    };
+    asyncActions: {
+        updateName: () => Promise<any>;
     };
     defaults: {
         name: boolean;
