@@ -1,6 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as fs from 'fs'
-import {  runThroughPrettier } from '../print/print'
+import { runThroughPrettier } from '../print/print'
 import { print, visit } from 'recast'
 import type { NodePath } from 'ast-types/lib/node-path'
 import { t, b, visitAllKeaCalls, getAst } from '../write/utils'
@@ -29,7 +29,6 @@ export function inlineFiles(
         const parsedLogicTypeNames = new Set<string>(parsedLogics.map((l) => l.logicTypeName))
         const foundLogicTypes = new Map<string, NodePath>()
 
-        // find all keaType calls, add interface declaration if missing
         visit(ast, {
             visitTSTypeAliasDeclaration(path): any {
                 if (parsedLogicTypeNames.has(path.value.id.name)) {
@@ -39,15 +38,16 @@ export function inlineFiles(
             },
         })
 
-        // find all kea calls, add `<logicType>` type parameters if needed
         visitAllKeaCalls(ast, parsedLogics, filename, ({ path, parsedLogic }) => {
-            if (parsedLogic.logicTypeName && foundLogicTypes.has(parsedLogic.logicTypeName)) {
+            path.node.typeParameters = b.tsTypeParameterInstantiation([
+                b.tsTypeReference(b.identifier(parsedLogic.logicTypeName)),
+            ])
+            if (foundLogicTypes.has(parsedLogic.logicTypeName)) {
                 const typeAlias: NodePath = foundLogicTypes.get(parsedLogic.logicTypeName)
                 if (t.TSTypeAliasDeclaration.check(typeAlias.value)) {
                     typeAlias.value.typeAnnotation = createLogicTypeReference(parsedLogic)
                 }
-            }
-            if (parsedLogic.logicTypeName && !foundLogicTypes.has(parsedLogic.logicTypeName)) {
+            } else {
                 let ptr: NodePath = path
                 while (ptr) {
                     if (ptr.parentPath?.value === ast.program.body) {
@@ -55,10 +55,10 @@ export function inlineFiles(
                         ast.program.body = [
                             ...ast.program.body.slice(0, index),
                             b.exportNamedDeclaration(
-                              b.tsTypeAliasDeclaration(
-                                b.identifier(parsedLogic.logicTypeName),
-                                createLogicTypeReference(parsedLogic),
-                              ),
+                                b.tsTypeAliasDeclaration(
+                                    b.identifier(parsedLogic.logicTypeName),
+                                    createLogicTypeReference(parsedLogic),
+                                ),
                             ),
                             ...ast.program.body.slice(index),
                         ]
@@ -70,6 +70,7 @@ export function inlineFiles(
 
         const newText = runThroughPrettier(print(ast).code, filename)
         fs.writeFileSync(filename, newText)
+        debugger
     }
 
     return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
