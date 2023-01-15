@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as fs from 'fs'
 import { nodeToString, runThroughPrettier } from '../print/print'
-import { parse, print, visit } from 'recast'
+import { print, visit } from 'recast'
 import type { NodePath } from 'ast-types/lib/node-path'
 import { t, b, visitAllKeaCalls, getAst, assureImport } from '../write/utils'
 import { factory, SyntaxKind } from 'typescript'
@@ -12,8 +12,6 @@ export function inlineFiles(
     appOptions,
     parsedLogics,
 ): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
-    const { log } = appOptions
-
     const groupedByFile: Record<string, ParsedLogic[]> = {}
     for (const parsedLogic of parsedLogics) {
         if (!groupedByFile[parsedLogic.fileName]) {
@@ -32,6 +30,7 @@ export function inlineFiles(
         const foundLogicTypes = new Map<string, NodePath>()
 
         let hasImportFromKea = false
+        let foundKeaLogicTypeImport = false
 
         visit(ast, {
             visitTSTypeAliasDeclaration(path): any {
@@ -43,14 +42,33 @@ export function inlineFiles(
             visitImportDeclaration(path) {
                 const isKeaImport =
                     path.value.source && t.StringLiteral.check(path.value.source) && path.value.source.value === 'kea'
+
                 if (isKeaImport) {
                     hasImportFromKea = true
+                    for (const specifier of path.value.specifiers) {
+                        if (specifier.imported.name === 'KeaLogicType') {
+                            foundKeaLogicTypeImport = true
+                        }
+                    }
                 }
+
+                // remove non-inline imports from external loginType.ts files
+                for (const specifier of path.value.specifiers) {
+                    if (specifier.imported?.name && parsedLogicTypeNames.has(specifier.imported.name)) {
+                        path.value.specifiers = path.value.specifiers.filter((s) => s !== specifier)
+                        if (path.value.specifiers.length === 0) {
+                            path.prune()
+                        }
+                    }
+                }
+
                 return false
             },
         })
 
-        assureImport(ast, 'kea', 'MakeLogicType', 'MakeLogicType', hasImportFromKea)
+        if (!foundKeaLogicTypeImport) {
+            assureImport(ast, 'kea', 'KeaLogicType', 'KeaLogicType', hasImportFromKea)
+        }
 
         visitAllKeaCalls(ast, parsedLogics, filename, ({ path, parsedLogic }) => {
             path.node.typeParameters = b.tsTypeParameterInstantiation([
@@ -84,37 +102,65 @@ export function inlineFiles(
 
         const newText = runThroughPrettier(print(ast).code, filename)
         fs.writeFileSync(filename, newText)
-        debugger
+        // debugger
     }
 
     return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
 }
 
 export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<typeof b.tsTypeReference> {
-    const typeReferenceNode = factory.createTypeReferenceNode(factory.createIdentifier('MakeLogicType'), [
-        // values
+    const typeReferenceNode = factory.createTypeReferenceNode(factory.createIdentifier('KeaLogicType'), [
         factory.createTypeLiteralNode(
-            cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) => {
-                return factory.createPropertySignature(
+            [
+                // actions
+                factory.createPropertySignature(
                     undefined,
-                    factory.createIdentifier(reducer.name),
+                    factory.createIdentifier('actions'),
                     undefined,
-                    reducer.typeNode,
-                )
-            }),
+
+                    factory.createTypeLiteralNode(
+                        parsedLogic.actions.map(({ name, parameters, returnTypeNode }) =>
+                            factory.createPropertySignature(
+                                undefined,
+                                factory.createIdentifier(name),
+                                undefined,
+                                factory.createFunctionTypeNode(undefined, parameters, returnTypeNode),
+                            ),
+                        ),
+                    ),
+                ),
+                // values
+                factory.createPropertySignature(
+                    undefined,
+                    factory.createIdentifier('values'),
+                    undefined,
+                    factory.createTypeLiteralNode(
+                        cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) =>
+                            factory.createPropertySignature(
+                                undefined,
+                                factory.createIdentifier(reducer.name),
+                                undefined,
+                                reducer.typeNode,
+                            ),
+                        ),
+                    ),
+                ),
+                // props
+                parsedLogic.propsType
+                    ? factory.createPropertySignature(
+                          undefined,
+                          factory.createIdentifier('props'),
+                          undefined,
+
+                          parsedLogic.propsType ||
+                              factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
+                                  factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
+                                  factory.createKeywordTypeNode(SyntaxKind.UnknownKeyword),
+                              ]),
+                      )
+                    : undefined,
+            ].filter((a) => !!a),
         ),
-        // actions
-        factory.createTypeLiteralNode(
-            parsedLogic.actions.map(({ name, parameters, returnTypeNode }) =>
-                factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, returnTypeNode),
-            ),
-        ),
-        // props
-        parsedLogic.propsType ||
-            factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
-                factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
-                factory.createKeywordTypeNode(SyntaxKind.UnknownKeyword),
-            ]),
     ])
 
     // Transform Typescript API's AST to a string
@@ -130,7 +176,7 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
 
     // Convert that string to recast's AST
     const node = getAst(parsedLogic.fileName, source).program.body[0].typeAnnotation
-    debugger
+    // debugger
 
     return node
 }
