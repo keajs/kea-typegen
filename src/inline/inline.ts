@@ -85,14 +85,14 @@ export function inlineFiles(
                     if (ptr.parentPath?.value === ast.program.body) {
                         const index = ast.program.body.findIndex((n) => n === ptr.value)
                         ast.program.body = [
-                            ...ast.program.body.slice(0, index),
+                            ...ast.program.body.slice(0, index+1),
                             b.exportNamedDeclaration(
                                 b.tsTypeAliasDeclaration(
                                     b.identifier(parsedLogic.logicTypeName),
                                     createLogicTypeReference(parsedLogic),
                                 ),
                             ),
-                            ...ast.program.body.slice(index),
+                            ...ast.program.body.slice(index+1),
                         ]
                     }
                     ptr = ptr.parentPath
