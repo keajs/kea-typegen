@@ -1,9 +1,11 @@
 import { ParsedLogic } from '../types'
 import * as fs from 'fs'
-import { runThroughPrettier } from '../print/print'
-import { print, visit } from 'recast'
+import { nodeToString, runThroughPrettier } from '../print/print'
+import { parse, print, visit } from 'recast'
 import type { NodePath } from 'ast-types/lib/node-path'
-import { t, b, visitAllKeaCalls, getAst } from '../write/utils'
+import { t, b, visitAllKeaCalls, getAst, assureImport } from '../write/utils'
+import { factory, SyntaxKind } from 'typescript'
+import { cleanDuplicateAnyNodes } from '../utils'
 
 export function inlineFiles(
     program,
@@ -29,6 +31,8 @@ export function inlineFiles(
         const parsedLogicTypeNames = new Set<string>(parsedLogics.map((l) => l.logicTypeName))
         const foundLogicTypes = new Map<string, NodePath>()
 
+        let hasImportFromKea = false
+
         visit(ast, {
             visitTSTypeAliasDeclaration(path): any {
                 if (parsedLogicTypeNames.has(path.value.id.name)) {
@@ -36,7 +40,17 @@ export function inlineFiles(
                 }
                 return false
             },
+            visitImportDeclaration(path) {
+                const isKeaImport =
+                    path.value.source && t.StringLiteral.check(path.value.source) && path.value.source.value === 'kea'
+                if (isKeaImport) {
+                    hasImportFromKea = true
+                }
+                return false
+            },
         })
+
+        assureImport(ast, 'kea', 'MakeLogicType', 'MakeLogicType', hasImportFromKea)
 
         visitAllKeaCalls(ast, parsedLogics, filename, ({ path, parsedLogic }) => {
             path.node.typeParameters = b.tsTypeParameterInstantiation([
@@ -77,7 +91,46 @@ export function inlineFiles(
 }
 
 export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<typeof b.tsTypeReference> {
-    const node = b.tsTypeReference(b.identifier('LogicType'))
+    const typeReferenceNode = factory.createTypeReferenceNode(factory.createIdentifier('MakeLogicType'), [
+        // values
+        factory.createTypeLiteralNode(
+            cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) => {
+                return factory.createPropertySignature(
+                    undefined,
+                    factory.createIdentifier(reducer.name),
+                    undefined,
+                    reducer.typeNode,
+                )
+            }),
+        ),
+        // actions
+        factory.createTypeLiteralNode(
+            parsedLogic.actions.map(({ name, parameters, returnTypeNode }) =>
+                factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, returnTypeNode),
+            ),
+        ),
+        // props
+        parsedLogic.propsType ||
+            factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
+                factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
+                factory.createKeywordTypeNode(SyntaxKind.UnknownKeyword),
+            ]),
+    ])
+
+    // Transform Typescript API's AST to a string
+    const source = nodeToString(
+        factory.createTypeAliasDeclaration(
+            [],
+            [],
+            factory.createIdentifier('githubLogicType'),
+            undefined,
+            typeReferenceNode,
+        ),
+    )
+
+    // Convert that string to recast's AST
+    const node = getAst(parsedLogic.fileName, source).program.body[0].typeAnnotation
     debugger
+
     return node
 }
