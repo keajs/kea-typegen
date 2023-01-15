@@ -45,6 +45,7 @@ yargs
         type: 'string',
     })
     .option('quiet', { alias: 'q', describe: 'Write nothing to stdout', type: 'boolean' })
+    .option('inline', { alias: 'i', describe: 'Inline types', type: 'boolean' })
     .option('no-import', { describe: 'Do not automatically import generated types in logic files', type: 'boolean' })
     .option('write-paths', { describe: 'Write paths into logic files that have none', type: 'boolean' })
     .option('add-ts-nocheck', { describe: 'Add @ts-nocheck to top of logicType.ts files', type: 'boolean' })

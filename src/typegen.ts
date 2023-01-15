@@ -3,8 +3,9 @@ import * as path from 'path'
 import { visitProgram } from './visit/visit'
 import { printToFiles } from './print/print'
 import { AppOptions } from './types'
-import { formatDiagnosticsWithColorAndContext, Program } from 'typescript'
+import { Program } from 'typescript'
 import { version } from '../package.json'
+import { inlineFiles } from './inline/inline'
 
 export function runTypeGen(appOptions: AppOptions) {
     let program: Program
@@ -106,7 +107,9 @@ export function runTypeGen(appOptions: AppOptions) {
             log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
         }
 
-        const response = printToFiles(program, appOptions, parsedLogics)
+        const response = appOptions.inline
+            ? inlineFiles(program, appOptions, parsedLogics)
+            : printToFiles(program, appOptions, parsedLogics)
 
         // running "kea-typegen check" and would write files?
         // exit with 1
