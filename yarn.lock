@@ -4203,10 +4203,14 @@ kea-router@^3.0.0-alpha.0:
   dependencies:
     url-pattern "^1.0.3"
 
-kea@^3.0.0-alpha.6:
-  version "3.0.0-alpha.6"
-  resolved "https://registry.yarnpkg.com/kea/-/kea-3.0.0-alpha.6.tgz#fef0b7f9c66a15df6437ed33a97dd152f2e0e20e"
-  integrity sha512-uKsuQezYIWW16TB5hTztC7VPsrT9fg0kKz5cy+WS6QPvDE6eMpeuTF6vNdG/WlHKJTKj5E54rp0dk+gcR+KKMA==
+kea@^3.1.3:
+  version "3.1.3"
+  resolved "https://registry.yarnpkg.com/kea/-/kea-3.1.3.tgz#2bc827cbba88e8b425fee8482acfae1199c8d0ac"
+  integrity sha512-BmPCe/s/JytLt5kJJgyt7i9ExfRLARJJfrjzxts6czfow0zkftHBGoPirP6+16mA+HIFFLGogu8dnPqQC9iLlw==
+  dependencies:
+    redux "^4.2.0"
+    reselect "^4.1.5"
+    use-sync-external-store "^1.2.0"
 
 kind-of@^3.0.2, kind-of@^3.0.3, kind-of@^3.2.0:
   version "3.2.2"
@@ -4764,10 +4768,10 @@ prelude-ls@~1.1.2:
   resolved "https://registry.yarnpkg.com/prelude-ls/-/prelude-ls-1.1.2.tgz#21932a549f5e52ffd9a827f570e04be62a97da54"
   integrity sha1-IZMqVJ9eUv/ZqCf1cOBL5iqX2lQ=
 
-prettier@^2.5.1:
-  version "2.5.1"
-  resolved "https://registry.yarnpkg.com/prettier/-/prettier-2.5.1.tgz#fff75fa9d519c54cf0fce328c1017d94546bc56a"
-  integrity sha512-vBZcPRUR5MZJwoyi3ZoyQlc1rXeEck8KgeC9AwwOn+exuxLxq5toTRDTSaVrXHxelDMHy9zlicw8u66yxoSUFg==
+prettier@^2.8.3:
+  version "2.8.3"
+  resolved "https://registry.yarnpkg.com/prettier/-/prettier-2.8.3.tgz#ab697b1d3dd46fb4626fbe2f543afe0cc98d8632"
+  integrity sha512-tJ/oJ4amDihPoufT5sM0Z1SKEuKay8LfVAMlbbhnnkvt6BUserZylqo2PN+p9KeljLr0OHa2rXHU1T8reeoTrw==
 
 pretty-format@^26.0.0, pretty-format@^26.6.2:
   version "26.6.2"
@@ -5656,6 +5660,11 @@ url-pattern@^1.0.3:
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/url-pattern/-/url-pattern-1.0.3.tgz#0409292471b24f23c50d65a47931793d2b5acfc1"
   integrity sha1-BAkpJHGyTyPFDWWkeTF5PStaz8E=
+
+use-sync-external-store@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/use-sync-external-store/-/use-sync-external-store-1.2.0.tgz#7dbefd6ef3fe4e767a0cf5d7287aacfb5846928a"
+  integrity sha512-eEgnFxGQ1Ife9bzYs6VLi8/4X6CObHMw9Qr9tPY43iKwsPw8xE8+EFsf/2cFZ5S3esXgpWgtSCtLNS41F+sKPA==
 
 use@^3.1.0:
   version "3.1.1"
