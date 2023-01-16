@@ -3,9 +3,14 @@ import * as fs from 'fs'
 import { nodeToString, runThroughPrettier } from '../print/print'
 import { print, visit } from 'recast'
 import type { NodePath } from 'ast-types/lib/node-path'
+import type { namedTypes } from 'ast-types/gen/namedTypes'
 import { t, b, visitAllKeaCalls, getAst, assureImport } from '../write/utils'
 import { factory, SyntaxKind, PropertySignature, Identifier } from 'typescript'
 import { cleanDuplicateAnyNodes } from '../utils'
+import { printInternalExtraInput } from '../print/printInternalExtraInput'
+import { printInternalSelectorTypes } from '../print/printInternalSelectorTypes'
+import { printInternalReducerActions } from '../print/printInternalReducerActions'
+import * as ts from 'typescript'
 
 export function inlineFiles(
     program,
@@ -79,6 +84,7 @@ export function inlineFiles(
                 ])
                 if (foundLogicTypes.has(parsedLogic.logicTypeName)) {
                     const typeAlias: NodePath = foundLogicTypes.get(parsedLogic.logicTypeName)
+                    typeAlias.parentPath.value.comments = createLogicTypeComments(parsedLogic)
                     if (t.TSTypeAliasDeclaration.check(typeAlias.value)) {
                         typeAlias.value.typeAnnotation = createLogicTypeReference(parsedLogic)
                     }
@@ -87,14 +93,16 @@ export function inlineFiles(
                     while (ptr) {
                         if (ptr.parentPath?.value === ast.program.body) {
                             const index = ast.program.body.findIndex((n) => n === ptr.value)
+                            const logicTypeNode = b.exportNamedDeclaration(
+                                b.tsTypeAliasDeclaration(
+                                    b.identifier(parsedLogic.logicTypeName),
+                                    createLogicTypeReference(parsedLogic),
+                                ),
+                            )
+                            logicTypeNode.comments = createLogicTypeComments(parsedLogic)
                             ast.program.body = [
                                 ...ast.program.body.slice(0, index + 1),
-                                b.exportNamedDeclaration(
-                                    b.tsTypeAliasDeclaration(
-                                        b.identifier(parsedLogic.logicTypeName),
-                                        createLogicTypeReference(parsedLogic),
-                                    ),
-                                ),
+                                logicTypeNode,
                                 ...ast.program.body.slice(index + 1),
                             ]
                         }
@@ -114,20 +122,8 @@ export function inlineFiles(
     return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
 }
 
-function sortPropertySignatures(
-    propertySignatures: (PropertySignature | unknown | null | false)[],
-): PropertySignature[] {
-    return propertySignatures
-        .filter((a): a is PropertySignature => !!a)
-        .sort((a, b) =>
-            String((a.name as Identifier)?.escapedText || ('' as string)).localeCompare(
-                String((a.name as Identifier)?.escapedText || ('' as string)),
-            ),
-        )
-}
-
 export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<typeof b.tsTypeReference> {
-    const typeReferenceNode = factory.createTypeReferenceNode(factory.createIdentifier('KeaLogicType'), [
+    let typeReferenceNode: ts.TypeNode = factory.createTypeReferenceNode(factory.createIdentifier('KeaLogicType'), [
         factory.createTypeLiteralNode(
             [
                 // actions
@@ -135,10 +131,10 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                     undefined,
                     factory.createIdentifier('actions'),
                     undefined,
-
                     factory.createTypeLiteralNode(
-                        sortPropertySignatures(
-                            parsedLogic.actions.map(({ name, parameters, returnTypeNode }) =>
+                        [...parsedLogic.actions]
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(({ name, parameters, returnTypeNode }) =>
                                 factory.createPropertySignature(
                                     undefined,
                                     factory.createIdentifier(name),
@@ -146,7 +142,6 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                                     factory.createFunctionTypeNode(undefined, parameters, returnTypeNode),
                                 ),
                             ),
-                        ),
                     ),
                 ),
                 // values
@@ -155,8 +150,9 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                     factory.createIdentifier('values'),
                     undefined,
                     factory.createTypeLiteralNode(
-                        sortPropertySignatures(
-                            cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) =>
+                        cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors))
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((reducer) =>
                                 factory.createPropertySignature(
                                     undefined,
                                     factory.createIdentifier(reducer.name),
@@ -164,7 +160,6 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                                     reducer.typeNode,
                                 ),
                             ),
-                        ),
                     ),
                 ),
                 // props
@@ -173,7 +168,6 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                           undefined,
                           factory.createIdentifier('props'),
                           undefined,
-
                           parsedLogic.propsType ||
                               factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
                                   factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
@@ -181,9 +175,46 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                               ]),
                       )
                     : undefined,
+
+                parsedLogic.selectors.filter((s) => s.functionTypes.length > 0).length > 0
+                    ? factory.createPropertySignature(
+                          undefined,
+                          factory.createIdentifier('__keaTypeGenInternalSelectorTypes'),
+                          undefined,
+                          printInternalSelectorTypes(parsedLogic),
+                      )
+                    : null,
+
+                Object.keys(parsedLogic.extraActions).length > 0
+                    ? factory.createPropertySignature(
+                          undefined,
+                          factory.createIdentifier('__keaTypeGenInternalReducerActions'),
+                          undefined,
+                          printInternalReducerActions(parsedLogic),
+                      )
+                    : null,
+                Object.keys(parsedLogic.extraInput).length > 0
+                    ? factory.createPropertySignature(
+                          undefined,
+                          factory.createIdentifier('__keaTypeGenInternalExtraInput'),
+                          undefined,
+                          printInternalExtraInput(parsedLogic),
+                      )
+                    : null,
             ].filter((a) => !!a),
         ),
     ])
+
+    if (Object.keys(parsedLogic.extraLogicFields).length > 0) {
+        typeReferenceNode = factory.createIntersectionTypeNode([
+            typeReferenceNode,
+            factory.createTypeLiteralNode(
+                Object.entries(parsedLogic.extraLogicFields).map(([key, field]) =>
+                    factory.createPropertySignature(undefined, factory.createIdentifier(key), undefined, field),
+                ),
+            ),
+        ])
+    }
 
     // Transform Typescript API's AST to a string
     let source: string = ''
@@ -207,4 +238,14 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
     const node = getAst(parsedLogic.fileName, source).program.body[0].typeAnnotation
 
     return node
+}
+
+function createLogicTypeComments(parsedLogic: ParsedLogic): namedTypes.CommentLine[] {
+    return [
+        {
+            type: 'CommentLine',
+            value: ` This is an auto-generated type for the logic "${parsedLogic.logicName}".`,
+            leading: true,
+        },
+    ]
 }
