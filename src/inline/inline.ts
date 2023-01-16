@@ -1,21 +1,22 @@
-import { ParsedLogic } from '../types'
+import { AppOptions, ParsedLogic } from '../types'
 import * as fs from 'fs'
-import { nodeToString, runThroughPrettier } from '../print/print'
+import { getShouldIgnore, nodeToString, runThroughPrettier } from '../print/print'
 import { print, visit } from 'recast'
 import type { NodePath } from 'ast-types/lib/node-path'
 import type { namedTypes } from 'ast-types/gen/namedTypes'
 import { t, b, visitAllKeaCalls, getAst, assureImport } from '../write/utils'
-import { factory, SyntaxKind, PropertySignature, Identifier } from 'typescript'
+import { factory, SyntaxKind, Program } from 'typescript'
 import { cleanDuplicateAnyNodes } from '../utils'
 import { printInternalExtraInput } from '../print/printInternalExtraInput'
 import { printInternalSelectorTypes } from '../print/printInternalSelectorTypes'
 import { printInternalReducerActions } from '../print/printInternalReducerActions'
 import * as ts from 'typescript'
+import * as path from 'path'
 
 export function inlineFiles(
-    program,
-    appOptions,
-    parsedLogics,
+    program: Program,
+    appOptions: AppOptions,
+    parsedLogics: ParsedLogic[],
 ): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
     const groupedByFile: Record<string, ParsedLogic[]> = {}
     for (const parsedLogic of parsedLogics) {
@@ -37,6 +38,7 @@ export function inlineFiles(
 
             let hasImportFromKea = false
             let foundKeaLogicTypeImport = false
+            const importedVariables = new Set<string>()
 
             visit(ast, {
                 visitTSTypeAliasDeclaration(path): any {
@@ -67,6 +69,8 @@ export function inlineFiles(
                             if (path.value.specifiers.length === 0) {
                                 path.prune()
                             }
+                        } else {
+                            importedVariables.add(specifier.local?.name ?? specifier.imported?.name)
                         }
                     }
 
@@ -86,7 +90,13 @@ export function inlineFiles(
                     const typeAlias: NodePath = foundLogicTypes.get(parsedLogic.logicTypeName)
                     typeAlias.parentPath.value.comments = createLogicTypeComments(parsedLogic)
                     if (t.TSTypeAliasDeclaration.check(typeAlias.value)) {
-                        typeAlias.value.typeAnnotation = createLogicTypeReference(parsedLogic)
+                        typeAlias.value.typeAnnotation = createLogicTypeReference(
+                            program,
+                            appOptions,
+                            parsedLogic,
+                            importedVariables,
+                            ast.program.body,
+                        )
                     }
                 } else {
                     let ptr: NodePath = path
@@ -96,7 +106,13 @@ export function inlineFiles(
                             const logicTypeNode = b.exportNamedDeclaration(
                                 b.tsTypeAliasDeclaration(
                                     b.identifier(parsedLogic.logicTypeName),
-                                    createLogicTypeReference(parsedLogic),
+                                    createLogicTypeReference(
+                                        program,
+                                        appOptions,
+                                        parsedLogic,
+                                        importedVariables,
+                                        ast.program.body,
+                                    ),
                                 ),
                             )
                             logicTypeNode.comments = createLogicTypeComments(parsedLogic)
@@ -122,7 +138,13 @@ export function inlineFiles(
     return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
 }
 
-export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<typeof b.tsTypeReference> {
+export function createLogicTypeReference(
+    program: Program,
+    appOptions: AppOptions,
+    parsedLogic: ParsedLogic,
+    importedVariables: Set<string>,
+    body: namedTypes.Program['body'],
+): ReturnType<typeof b.tsTypeReference> {
     let typeReferenceNode: ts.TypeNode = factory.createTypeReferenceNode(factory.createIdentifier('KeaLogicType'), [
         factory.createTypeLiteralNode(
             [
@@ -214,6 +236,40 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                 ),
             ),
         ])
+    }
+
+    if (Object.keys(parsedLogic.typeReferencesToImportFromFiles).length > 0) {
+        const shouldIgnore = getShouldIgnore(program, appOptions)
+        const requiredImports = Object.entries(parsedLogic.typeReferencesToImportFromFiles)
+            .map(([file, list]): [string, string[]] => [file, [...list].filter((key) => !importedVariables.has(key))])
+            .filter(([file, list]) => list.length > 0 && !shouldIgnore(file) && file !== parsedLogic.fileName)
+
+        for (const [file, list] of requiredImports) {
+            let relativePath = path.relative(path.dirname(parsedLogic.fileName), file)
+            relativePath = relativePath.replace(/\.tsx?$/, '')
+            if (!relativePath.startsWith('.')) {
+                relativePath = `./${relativePath}`
+            }
+
+            let importDeclaration = body.find(
+                (node) => t.ImportDeclaration.check(node) && node.source.value === relativePath,
+            ) as namedTypes.ImportDeclaration | undefined
+            if (importDeclaration) {
+                importDeclaration.specifiers.push(b.importSpecifier(b.identifier(list[0])))
+            } else {
+                importDeclaration = b.importDeclaration(
+                    list.map((key) => b.importSpecifier(b.identifier(key))),
+                    b.stringLiteral(relativePath),
+                )
+                let lastIndex = -1
+                for (let i = 0; i < body.length; i++) {
+                    if (t.ImportDeclaration.check(body[i])) {
+                        lastIndex = i
+                    }
+                }
+                body.splice(lastIndex + 1, 0, importDeclaration)
+            }
+        }
     }
 
     // Transform Typescript API's AST to a string

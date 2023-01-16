@@ -73,28 +73,7 @@ export function printToFiles(
         printLogicType(parsedLogic, appOptions)
     }
 
-    // Automatically ignore imports from "node_modules/@types/node", if {types: ["node"]} in tsconfig.json
-    const defaultGlobalTypePaths = appOptions.importGlobalTypes
-        ? []
-        : (program.getCompilerOptions().types || []).map(
-              (type) =>
-                  path.join(
-                      appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
-                      'node_modules',
-                      '@types',
-                      type,
-                  ) + path.sep,
-          )
-
-    // Manually ignored
-    const ignoredImportPaths = (appOptions.ignoreImportPaths || []).map((importPath) =>
-        path.resolve(appOptions.rootPath, importPath),
-    )
-
-    const doNotImportFromPaths = [...defaultGlobalTypePaths, ...ignoredImportPaths]
-
-    const shouldIgnore = (absolutePath: string) =>
-        !!doNotImportFromPaths.find((badPath) => absolutePath.startsWith(badPath))
+    const shouldIgnore = getShouldIgnore(program, appOptions)
 
     let writtenFiles = 0
     let filesToWrite = 0
@@ -249,6 +228,32 @@ export function printToFiles(
     }
 
     return { filesToWrite, writtenFiles, filesToModify }
+}
+
+export function getShouldIgnore(program: Program, appOptions: AppOptions): (absolutePath: string) => boolean {
+    // Automatically ignore imports from "node_modules/@types/node", if {types: ["node"]} in tsconfig.json
+    const defaultGlobalTypePaths = appOptions.importGlobalTypes
+        ? []
+        : (program.getCompilerOptions().types || []).map(
+              (type) =>
+                  path.join(
+                      appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
+                      'node_modules',
+                      '@types',
+                      type,
+                  ) + path.sep,
+          )
+
+    // Manually ignored
+    const ignoredImportPaths = (appOptions.ignoreImportPaths || []).map((importPath) =>
+        path.resolve(appOptions.rootPath, importPath),
+    )
+
+    const doNotImportFromPaths = [...defaultGlobalTypePaths, ...ignoredImportPaths]
+
+    const shouldIgnore = (absolutePath: string) =>
+        !!doNotImportFromPaths.find((badPath) => absolutePath.startsWith(badPath))
+    return shouldIgnore
 }
 
 export function nodeToString(node: Node): string {
