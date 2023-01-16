@@ -11,7 +11,7 @@ export function getAst(filename: string, source: string): any {
         parser: {
             parse: (source) =>
                 parseSync(source, {
-                    presets: ['@babel/preset-env', '@babel/preset-typescript'],
+                    presets: ['@babel/preset-env', '@babel/preset-react', '@babel/preset-typescript'],
                     filename: filename,
                     parserOpts: {
                         tokens: true, // recast uses this

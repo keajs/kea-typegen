@@ -14,7 +14,7 @@
         "samples:write:inline": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths --inline",
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples",
-        "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json",
+        "samples:write:posthog": "ts-node ./src/cli/typegen.ts write --inline --write-paths -c ../../PostHog/posthog/tsconfig.json",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },
@@ -34,6 +34,7 @@
         "yargs": "^16.2.0"
     },
     "devDependencies": {
+        "@babel/preset-react": "^7.18.6",
         "@types/jest": "^26.0.20",
         "@types/node": "^14.14.31",
         "@types/yargs": "^16.0.0",

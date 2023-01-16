@@ -4,7 +4,7 @@ import { nodeToString, runThroughPrettier } from '../print/print'
 import { print, visit } from 'recast'
 import type { NodePath } from 'ast-types/lib/node-path'
 import { t, b, visitAllKeaCalls, getAst, assureImport } from '../write/utils'
-import { factory, SyntaxKind } from 'typescript'
+import { factory, SyntaxKind, PropertySignature, Identifier } from 'typescript'
 import { cleanDuplicateAnyNodes } from '../utils'
 
 export function inlineFiles(
@@ -21,91 +21,109 @@ export function inlineFiles(
     }
 
     for (const [filename, parsedLogics] of Object.entries(groupedByFile)) {
-        const sourceFile = program.getSourceFile(filename)
-        const rawCode = sourceFile.getText()
+        try {
+            const sourceFile = program.getSourceFile(filename)
+            const rawCode = sourceFile.getText()
 
-        const ast = getAst(filename, rawCode)
+            const ast = getAst(filename, rawCode)
 
-        const parsedLogicTypeNames = new Set<string>(parsedLogics.map((l) => l.logicTypeName))
-        const foundLogicTypes = new Map<string, NodePath>()
+            const parsedLogicTypeNames = new Set<string>(parsedLogics.map((l) => l.logicTypeName))
+            const foundLogicTypes = new Map<string, NodePath>()
 
-        let hasImportFromKea = false
-        let foundKeaLogicTypeImport = false
+            let hasImportFromKea = false
+            let foundKeaLogicTypeImport = false
 
-        visit(ast, {
-            visitTSTypeAliasDeclaration(path): any {
-                if (parsedLogicTypeNames.has(path.value.id.name)) {
-                    foundLogicTypes.set(path.value.id.name, path)
-                }
-                return false
-            },
-            visitImportDeclaration(path) {
-                const isKeaImport =
-                    path.value.source && t.StringLiteral.check(path.value.source) && path.value.source.value === 'kea'
+            visit(ast, {
+                visitTSTypeAliasDeclaration(path): any {
+                    if (parsedLogicTypeNames.has(path.value.id.name)) {
+                        foundLogicTypes.set(path.value.id.name, path)
+                    }
+                    return false
+                },
+                visitImportDeclaration(path) {
+                    const isKeaImport =
+                        path.value.source &&
+                        t.StringLiteral.check(path.value.source) &&
+                        path.value.source.value === 'kea'
 
-                if (isKeaImport) {
-                    hasImportFromKea = true
+                    if (isKeaImport) {
+                        hasImportFromKea = true
+                        for (const specifier of path.value.specifiers) {
+                            if (specifier.imported.name === 'KeaLogicType') {
+                                foundKeaLogicTypeImport = true
+                            }
+                        }
+                    }
+
+                    // remove non-inline imports from external loginType.ts files
                     for (const specifier of path.value.specifiers) {
-                        if (specifier.imported.name === 'KeaLogicType') {
-                            foundKeaLogicTypeImport = true
+                        if (specifier.imported?.name && parsedLogicTypeNames.has(specifier.imported.name)) {
+                            path.value.specifiers = path.value.specifiers.filter((s) => s !== specifier)
+                            if (path.value.specifiers.length === 0) {
+                                path.prune()
+                            }
                         }
                     }
-                }
 
-                // remove non-inline imports from external loginType.ts files
-                for (const specifier of path.value.specifiers) {
-                    if (specifier.imported?.name && parsedLogicTypeNames.has(specifier.imported.name)) {
-                        path.value.specifiers = path.value.specifiers.filter((s) => s !== specifier)
-                        if (path.value.specifiers.length === 0) {
-                            path.prune()
-                        }
-                    }
-                }
+                    return false
+                },
+            })
 
-                return false
-            },
-        })
-
-        if (!foundKeaLogicTypeImport) {
-            assureImport(ast, 'kea', 'KeaLogicType', 'KeaLogicType', hasImportFromKea)
-        }
-
-        visitAllKeaCalls(ast, parsedLogics, filename, ({ path, parsedLogic }) => {
-            path.node.typeParameters = b.tsTypeParameterInstantiation([
-                b.tsTypeReference(b.identifier(parsedLogic.logicTypeName)),
-            ])
-            if (foundLogicTypes.has(parsedLogic.logicTypeName)) {
-                const typeAlias: NodePath = foundLogicTypes.get(parsedLogic.logicTypeName)
-                if (t.TSTypeAliasDeclaration.check(typeAlias.value)) {
-                    typeAlias.value.typeAnnotation = createLogicTypeReference(parsedLogic)
-                }
-            } else {
-                let ptr: NodePath = path
-                while (ptr) {
-                    if (ptr.parentPath?.value === ast.program.body) {
-                        const index = ast.program.body.findIndex((n) => n === ptr.value)
-                        ast.program.body = [
-                            ...ast.program.body.slice(0, index+1),
-                            b.exportNamedDeclaration(
-                                b.tsTypeAliasDeclaration(
-                                    b.identifier(parsedLogic.logicTypeName),
-                                    createLogicTypeReference(parsedLogic),
-                                ),
-                            ),
-                            ...ast.program.body.slice(index+1),
-                        ]
-                    }
-                    ptr = ptr.parentPath
-                }
+            if (!foundKeaLogicTypeImport) {
+                assureImport(ast, 'kea', 'KeaLogicType', 'KeaLogicType', hasImportFromKea)
             }
-        })
 
-        const newText = runThroughPrettier(print(ast).code, filename)
-        fs.writeFileSync(filename, newText)
-        // debugger
+            visitAllKeaCalls(ast, parsedLogics, filename, ({ path, parsedLogic }) => {
+                path.node.typeParameters = b.tsTypeParameterInstantiation([
+                    b.tsTypeReference(b.identifier(parsedLogic.logicTypeName)),
+                ])
+                if (foundLogicTypes.has(parsedLogic.logicTypeName)) {
+                    const typeAlias: NodePath = foundLogicTypes.get(parsedLogic.logicTypeName)
+                    if (t.TSTypeAliasDeclaration.check(typeAlias.value)) {
+                        typeAlias.value.typeAnnotation = createLogicTypeReference(parsedLogic)
+                    }
+                } else {
+                    let ptr: NodePath = path
+                    while (ptr) {
+                        if (ptr.parentPath?.value === ast.program.body) {
+                            const index = ast.program.body.findIndex((n) => n === ptr.value)
+                            ast.program.body = [
+                                ...ast.program.body.slice(0, index + 1),
+                                b.exportNamedDeclaration(
+                                    b.tsTypeAliasDeclaration(
+                                        b.identifier(parsedLogic.logicTypeName),
+                                        createLogicTypeReference(parsedLogic),
+                                    ),
+                                ),
+                                ...ast.program.body.slice(index + 1),
+                            ]
+                        }
+                        ptr = ptr.parentPath
+                    }
+                }
+            })
+
+            const newText = runThroughPrettier(print(ast).code, filename)
+            fs.writeFileSync(filename, newText)
+        } catch (e) {
+            console.error(`Error updating logic types in ${filename}`)
+            console.error(e)
+        }
     }
 
     return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
+}
+
+function sortPropertySignatures(
+    propertySignatures: (PropertySignature | unknown | null | false)[],
+): PropertySignature[] {
+    return propertySignatures
+        .filter((a): a is PropertySignature => !!a)
+        .sort((a, b) =>
+            String((a.name as Identifier)?.escapedText || ('' as string)).localeCompare(
+                String((a.name as Identifier)?.escapedText || ('' as string)),
+            ),
+        )
 }
 
 export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<typeof b.tsTypeReference> {
@@ -119,12 +137,14 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                     undefined,
 
                     factory.createTypeLiteralNode(
-                        parsedLogic.actions.map(({ name, parameters, returnTypeNode }) =>
-                            factory.createPropertySignature(
-                                undefined,
-                                factory.createIdentifier(name),
-                                undefined,
-                                factory.createFunctionTypeNode(undefined, parameters, returnTypeNode),
+                        sortPropertySignatures(
+                            parsedLogic.actions.map(({ name, parameters, returnTypeNode }) =>
+                                factory.createPropertySignature(
+                                    undefined,
+                                    factory.createIdentifier(name),
+                                    undefined,
+                                    factory.createFunctionTypeNode(undefined, parameters, returnTypeNode),
+                                ),
                             ),
                         ),
                     ),
@@ -135,12 +155,14 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
                     factory.createIdentifier('values'),
                     undefined,
                     factory.createTypeLiteralNode(
-                        cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) =>
-                            factory.createPropertySignature(
-                                undefined,
-                                factory.createIdentifier(reducer.name),
-                                undefined,
-                                reducer.typeNode,
+                        sortPropertySignatures(
+                            cleanDuplicateAnyNodes(parsedLogic.reducers.concat(parsedLogic.selectors)).map((reducer) =>
+                                factory.createPropertySignature(
+                                    undefined,
+                                    factory.createIdentifier(reducer.name),
+                                    undefined,
+                                    reducer.typeNode,
+                                ),
                             ),
                         ),
                     ),
@@ -164,19 +186,25 @@ export function createLogicTypeReference(parsedLogic: ParsedLogic): ReturnType<t
     ])
 
     // Transform Typescript API's AST to a string
-    const source = nodeToString(
-        factory.createTypeAliasDeclaration(
-            [],
-            [],
-            factory.createIdentifier('githubLogicType'),
-            undefined,
-            typeReferenceNode,
-        ),
-    )
+    let source: string = ''
+    try {
+        source = nodeToString(
+            factory.createTypeAliasDeclaration(
+                [],
+                [],
+                factory.createIdentifier(parsedLogic.logicTypeName),
+                undefined,
+                typeReferenceNode,
+            ),
+        )
+    } catch (e) {
+        console.error(`Error emitting logic type ${parsedLogic.logicTypeName} to string`)
+        console.error(e)
+        debugger
+    }
 
     // Convert that string to recast's AST
     const node = getAst(parsedLogic.fileName, source).program.body[0].typeAnnotation
-    // debugger
 
     return node
 }
