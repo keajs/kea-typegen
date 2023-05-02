@@ -3,8 +3,15 @@ import * as path from 'path'
 import { visitProgram } from './visit/visit'
 import { printToFiles } from './print/print'
 import { AppOptions } from './types'
-import { formatDiagnosticsWithColorAndContext, Program } from 'typescript'
+import { Program } from 'typescript'
 import { version } from '../package.json'
+
+// The undocumented defaultMaximumTruncationLength setting determines at what point printed types are truncated.
+// In kea-typegen output, we NEVER want the types truncated, as that results in a syntax error –
+// "... n more ..." is not valid .d.ts syntax. This is a risk with union types in particular, so we disable truncation.
+// See https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/utilities.ts#L563
+// and https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/checker.ts#L6331-L6334.
+(ts as any).defaultMaximumTruncationLength = Infinity
 
 export function runTypeGen(appOptions: AppOptions) {
     let program: Program
