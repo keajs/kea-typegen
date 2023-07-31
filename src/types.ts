@@ -78,6 +78,8 @@ export interface AppOptions {
     convertToBuilders?: boolean
     /** Show TypeScript errors */
     showTsErrors?: boolean
+    /** Inline types into source files */
+    inline?: boolean
 
     log: (message: string) => void
 }
