@@ -1,7 +1,7 @@
 # kea-typegen
 
-Automatically generate types for `kea()` calls for [Kea 2.2+](https://kea.js.org/)
+Automatically generate types for `kea()` calls for [Kea 2.2+](https://keajs.org/)
 
 ## Docs
 
-https://kea.js.org/docs/guide/typescript/
+https://keajs.org/docs/guide/typescript/
