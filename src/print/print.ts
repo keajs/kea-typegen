@@ -138,8 +138,9 @@ export function printToFiles(
                         if (result && result.length > 1) {
                             finalPath = result[1]
                         }
-                    } else {
-                        finalPath = file.substring(nodeModulesPath.length + 1)
+                    }
+                    if (finalPath.startsWith('@types/')) {
+                        finalPath = finalPath.substring(7)
                     }
                 }
                 if (!finalPath) {
@@ -148,7 +149,10 @@ export function printToFiles(
                         finalPath = `./${finalPath}`
                     }
                 }
-                finalPath = finalPath.replace(/\.tsx?$/, '')
+                finalPath = finalPath.replace(/(\.d|)\.tsx?$/, '')
+                if (finalPath.split('/').length === 2 && finalPath.endsWith('/index')) {
+                    finalPath = finalPath.substring(0, finalPath.length - 6)
+                }
                 return {
                     list: [...list].sort(),
                     fullPath: file,

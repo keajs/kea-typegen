@@ -1,3 +1,6 @@
+## 3.2.1 - 2023-08-16
+- Also support `@types/` imports by removing `@types/`
+
 ## 3.2.0 - 2023-08-16
 
 - Clean up paths in generated import files
