@@ -29,7 +29,6 @@ export function visitActions(parsedLogic: ParsedLogic, type: Type, expression: E
                 return factory.createParameterDeclaration(
                     undefined,
                     undefined,
-                    undefined,
                     factory.createIdentifier(param.name.getText()),
                     param.initializer || param.questionToken
                         ? factory.createToken(SyntaxKind.QuestionToken)

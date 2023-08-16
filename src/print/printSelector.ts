@@ -9,7 +9,6 @@ export function printSelector(parsedLogic: ParsedLogic) {
             factory.createParameterDeclaration(
                 undefined,
                 undefined,
-                undefined,
                 factory.createIdentifier('state'),
                 undefined,
                 factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),

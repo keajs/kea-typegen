@@ -17,7 +17,6 @@ export function printInternalSelectorTypes(parsedLogic: ParsedLogic) {
                             factory.createParameterDeclaration(
                                 undefined,
                                 undefined,
-                                undefined,
                                 factory.createIdentifier(functionType.name),
                                 undefined,
                                 functionType.type,

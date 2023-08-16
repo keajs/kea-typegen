@@ -14,14 +14,12 @@ export function printSharedListeners(parsedLogic: ParsedLogic) {
                         factory.createParameterDeclaration(
                             undefined,
                             undefined,
-                            undefined,
                             factory.createIdentifier('payload'),
                             undefined,
                             payload || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                         factory.createParameterDeclaration(
-                            undefined,
                             undefined,
                             undefined,
                             factory.createIdentifier('breakpoint'),
@@ -32,14 +30,12 @@ export function printSharedListeners(parsedLogic: ParsedLogic) {
                         factory.createParameterDeclaration(
                             undefined,
                             undefined,
-                            undefined,
                             factory.createIdentifier('action'),
                             undefined,
                             action,
                             undefined,
                         ),
                         factory.createParameterDeclaration(
-                            undefined,
                             undefined,
                             undefined,
                             factory.createIdentifier('previousState'),

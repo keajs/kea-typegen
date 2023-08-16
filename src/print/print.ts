@@ -355,7 +355,6 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
     }
 
     parsedLogic.interfaceDeclaration = factory.createInterfaceDeclaration(
-        undefined,
         [factory.createModifier(SyntaxKind.ExportKeyword)],
         factory.createIdentifier(`${parsedLogic.logicName}Type`),
         undefined,

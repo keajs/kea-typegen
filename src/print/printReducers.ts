@@ -15,7 +15,6 @@ export function printReducers(parsedLogic: ParsedLogic) {
                         factory.createParameterDeclaration(
                             undefined,
                             undefined,
-                            undefined,
                             factory.createIdentifier('state'),
                             undefined,
                             reducer.typeNode,
@@ -24,14 +23,12 @@ export function printReducers(parsedLogic: ParsedLogic) {
                         factory.createParameterDeclaration(
                             undefined,
                             undefined,
-                            undefined,
                             factory.createIdentifier('action'),
                             undefined,
                             factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                             undefined,
                         ),
                         factory.createParameterDeclaration(
-                            undefined,
                             undefined,
                             undefined,
                             factory.createIdentifier('fullState'),

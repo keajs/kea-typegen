@@ -92,7 +92,6 @@ export function getParameterDeclaration(param: ts.ParameterDeclaration) {
     return factory.createParameterDeclaration(
         undefined,
         undefined,
-        undefined,
         factory.createIdentifier(param.name.getText()),
         param.initializer || param.questionToken ? factory.createToken(SyntaxKind.QuestionToken) : undefined,
         cloneNode(param.type || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)),

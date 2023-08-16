@@ -18,7 +18,6 @@ export function printInternalExtraInput(parsedLogic: ParsedLogic) {
                                 factory.createParameterDeclaration(
                                     undefined,
                                     undefined,
-                                    undefined,
                                     factory.createIdentifier('logic'),
                                     undefined,
                                     factory.createTypeReferenceNode(

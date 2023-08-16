@@ -16,14 +16,12 @@ export function printListeners(parsedLogic: ParsedLogic) {
                                 factory.createParameterDeclaration(
                                     undefined,
                                     undefined,
-                                    undefined,
                                     factory.createIdentifier('action'),
                                     undefined,
                                     action,
                                     undefined,
                                 ),
                                 factory.createParameterDeclaration(
-                                    undefined,
                                     undefined,
                                     undefined,
                                     factory.createIdentifier('previousState'),

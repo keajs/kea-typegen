@@ -111,14 +111,12 @@ export function visitLoaders(parsedLogic: ParsedLogic, type: Type, expression: E
                         factory.createParameterDeclaration(
                             undefined,
                             undefined,
-                            undefined,
                             factory.createIdentifier(loaderName),
                             undefined,
                             returnTypeNode,
                             undefined,
                         ),
                         factory.createParameterDeclaration(
-                            undefined,
                             undefined,
                             undefined,
                             factory.createIdentifier('payload'),
@@ -153,14 +151,12 @@ export function visitLoaders(parsedLogic: ParsedLogic, type: Type, expression: E
                         factory.createParameterDeclaration(
                             undefined,
                             undefined,
-                            undefined,
                             factory.createIdentifier('error'),
                             undefined,
                             factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
                             undefined,
                         ),
                         factory.createParameterDeclaration(
-                            undefined,
                             undefined,
                             undefined,
                             factory.createIdentifier('errorObject'),
