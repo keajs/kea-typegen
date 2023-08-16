@@ -10,7 +10,7 @@
         "run-built-cli": "node dist/src/cli/typegen.js",
         "test": "jest",
         "samples:check": "ts-node ./src/cli/typegen.ts check -r ./samples",
-        "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths",
+        "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths --delete",
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples",
         "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json",

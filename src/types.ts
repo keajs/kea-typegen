@@ -72,6 +72,8 @@ export interface AppOptions {
     ignoreImportPaths?: string[]
     /** Write paths inside logic.ts files */
     writePaths?: boolean
+    /** Delete logicType.ts files without a logic.ts */
+    delete?: boolean
     /** Add @ts-nocheck inside logicType.ts files */
     addTsNocheck?: boolean
     /** Convert kea 2.0 logic input to kea 3.0 builders */

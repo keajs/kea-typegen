@@ -1,5 +1,6 @@
 import * as ts from 'typescript'
 import * as path from 'path'
+import * as fs from 'fs'
 import { AppOptions, ParsedLogic, PluginModule, TypeBuilderModule, VisitKeaPropertyArguments } from '../types'
 import {
     gatherImports,
@@ -64,6 +65,17 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
         }
     }
 
+    if (appOptions?.delete) {
+        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.mjsx']
+        for (const sourceFile of program.getSourceFiles()) {
+            if (sourceFile.fileName.endsWith('Type.ts')) {
+                if (!extensions.find((e) => fs.existsSync(sourceFile.fileName.replace('Type.ts', e)))) {
+                    appOptions.log(`🗑️ Deleting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
+                    fs.unlinkSync(sourceFile.fileName)
+                }
+            }
+        }
+    }
     return parsedLogics
 }
 
