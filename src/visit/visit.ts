@@ -23,7 +23,7 @@ import { visitListeners } from './visitListeners'
 import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
-import { cloneNode } from '@wessberg/ts-clone-node'
+import { cloneNode } from 'ts-clone-node'
 
 const visitFunctions = {
     actions: visitActions,

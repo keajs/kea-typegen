@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import { factory, isFunctionLike, isPropertyAssignment, Expression, SyntaxKind, Type, TrueLiteral } from 'typescript'
 import { NodeBuilderFlags } from 'typescript'
-import { cloneNode } from '@wessberg/ts-clone-node'
+import { cloneNode } from 'ts-clone-node'
 import { gatherImports } from '../utils'
 
 export function visitActions(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
