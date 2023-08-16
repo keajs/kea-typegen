@@ -1,3 +1,9 @@
+## 3.2.0 - 2023-08-16
+
+- Clean up paths in generated import files
+  - Convert `../../node_modules/*` to just `*` 
+  - Convert `../../node_modules/.pnpm/pkg@version/node_modules/*` to just `*` 
+
 ## 3.1.7 - 2023-08-16
 
 - Add `--delete` to delete unused `logicTypes.ts` files

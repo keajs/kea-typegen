@@ -118,22 +118,45 @@ export function printToFiles(
 
         const output = logicStrings.join('\n\n')
 
+        const nodeModulesPath = path.join(
+            appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
+            'node_modules',
+        )
+
         const otherimports = Object.entries(parsedLogics[0].typeReferencesToImportFromFiles)
             .filter(([_, list]) => list.size > 0)
             .map(([file, list]) => {
-                let relativePath = path.relative(path.dirname(parsedLogics[0].typeFileName), file)
-                relativePath = relativePath.replace(/\.tsx?$/, '')
-                if (!relativePath.startsWith('.')) {
-                    relativePath = `./${relativePath}`
+                let finalPath: string | undefined
+
+                // clean up '../../node_modules/...'
+                if (file.startsWith(nodeModulesPath)) {
+                    finalPath = file.substring(nodeModulesPath.length + 1)
+                    if (finalPath.startsWith('.pnpm/')) {
+                        // node_modules/.pnpm/pkg@version/node_modules/* --> *
+                        const regex = /\.pnpm\/[^/]+@[^\/]+\/node_modules\/(.*)/
+                        const result = finalPath.match(regex)
+                        if (result && result.length > 1) {
+                            finalPath = result[1]
+                        }
+                    } else {
+                        finalPath = file.substring(nodeModulesPath.length + 1)
+                    }
                 }
+                if (!finalPath) {
+                    finalPath = path.relative(path.dirname(parsedLogics[0].typeFileName), file)
+                    if (!finalPath.startsWith('.')) {
+                        finalPath = `./${finalPath}`
+                    }
+                }
+                finalPath = finalPath.replace(/\.tsx?$/, '')
                 return {
                     list: [...list].sort(),
                     fullPath: file,
-                    relativePath,
+                    finalPath,
                 }
             })
-            .filter(({ fullPath }) => !shouldIgnore(fullPath))
-            .map(({ list, relativePath }) => `import type { ${list.join(', ')} } from '${relativePath}'`)
+            .filter((entry) => !shouldIgnore(entry.fullPath))
+            .map(({ list, finalPath }) => `import type { ${list.join(', ')} } from '${finalPath}'`)
             .join('\n')
 
         const finalOutput = [
