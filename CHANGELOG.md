@@ -1,3 +1,6 @@
+## 3.2.2 - 2023-08-16
+- Support kea-forms's paths in path cleanup.
+
 ## 3.2.1 - 2023-08-16
 - Also support `@types/` imports by removing `@types/`
 

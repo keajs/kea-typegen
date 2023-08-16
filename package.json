@@ -13,7 +13,7 @@
         "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths --delete",
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples --delete",
-        "samples:write:posthog": "ts-node ./src/cli/typegen.ts write -c ../../PostHog/posthog/tsconfig.json",
+        "samples:write:posthog": "cd ../../PostHog/posthog && ts-node ../../Kea/kea-typegen/src/cli/typegen.ts watch -c ./tsconfig.json --show-ts-errors",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },
@@ -24,12 +24,12 @@
         "kea-typegen": "dist/src/cli/typegen.js"
     },
     "dependencies": {
-        "@babel/core": "^7.17.9",
-        "@babel/preset-env": "^7.16.11",
-        "@babel/preset-typescript": "^7.16.0",
+        "@babel/core": "^7.22.10",
+        "@babel/preset-env": "^7.22.10",
+        "@babel/preset-typescript": "^7.22.5",
         "@wessberg/ts-clone-node": "0.3.19",
-        "prettier": "^2.5.1",
-        "recast": "^0.20.5",
+        "prettier": "^2.8.8",
+        "recast": "^0.23.4",
         "yargs": "^16.2.0"
     },
     "devDependencies": {
@@ -41,8 +41,8 @@
         "form-plugin": "file:./form-plugin",
         "husky": ">=4",
         "jest": "^27.0.5",
-        "kea": "^3.0.0-alpha.6",
-        "kea-router": "^3.0.0-alpha.0",
+        "kea": "^3.1.5",
+        "kea-router": "^3.1.4",
         "lint-staged": ">=12.1.2",
         "react": "^16.13.1",
         "react-redux": "^7.2.6",
@@ -51,7 +51,7 @@
         "rimraf": "^3.0.2",
         "ts-jest": "^27.1.4",
         "ts-node": "^10.7.0",
-        "typescript": "^4.6.3"
+        "typescript": "^4.9.5"
     },
     "peerDependencies": {
         "typescript": ">=4.5.3"

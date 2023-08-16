@@ -126,11 +126,18 @@ export function printToFiles(
         const otherimports = Object.entries(parsedLogics[0].typeReferencesToImportFromFiles)
             .filter(([_, list]) => list.size > 0)
             .map(([file, list]) => {
-                let finalPath: string | undefined
+                let finalPath = file
 
+                // Relative path? Get the absolute.
+                if (finalPath.startsWith('.')) {
+                    finalPath = path.resolve(path.dirname(parsedLogics[0].typeFileName), finalPath)
+                }
+                if (finalPath.startsWith('node_modules/')) {
+                    finalPath = path.resolve(path.dirname(nodeModulesPath), finalPath)
+                }
                 // clean up '../../node_modules/...'
-                if (file.startsWith(nodeModulesPath)) {
-                    finalPath = file.substring(nodeModulesPath.length + 1)
+                if (finalPath.startsWith(nodeModulesPath)) {
+                    finalPath = finalPath.substring(nodeModulesPath.length + 1)
                     if (finalPath.startsWith('.pnpm/')) {
                         // node_modules/.pnpm/pkg@version/node_modules/* --> *
                         const regex = /\.pnpm\/[^/]+@[^\/]+\/node_modules\/(.*)/
@@ -143,16 +150,23 @@ export function printToFiles(
                         finalPath = finalPath.substring(7)
                     }
                 }
-                if (!finalPath) {
-                    finalPath = path.relative(path.dirname(parsedLogics[0].typeFileName), file)
+
+                // Resolve absolute urls
+                if (finalPath.startsWith('/')) {
+                    finalPath = path.relative(path.dirname(parsedLogics[0].typeFileName), finalPath)
                     if (!finalPath.startsWith('.')) {
                         finalPath = `./${finalPath}`
                     }
                 }
+
+                // Remove extension
                 finalPath = finalPath.replace(/(\.d|)\.tsx?$/, '')
+
+                // Remove "/index"
                 if (finalPath.split('/').length === 2 && finalPath.endsWith('/index')) {
                     finalPath = finalPath.substring(0, finalPath.length - 6)
                 }
+
                 return {
                     list: [...list].sort(),
                     fullPath: file,
