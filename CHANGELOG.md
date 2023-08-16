@@ -1,3 +1,7 @@
+## 3.1.7 - 2023-08-16
+
+- Add `--delete` to delete unused `logicTypes.ts` files
+
 ## 3.1.6 - 2023-05-02
 
 - Fix "... n more ..." case. Thanks @Twixes
