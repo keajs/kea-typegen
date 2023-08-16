@@ -13,7 +13,7 @@
         "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths --delete",
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples --delete",
-        "samples:write:posthog": "cd ../../PostHog/posthog && ts-node ../../Kea/kea-typegen/src/cli/typegen.ts watch -c ./tsconfig.json --show-ts-errors",
+        "samples:write:posthog": "ts-node ./src/cli/typegen.ts watch -c ../../PostHog/posthog/tsconfig.json --show-ts-errors",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },

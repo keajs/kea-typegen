@@ -1,7 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { gatherImports, getParameterDeclaration } from '../utils'
-import { cloneNode } from 'ts-clone-node'
+import { cloneNodeSorted, gatherImports, getParameterDeclaration } from '../utils'
 import { Expression, Type } from 'typescript'
 
 export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
@@ -74,7 +73,7 @@ export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: E
                                     if (ts.isTypeLiteralNode(returnType)) {
                                         const payload = returnType.members.find((m) => m.name.getText() === 'payload')
                                         if (ts.isPropertySignature(payload)) {
-                                            const returnTypeNode = cloneNode(payload.type)
+                                            const returnTypeNode = cloneNodeSorted(payload.type)
                                             gatherImports(actionType, checker, parsedLogic)
 
                                             parsedLogic.actions.push({

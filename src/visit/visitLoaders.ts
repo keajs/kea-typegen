@@ -17,6 +17,7 @@ import {
     getAndGatherTypeNodeForDefaultValue,
     isAnyUnknown,
     unPromisify,
+    cloneNodeSorted,
 } from '../utils'
 import { NodeBuilderFlags } from 'typescript'
 
@@ -113,7 +114,7 @@ export function visitLoaders(parsedLogic: ParsedLogic, type: Type, expression: E
                             undefined,
                             factory.createIdentifier(loaderName),
                             undefined,
-                            returnTypeNode,
+                            cloneNodeSorted(returnTypeNode),
                             undefined,
                         ),
                         factory.createParameterDeclaration(
@@ -130,7 +131,7 @@ export function visitLoaders(parsedLogic: ParsedLogic, type: Type, expression: E
                             undefined,
                             factory.createIdentifier(loaderName),
                             undefined,
-                            returnTypeNode,
+                            cloneNodeSorted(returnTypeNode),
                         ),
                         factory.createPropertySignature(
                             undefined,

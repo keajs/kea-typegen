@@ -1,3 +1,6 @@
+## 3.3.0 - 2023-08-16
+- Sort printed unions and type literals in actions, reducers, etc. This is to keep the output deterministic.
+
 ## 3.2.3 - 2023-08-16
 - Fix deprecations and upgrade TypeScript
 

@@ -85,7 +85,7 @@ export function getAndGatherTypeNodeForDefaultValue(
 ): ts.TypeNode {
     const typeNode = getTypeNodeForNode(defaultValue, checker)
     gatherImports(typeNode, checker, parsedLogic)
-    return cloneNode(typeNode)
+    return cloneNodeSorted(typeNode)
 }
 
 export function getParameterDeclaration(param: ts.ParameterDeclaration) {
@@ -94,7 +94,7 @@ export function getParameterDeclaration(param: ts.ParameterDeclaration) {
         undefined,
         factory.createIdentifier(param.name.getText()),
         param.initializer || param.questionToken ? factory.createToken(SyntaxKind.QuestionToken) : undefined,
-        cloneNode(param.type || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)),
+        cloneNodeSorted(param.type || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)),
         undefined,
     )
 }
@@ -196,7 +196,7 @@ export function extractImportedActions(
                                     }
                                 }
 
-                                extraActions[actionType] = cloneNode(actionCreator.type) //payload
+                                extraActions[actionType] = cloneNodeSorted(actionCreator.type) //payload
                             }
                         }
                     }
@@ -325,4 +325,111 @@ export function isAnyUnknown(node?: ts.Node): boolean {
         unPromised.kind === SyntaxKind.UnknownKeyword ||
         (ts.isTypeLiteralNode(unPromised) && unPromised.members.length === 0)
     )
+}
+
+const syntaxKindOrderOverride = (kind: ts.SyntaxKind): number => {
+    if (kind === ts.SyntaxKind.UndefinedKeyword) {
+        // sort undefineds at the end always
+        return 999
+    }
+    return kind
+}
+function compareNodes(a?: ts.Node, b?: ts.Node): number {
+    if (!a) {
+        if (!b) {
+            return 0
+        }
+        return -1
+    } else if (!b) {
+        return 1
+    }
+    if (ts.isLiteralTypeNode(a) && ts.isLiteralTypeNode(b)) {
+        if (ts.isStringLiteralLike(a.literal) && ts.isStringLiteralLike(b.literal)) {
+            return a.literal.text.localeCompare(b.literal.text)
+        } else if (ts.isNumericLiteral(a.literal) && ts.isNumericLiteral(b.literal)) {
+            return Number(a.literal.text) - Number(b.literal.text)
+        }
+        return a.literal.kind - b.literal.kind
+    } else if (ts.isTypeReferenceNode(a) && ts.isTypeReferenceNode(b)) {
+        try {
+            const textA = (a.typeName as any).escapedText || ''
+            const textB = (b.typeName as any).escapedText || ''
+            return textA.localeCompare(textB)
+        } catch (e) {
+            return 0
+        }
+    } else if (ts.isIdentifier(a) && ts.isIdentifier(b)) {
+        try {
+            const textA = (a as any).escapedText || ''
+            const textB = (b as any).escapedText || ''
+            return textA.localeCompare(textB)
+        } catch (e) {
+            return 0
+        }
+    } else if (ts.isImportTypeNode(a) && ts.isImportTypeNode(b)) {
+        const compare = compareNodes(a.argument, b.argument)
+        if (compare !== 0) {
+            return compare
+        }
+        return compareNodes(a.qualifier, b.qualifier)
+    } else if (ts.isUnionTypeNode(a) && ts.isUnionTypeNode(b)) {
+        if (a.types.length === b.types.length) {
+            for (let index = 0; index < a.types.length; index++) {
+                const compare = compareNodes(a.types[index], b.types[index])
+                if (compare !== 0) {
+                    return compare
+                }
+            }
+            return 0
+        }
+        return a.types.length - b.types.length
+    } else if (ts.isTypeLiteralNode(a) && ts.isTypeLiteralNode(b)) {
+        if (a.members.length === b.members.length) {
+            for (let index = 0; index < a.members.length; index++) {
+                const compare = compareNodes(a.members[index], b.members[index])
+                if (compare !== 0) {
+                    return compare
+                }
+                if (ts.isPropertySignature(a.members[index]) && ts.isPropertySignature(b.members[index])) {
+                    const typeCompare = compareNodes(
+                        (a.members[index] as ts.PropertySignature).type,
+                        (b.members[index] as ts.PropertySignature).type,
+                    )
+                    if (typeCompare !== 0) {
+                        return typeCompare
+                    }
+                }
+            }
+            return 0
+        }
+        return a.members.length - b.members.length
+    } else if (ts.isArrayTypeNode(a) && ts.isArrayTypeNode(b)) {
+        return compareNodes(a.elementType, b.elementType)
+    } else if (ts.isPropertySignature(a) && ts.isPropertySignature(b)) {
+        try {
+            return a.name.getText().localeCompare(b.name.getText())
+        } catch (e) {
+            return ((a.name as any).escapedText || '').localeCompare((b.name as any).escapedText || '')
+        }
+    } else if (b.kind === a.kind) {
+        // if (a.kind !== 148 && a.kind !== 152 && a.kind !== 155 && a.kind !== 131) {
+        //     debugger
+        // }
+    }
+    return syntaxKindOrderOverride(a.kind) - syntaxKindOrderOverride(b.kind)
+}
+
+export function cloneNodeSorted<T extends ts.Node>(node: T): T {
+    const visit = (node) => {
+        if (ts.isUnionTypeNode(node)) {
+            ;(node.types as any as ts.Node[]).sort(compareNodes)
+        }
+        if (ts.isTypeLiteralNode(node) && node.members.length > 1) {
+            ;(node.members as any as ts.Node[]).sort(compareNodes)
+        }
+        ts.forEachChild(node, visit)
+    }
+    const cloned = cloneNode(node)
+    visit(cloned)
+    return cloned
 }

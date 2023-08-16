@@ -1,8 +1,7 @@
 import { ParsedLogic } from '../types'
 import { factory, isFunctionLike, isPropertyAssignment, Expression, SyntaxKind, Type, TrueLiteral } from 'typescript'
 import { NodeBuilderFlags } from 'typescript'
-import { cloneNode } from 'ts-clone-node'
-import { gatherImports } from '../utils'
+import { cloneNodeSorted, gatherImports } from '../utils'
 
 export function visitActions(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
@@ -33,7 +32,7 @@ export function visitActions(parsedLogic: ParsedLogic, type: Type, expression: E
                     param.initializer || param.questionToken
                         ? factory.createToken(SyntaxKind.QuestionToken)
                         : undefined,
-                    param.type ? cloneNode(param.type) : factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
+                    param.type ? cloneNodeSorted(param.type) : factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
                     undefined,
                 )
             })
@@ -54,7 +53,7 @@ export function visitActions(parsedLogic: ParsedLogic, type: Type, expression: E
             }
 
             gatherImports(returnTypeNode, checker, parsedLogic)
-            returnTypeNode = cloneNode(returnTypeNode)
+            returnTypeNode = cloneNodeSorted(returnTypeNode)
         } else {
             // action is a value (action: true)
             returnTypeNode = factory.createTypeLiteralNode([

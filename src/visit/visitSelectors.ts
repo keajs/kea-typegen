@@ -1,8 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { Expression, NodeBuilderFlags, Type } from 'typescript'
-import { cloneNode } from 'ts-clone-node'
-import { gatherImports } from '../utils'
+import { cloneNodeSorted, gatherImports } from '../utils'
 
 export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
@@ -48,7 +47,7 @@ export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression:
                         return {
                             name,
                             type: ts.isFunctionTypeNode(selectorTypeNode)
-                                ? cloneNode(selectorTypeNode.type)
+                                ? cloneNodeSorted(selectorTypeNode.type)
                                 : ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         }
                     })
@@ -62,10 +61,11 @@ export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression:
                 let typeNode: ts.TypeNode
                 if (computedFunction.type) {
                     gatherImports(computedFunction.type, checker, parsedLogic)
-                    typeNode = cloneNode(computedFunction.type)
+                    typeNode = cloneNodeSorted(computedFunction.type)
                 } else if (type) {
                     typeNode = checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation)
                     gatherImports(typeNode, checker, parsedLogic)
+                    typeNode = cloneNodeSorted(typeNode)
                 } else {
                     typeNode = ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
                 }

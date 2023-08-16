@@ -1,6 +1,5 @@
 import { ParsedLogic } from '../types'
-import { cloneNode } from 'ts-clone-node'
-import { gatherImports } from '../utils'
+import { cloneNodeSorted, gatherImports } from '../utils'
 import { Expression, Type } from 'typescript'
 
 export function visitKey(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
@@ -8,5 +7,5 @@ export function visitKey(parsedLogic: ParsedLogic, type: Type, expression: Expre
     const typeNode = checker.typeToTypeNode(type, undefined, undefined)
     gatherImports(typeNode, checker, parsedLogic)
 
-    parsedLogic.keyType = cloneNode(typeNode)
+    parsedLogic.keyType = cloneNodeSorted(typeNode)
 }

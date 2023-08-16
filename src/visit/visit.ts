@@ -3,6 +3,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import { AppOptions, ParsedLogic, PluginModule, TypeBuilderModule, VisitKeaPropertyArguments } from '../types'
 import {
+    cloneNodeSorted,
     gatherImports,
     getFilenameForImportDeclaration,
     getFilenameForNode,
@@ -376,11 +377,11 @@ export function visitKeaCalls(
                 node: expression,
                 checker,
                 gatherImports: (input) => gatherImports(input, checker, parsedLogic),
-                cloneNode,
+                cloneNode: cloneNodeSorted,
                 getTypeNodeForNode: (node) => getTypeNodeForNode(node, checker),
                 prepareForPrint: (node) => {
                     gatherImports(node, checker, parsedLogic)
-                    return cloneNode(node)
+                    return cloneNodeSorted(node)
                 },
             }
 
