@@ -1,3 +1,6 @@
+## 3.2.3 - 2023-08-16
+- Fix deprecations and upgrade TypeScript
+
 ## 3.2.2 - 2023-08-16
 - Support kea-forms's paths in path cleanup.
 

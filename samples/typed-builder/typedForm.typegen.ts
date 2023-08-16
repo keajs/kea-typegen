@@ -76,7 +76,6 @@ export function typedForm({ parsedLogic, node, getTypeNodeForNode, prepareForPri
                         factory.createParameterDeclaration(
                             undefined,
                             undefined,
-                            undefined,
                             factory.createIdentifier('form'),
                             undefined,
                             typeNode ||
