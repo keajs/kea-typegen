@@ -16,7 +16,7 @@ const supportedProperties = {
     loaders: 'kea-loaders',
     forms: 'kea-forms',
     subscriptions: 'kea-subscriptions',
-    windowValues: 'kea-windowvalues',
+    windowValues: 'kea-window-values',
     reducers: 'kea',
     selectors: 'kea',
     sharedListeners: 'kea',
