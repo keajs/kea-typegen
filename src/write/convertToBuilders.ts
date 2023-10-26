@@ -56,7 +56,7 @@ export function convertToBuilders(
             }
             imports[importFrom] ??= []
             for (const specifier of path.value.specifiers) {
-                imports[importFrom].push([specifier.imported.name, specifier.local.name])
+                imports[importFrom].push([specifier.imported?.name, specifier.local.name])
             }
             return false
         },
