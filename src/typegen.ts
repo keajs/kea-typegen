@@ -11,7 +11,7 @@ import { version } from '../package.json'
 // "... n more ..." is not valid .d.ts syntax. This is a risk with union types in particular, so we disable truncation.
 // See https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/utilities.ts#L563
 // and https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/checker.ts#L6331-L6334.
-if (!/^5\.\d$/.test(ts.versionMajorMinor)) {
+if (parseInt(ts.versionMajorMinor.split('.')[0]) < 5)) {
     (ts as any).defaultMaximumTruncationLength = Infinity
 }
 
