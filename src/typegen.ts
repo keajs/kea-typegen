@@ -6,12 +6,14 @@ import { AppOptions } from './types'
 import { Program } from 'typescript'
 import { version } from '../package.json'
 
-// The undocumented defaultMaximumTruncationLength setting determines at what point printed types are truncated.
+// The undocumented defaultMaximumTruncationLength setting determines at what point printed types are truncated in versions less than 5.
 // In kea-typegen output, we NEVER want the types truncated, as that results in a syntax error –
 // "... n more ..." is not valid .d.ts syntax. This is a risk with union types in particular, so we disable truncation.
 // See https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/utilities.ts#L563
 // and https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/checker.ts#L6331-L6334.
-(ts as any).defaultMaximumTruncationLength = Infinity
+if (parseInt(ts.versionMajorMinor.split('.')[0]) < 5)) {
+    (ts as any).defaultMaximumTruncationLength = Infinity
+}
 
 export function runTypeGen(appOptions: AppOptions) {
     let program: Program
@@ -27,6 +29,7 @@ export function runTypeGen(appOptions: AppOptions) {
                 target: ts.ScriptTarget.ES5,
                 module: ts.ModuleKind.CommonJS,
                 noEmit: true,
+                noErrorTruncation: true,
             })
         }
         resetProgram()
