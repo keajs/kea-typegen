@@ -1,3 +1,6 @@
+## 3.3.1 - 2023-12-04
+- Fix missing logic in connect.
+
 ## 3.3.0 - 2023-08-16
 - Sort printed unions and type literals in actions, reducers, etc. This is to keep the output deterministic.
 
