@@ -24,6 +24,11 @@ export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: E
                     logicReference = logicReference.expression
                 }
 
+                if (!logicReference) {
+                    // nothing to do
+                    continue
+                }
+
                 const connectArray = value.elements[i + 1]
 
                 let lookup: Record<string, string> = {}
