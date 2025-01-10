@@ -271,7 +271,9 @@ export function storeExtractedSymbol(
         typeName = typeName || declaration.name.getText()
     }
 
-    if (typeName) {
+    // Also checking isTypeNameAlreadyImported to prevent multiple imports of the same type,
+    // which we were seeing when importing from `export * from ...` files
+    if (typeName && !isTypeNameAlreadyImported(parsedLogic, typeName)) {
         const importFilename = getFilenameForNode(declaration, checker)
         if (importFilename && !rejectImportPath(importFilename)) {
             addTypeImport(parsedLogic, importFilename, typeName)
@@ -305,6 +307,15 @@ function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string)
         parsedLogic.typeReferencesToImportFromFiles[file] = new Set()
     }
     parsedLogic.typeReferencesToImportFromFiles[file].add(typeName.split('.')[0])
+}
+
+function isTypeNameAlreadyImported(parsedLogic: ParsedLogic, typeName: string) {
+    for (const file in parsedLogic.typeReferencesToImportFromFiles) {
+        if (parsedLogic.typeReferencesToImportFromFiles[file].has(typeName)) {
+            return true
+        }
+    }
+    return false
 }
 
 export function unPromisify(node: ts.Node): ts.Node {
