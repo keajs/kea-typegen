@@ -1,3 +1,6 @@
+## 3.3.5 - 2025-01-10
+- Resolve duplicate type imports in logic files
+
 ## 3.3.4 - 2023-12-04
 - Fix missing logic in connect.
 
