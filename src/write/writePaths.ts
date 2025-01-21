@@ -52,7 +52,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
     visitAllKeaCalls(ast, parsedLogics, filename, ({ path, parsedLogic }) => {
         const stmt = path.node
         const arg = stmt.arguments[0]
-        const logicPath = parsedLogic.path
+        const logicPath = parsedLogic.path.filter(p => p !== '..')
 
         if (t.ObjectExpression.check(arg)) {
             const pathProperty = arg.properties.find(

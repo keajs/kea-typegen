@@ -1,3 +1,6 @@
+## 3.3.6 - 2025-01-21
+- Skip `..` in `path()`
+
 ## 3.3.5 - 2025-01-10
 - Resolve duplicate type imports in logic files
 
