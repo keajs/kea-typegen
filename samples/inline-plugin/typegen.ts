@@ -10,13 +10,12 @@ export default {
             parsedLogic.actions.push({
                 name: 'inlineAction',
                 parameters: [],
-                returnTypeNode: ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
+                returnTypeNode: ts.factory.createTypeLiteralNode([
+                    ts.factory.createPropertySignature(
                         undefined,
-                        ts.createIdentifier('value'),
+                        ts.factory.createIdentifier('value'),
                         undefined,
-                        ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
-                        undefined,
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
                     ),
                 ]),
             })
@@ -24,12 +23,12 @@ export default {
             // add reducer "form" to parsedLogic
             parsedLogic.reducers.push({
                 name: 'inlineReducer',
-                typeNode: ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
+                typeNode: ts.factory.createTypeLiteralNode([
+                    ts.factory.createPropertySignature(
                         undefined,
-                        ts.createIdentifier('asd'),
+                        ts.factory.createIdentifier('asd'),
                         undefined,
-                        ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
                     ),
                 ]),
             })

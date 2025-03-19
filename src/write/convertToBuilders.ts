@@ -69,7 +69,7 @@ export function convertToBuilders(
         const arg = stmt.arguments[0]
 
         if (t.ObjectExpression.check(arg)) {
-            const propertiesMap = Object.fromEntries(
+            const propertiesMap: Record<string, typeof t.ObjectProperty> = Object.fromEntries(
                 arg.properties
                     .map((p) => [t.ObjectProperty.check(p) && t.Identifier.check(p.key) ? p.key.name : null, p])
                     .filter(([key]) => key !== null),
@@ -84,7 +84,7 @@ export function convertToBuilders(
                     const renameTo =
                         Array.isArray(importFromOrArray) && importFromOrArray.length > 1 ? importFromOrArray[1] : key
 
-                    newEntries.push(b.callExpression(b.identifier(renameTo), [propertiesMap[key].value]))
+                    newEntries.push(b.callExpression(b.identifier(renameTo), [propertiesMap[key].value as any]))
                     neededImports[importFrom] ??= []
                     if (!neededImports[importFrom].find(([l]) => l === renameTo)) {
                         neededImports[importFrom].push([renameTo, renameTo])
@@ -95,16 +95,14 @@ export function convertToBuilders(
             const unsupported = propertyKeys.filter((p) => !supportedProperties[p])
             if (unsupported.length > 0) {
                 console.warn(
-                    `❗ Logic "${parsedLogic.logicName}", converted unsupported keys (${unsupported.join(
-                        ', ',
-                    )}) to builders without imports`,
+                    `❗ Logic "${parsedLogic.logicName}", has unsupported keys: ${unsupported.join(', ')}`,
                 )
             }
-            for (const key of unsupported) {
-                if (propertiesMap[key] && t.ObjectProperty.check(propertiesMap[key])) {
-                    newEntries.push(b.callExpression(b.identifier(key), [propertiesMap[key].value]))
-                }
-            }
+            // for (const key of unsupported) {
+            //     if (propertiesMap[key] && t.ObjectProperty.check(propertiesMap[key])) {
+            //         newEntries.push(b.callExpression(b.identifier(key), [propertiesMap[key]]))
+            //     }
+            // }
 
             stmt.arguments[0] = b.arrayExpression(newEntries)
         }
