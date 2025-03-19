@@ -1,3 +1,6 @@
+## 3.4.0@next - 2025-03-20
+- TypeScript 5.8 required
+
 ## 3.3.6 - 2025-01-21
 - Skip `..` in `path()`
 
