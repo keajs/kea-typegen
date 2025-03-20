@@ -77,14 +77,12 @@ export function convertToBuilders(
             const propertyKeys = Object.keys(propertiesMap)
 
             const newEntries = []
-
             for (const [key, importFromOrArray] of Object.entries(supportedProperties)) {
                 if (propertiesMap[key] && t.ObjectProperty.check(propertiesMap[key])) {
                     const importFrom = Array.isArray(importFromOrArray) ? importFromOrArray[0] : importFromOrArray
                     const renameTo =
                         Array.isArray(importFromOrArray) && importFromOrArray.length > 1 ? importFromOrArray[1] : key
-
-                    newEntries.push(b.callExpression(b.identifier(renameTo), [propertiesMap[key].value as any]))
+                    newEntries.push(b.callExpression(b.identifier(renameTo), [(propertiesMap[key] as any).value as any]))
                     neededImports[importFrom] ??= []
                     if (!neededImports[importFrom].find(([l]) => l === renameTo)) {
                         neededImports[importFrom].push([renameTo, renameTo])
