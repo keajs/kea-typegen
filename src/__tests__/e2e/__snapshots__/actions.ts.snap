@@ -4,25 +4,25 @@ exports[`actions - as a function returning a object 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
+            type: "update other name (logic)";
             payload: {
                 otherName: string;
             };
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"update other name (logic)\\": \\"updateOtherName\\";
+        "update name (logic)": "updateName";
+        "update other name (logic)": "updateOtherName";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        updateOtherName: \\"update other name (logic)\\";
+        updateName: "update name (logic)";
+        updateOtherName: "update other name (logic)";
     };
     actions: {
         updateName: (name: string) => void;
@@ -37,9 +37,9 @@ exports[`actions - as a function returning a object 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -56,25 +56,25 @@ exports[`actions - as an object 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
+            type: "update other name (logic)";
             payload: {
                 otherName: string;
             };
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"update other name (logic)\\": \\"updateOtherName\\";
+        "update name (logic)": "updateName";
+        "update other name (logic)": "updateOtherName";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        updateOtherName: \\"update other name (logic)\\";
+        updateName: "update name (logic)";
+        updateOtherName: "update other name (logic)";
     };
     actions: {
         updateName: (name: string) => void;
@@ -89,9 +89,9 @@ exports[`actions - as an object 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -108,25 +108,25 @@ exports[`actions - with a function 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
+            type: "update other name (logic)";
             payload: {
                 otherName: string;
             };
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"update other name (logic)\\": \\"updateOtherName\\";
+        "update name (logic)": "updateName";
+        "update other name (logic)": "updateOtherName";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        updateOtherName: \\"update other name (logic)\\";
+        updateName: "update name (logic)";
+        updateOtherName: "update other name (logic)";
     };
     actions: {
         updateName: (name: string) => void;
@@ -141,9 +141,9 @@ exports[`actions - with a function 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -160,41 +160,41 @@ exports[`actions - with random values instead of functions 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name?: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         withDefaultValue: (name?: any) => ({
-            type: \\"with default value (logic)\\";
+            type: "with default value (logic)";
             payload: {
                 name: string;
             };
         });
         withDefaultValueAndType: (name?: string) => ({
-            type: \\"with default value and type (logic)\\";
+            type: "with default value and type (logic)";
             payload: {
                 name: string;
             };
         });
         withTrue: () => ({
-            type: \\"with true (logic)\\";
+            type: "with true (logic)";
             payload: {
                 value: true;
             };
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"with default value (logic)\\": \\"withDefaultValue\\";
-        \\"with default value and type (logic)\\": \\"withDefaultValueAndType\\";
-        \\"with true (logic)\\": \\"withTrue\\";
+        "update name (logic)": "updateName";
+        "with default value (logic)": "withDefaultValue";
+        "with default value and type (logic)": "withDefaultValueAndType";
+        "with true (logic)": "withTrue";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        withDefaultValue: \\"with default value (logic)\\";
-        withDefaultValueAndType: \\"with default value and type (logic)\\";
-        withTrue: \\"with true (logic)\\";
+        updateName: "update name (logic)";
+        withDefaultValue: "with default value (logic)";
+        withDefaultValueAndType: "with default value and type (logic)";
+        withTrue: "with true (logic)";
     };
     actions: {
         updateName: (name?: string) => void;
@@ -213,9 +213,9 @@ exports[`actions - with random values instead of functions 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};

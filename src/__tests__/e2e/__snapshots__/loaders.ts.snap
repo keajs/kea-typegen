@@ -4,24 +4,24 @@ exports[`loaders - with a function 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         loadSessions: (query: string) => ({
-            type: \\"load sessions (logic)\\";
+            type: "load sessions (logic)";
             payload: string;
         });
         loadSessionsSuccess: (sessions: Session[], payload?: string) => ({
-            type: \\"load sessions success (logic)\\";
+            type: "load sessions success (logic)";
             payload: {
                 sessions: Session[];
                 payload?: string;
             };
         });
         loadSessionsFailure: (error: string, errorObject?: any) => ({
-            type: \\"load sessions failure (logic)\\";
+            type: "load sessions failure (logic)";
             payload: {
                 error: string;
                 errorObject?: any;
@@ -29,16 +29,16 @@ exports[`loaders - with a function 1`] = `
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"load sessions (logic)\\": \\"loadSessions\\";
-        \\"load sessions success (logic)\\": \\"loadSessionsSuccess\\";
-        \\"load sessions failure (logic)\\": \\"loadSessionsFailure\\";
+        "update name (logic)": "updateName";
+        "load sessions (logic)": "loadSessions";
+        "load sessions success (logic)": "loadSessionsSuccess";
+        "load sessions failure (logic)": "loadSessionsFailure";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        loadSessions: \\"load sessions (logic)\\";
-        loadSessionsSuccess: \\"load sessions success (logic)\\";
-        loadSessionsFailure: \\"load sessions failure (logic)\\";
+        updateName: "update name (logic)";
+        loadSessions: "load sessions (logic)";
+        loadSessionsSuccess: "load sessions success (logic)";
+        loadSessionsFailure: "load sessions failure (logic)";
     };
     actions: {
         updateName: (name: string) => void;
@@ -60,9 +60,9 @@ exports[`loaders - with a function 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {
         sessions: Session[];
@@ -94,24 +94,24 @@ exports[`loaders - with an array and default 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         loadSessions: (query: string) => ({
-            type: \\"load sessions (logic)\\";
+            type: "load sessions (logic)";
             payload: string;
         });
         loadSessionsSuccess: (sessions: Session[], payload?: string) => ({
-            type: \\"load sessions success (logic)\\";
+            type: "load sessions success (logic)";
             payload: {
                 sessions: Session[];
                 payload?: string;
             };
         });
         loadSessionsFailure: (error: string, errorObject?: any) => ({
-            type: \\"load sessions failure (logic)\\";
+            type: "load sessions failure (logic)";
             payload: {
                 error: string;
                 errorObject?: any;
@@ -119,16 +119,16 @@ exports[`loaders - with an array and default 1`] = `
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"load sessions (logic)\\": \\"loadSessions\\";
-        \\"load sessions success (logic)\\": \\"loadSessionsSuccess\\";
-        \\"load sessions failure (logic)\\": \\"loadSessionsFailure\\";
+        "update name (logic)": "updateName";
+        "load sessions (logic)": "loadSessions";
+        "load sessions success (logic)": "loadSessionsSuccess";
+        "load sessions failure (logic)": "loadSessionsFailure";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        loadSessions: \\"load sessions (logic)\\";
-        loadSessionsSuccess: \\"load sessions success (logic)\\";
-        loadSessionsFailure: \\"load sessions failure (logic)\\";
+        updateName: "update name (logic)";
+        loadSessions: "load sessions (logic)";
+        loadSessionsSuccess: "load sessions success (logic)";
+        loadSessionsFailure: "load sessions failure (logic)";
     };
     actions: {
         updateName: (name: string) => void;
@@ -150,9 +150,9 @@ exports[`loaders - with an array and default 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {
         sessions: Session[];
@@ -184,36 +184,36 @@ exports[`loaders - with no param 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         loadSessions: () => ({
-            type: \\"load sessions (logic)\\";
+            type: "load sessions (logic)";
             payload: any;
         });
         loadSessionsSuccess: (sessions: string[], payload?: any) => ({
-            type: \\"load sessions success (logic)\\";
+            type: "load sessions success (logic)";
             payload: {
                 sessions: string[];
                 payload?: any;
             };
         });
         loadSessionsFailure: (error: string, errorObject?: any) => ({
-            type: \\"load sessions failure (logic)\\";
+            type: "load sessions failure (logic)";
             payload: {
                 error: string;
                 errorObject?: any;
             };
         });
         loadResults: () => ({
-            type: \\"load results (logic)\\";
+            type: "load results (logic)";
             payload: any;
         });
         loadResultsSuccess: (sessions: string[], payload?: any) => ({
-            type: \\"load results success (logic)\\";
+            type: "load results success (logic)";
             payload: {
                 sessions: string[];
                 payload?: any;
             };
         });
         loadResultsFailure: (error: string, errorObject?: any) => ({
-            type: \\"load results failure (logic)\\";
+            type: "load results failure (logic)";
             payload: {
                 error: string;
                 errorObject?: any;
@@ -221,20 +221,20 @@ exports[`loaders - with no param 1`] = `
         });
     };
     actionKeys: {
-        \\"load sessions (logic)\\": \\"loadSessions\\";
-        \\"load sessions success (logic)\\": \\"loadSessionsSuccess\\";
-        \\"load sessions failure (logic)\\": \\"loadSessionsFailure\\";
-        \\"load results (logic)\\": \\"loadResults\\";
-        \\"load results success (logic)\\": \\"loadResultsSuccess\\";
-        \\"load results failure (logic)\\": \\"loadResultsFailure\\";
+        "load sessions (logic)": "loadSessions";
+        "load sessions success (logic)": "loadSessionsSuccess";
+        "load sessions failure (logic)": "loadSessionsFailure";
+        "load results (logic)": "loadResults";
+        "load results success (logic)": "loadResultsSuccess";
+        "load results failure (logic)": "loadResultsFailure";
     };
     actionTypes: {
-        loadSessions: \\"load sessions (logic)\\";
-        loadSessionsSuccess: \\"load sessions success (logic)\\";
-        loadSessionsFailure: \\"load sessions failure (logic)\\";
-        loadResults: \\"load results (logic)\\";
-        loadResultsSuccess: \\"load results success (logic)\\";
-        loadResultsFailure: \\"load results failure (logic)\\";
+        loadSessions: "load sessions (logic)";
+        loadSessionsSuccess: "load sessions success (logic)";
+        loadSessionsFailure: "load sessions failure (logic)";
+        loadResults: "load results (logic)";
+        loadResultsSuccess: "load results success (logic)";
+        loadResultsFailure: "load results failure (logic)";
     };
     actions: {
         loadSessions: () => void;
@@ -260,9 +260,9 @@ exports[`loaders - with no param 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {
         sessions: string[];

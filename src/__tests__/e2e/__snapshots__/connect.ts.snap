@@ -4,25 +4,25 @@ exports[`connect actions and rename 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         firstAction: (name: string) => ({
-            type: \\"first action (logic)\\";
+            type: "first action (logic)";
             payload: {
                 name: string;
             };
         });
         secondAction: (otherName: string) => ({
-            type: \\"second action (logic)\\";
+            type: "second action (logic)";
             payload: {
                 otherName: string;
             };
         });
     };
     actionKeys: {
-        \\"first action (logic)\\": \\"firstAction\\";
-        \\"second action (logic)\\": \\"secondAction\\";
+        "first action (logic)": "firstAction";
+        "second action (logic)": "secondAction";
     };
     actionTypes: {
-        firstAction: \\"first action (logic)\\";
-        secondAction: \\"second action (logic)\\";
+        firstAction: "first action (logic)";
+        secondAction: "second action (logic)";
     };
     actions: {
         firstAction: (name: string) => void;
@@ -37,9 +37,9 @@ exports[`connect actions and rename 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -56,25 +56,25 @@ exports[`connect actions from another logic 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
+            type: "update other name (logic)";
             payload: {
                 otherName: string;
             };
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"update other name (logic)\\": \\"updateOtherName\\";
+        "update name (logic)": "updateName";
+        "update other name (logic)": "updateOtherName";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        updateOtherName: \\"update other name (logic)\\";
+        updateName: "update name (logic)";
+        updateOtherName: "update other name (logic)";
     };
     actions: {
         updateName: (name: string) => void;
@@ -89,9 +89,9 @@ exports[`connect actions from another logic 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -108,25 +108,25 @@ exports[`connect actions from multiple other logics 1`] = `
 "export interface logicType extends Logic {
     actionCreators: {
         updateName: (name: string) => ({
-            type: \\"update name (logic)\\";
+            type: "update name (logic)";
             payload: {
                 name: string;
             };
         });
         updateOtherName: (otherName: string) => ({
-            type: \\"update other name (logic)\\";
+            type: "update other name (logic)";
             payload: {
                 otherName: string;
             };
         });
     };
     actionKeys: {
-        \\"update name (logic)\\": \\"updateName\\";
-        \\"update other name (logic)\\": \\"updateOtherName\\";
+        "update name (logic)": "updateName";
+        "update other name (logic)": "updateOtherName";
     };
     actionTypes: {
-        updateName: \\"update name (logic)\\";
-        updateOtherName: \\"update other name (logic)\\";
+        updateName: "update name (logic)";
+        updateOtherName: "update other name (logic)";
     };
     actions: {
         updateName: (name: string) => void;
@@ -141,9 +141,9 @@ exports[`connect actions from multiple other logics 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -168,9 +168,9 @@ exports[`connect props from another logic 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -201,9 +201,9 @@ exports[`connect values and rename 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
@@ -234,9 +234,9 @@ exports[`connect values from another logic 1`] = `
     key: undefined;
     listeners: {};
     path: [
-        \\"logic\\"
+        "logic"
     ];
-    pathString: \\"logic\\";
+    pathString: "logic";
     props: Record<string, unknown>;
     reducer: (state: any, action: any, fullState: any) => {};
     reducers: {};
