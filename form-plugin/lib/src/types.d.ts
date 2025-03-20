@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import { CloneNodeOptions } from '@wessberg/ts-clone-node';
+import { CloneNodeOptions } from 'ts-clone-node';
 export interface ActionTransform {
     name: string;
     parameters: ts.ParameterDeclaration[];
@@ -10,7 +10,6 @@ export interface NameType {
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode;
 }
 export interface ReducerTransform extends NameType {
-    reducerOptions?: ts.TypeNode | ts.ParenthesizedTypeNode;
 }
 export interface SelectorTransform extends NameType {
     functionTypes?: {
@@ -35,7 +34,6 @@ export interface ParsedLogic {
     hasPathInLogic: boolean;
     hasKeyInLogic: boolean;
     logicTypeArguments: string[];
-    constants: string[];
     events: Record<string, boolean>;
     checker: ts.TypeChecker;
     actions: ActionTransform[];
@@ -43,17 +41,18 @@ export interface ParsedLogic {
     selectors: SelectorTransform[];
     listeners: ListenerTransform[];
     sharedListeners: ListenerTransform[];
-    extraActions: Record<string, ts.TypeNode>;
     propsType?: ts.TypeNode;
     keyType?: ts.TypeNode;
     typeReferencesToImportFromFiles: Record<string, Set<string>>;
-    typeReferencesInLogicInput: Set<string>;
     interfaceDeclaration?: ts.InterfaceDeclaration;
+    extraActions: Record<string, ts.TypeNode>;
     extraInput: Record<string, {
         typeNode: ts.TypeNode;
         withLogicFunction: boolean;
     }>;
+    extraLogicFields: Record<string, ts.TypeNode>;
     importFromKeaInLogicType: Set<string>;
+    inputBuilderArray: boolean;
 }
 export interface AppOptions {
     tsConfigPath?: string;
@@ -69,6 +68,10 @@ export interface AppOptions {
     importGlobalTypes?: boolean;
     ignoreImportPaths?: string[];
     writePaths?: boolean;
+    delete?: boolean;
+    addTsNocheck?: boolean;
+    convertToBuilders?: boolean;
+    showTsErrors?: boolean;
     log: (message: string) => void;
 }
 export interface VisitKeaPropertyArguments {
@@ -84,10 +87,17 @@ export interface VisitKeaPropertyArguments {
     getTypeNodeForNode(node: ts.Node): ts.TypeNode;
     prepareForPrint<T extends ts.Node>(node: T): T;
 }
+export type TypeBuilder = (args: VisitKeaPropertyArguments) => void;
+export interface TypeBuilderModule {
+    name: string;
+    file: string;
+    typeBuilder?: TypeBuilder;
+}
 export interface Plugin {
     visitKeaProperty?: (args: VisitKeaPropertyArguments) => void;
 }
 export interface PluginModule extends Plugin {
     name: string;
     file: string;
+    typeBuilder?: (args: VisitKeaPropertyArguments) => void;
 }
