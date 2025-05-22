@@ -1,3 +1,6 @@
+## 3.3.7 - 2025-05-22
+- Support `lazyLoaders`
+
 ## 3.3.6 - 2025-01-21
 - Skip `..` in `path()`
 
