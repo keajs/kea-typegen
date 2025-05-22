@@ -1,6 +1,6 @@
 import { actions, events, kea, listeners, reducers, selectors, path } from 'kea'
 import { Repository } from './types'
-
+import { lazyLoaders } from "kea-loaders"
 import type { builderLogicType } from './builderLogicType'
 
 const API_URL = 'https://api.github.com'
@@ -82,4 +82,7 @@ export const builderLogic = kea<builderLogicType>([
             actions.setUsername(values.username)
         },
     })),
+    lazyLoaders({
+        lazyValue: ['', { initValue: () => {} }]
+    })
 ])

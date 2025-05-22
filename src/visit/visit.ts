@@ -34,6 +34,7 @@ const visitFunctions = {
     key: visitKey,
     listeners: visitListeners,
     loaders: visitLoaders,
+    lazyLoaders: visitLoaders,
     path: visitPath,
     props: visitProps,
     reducers: visitReducers,

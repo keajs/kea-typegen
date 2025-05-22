@@ -4086,6 +4086,11 @@ json5@^2.2.2:
   resolved "https://registry.yarnpkg.com/json5/-/json5-2.2.3.tgz#78cd6f1a19bdc12b73db5ad0c61efd66c1e29283"
   integrity sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==
 
+kea-loaders@^3.1.0:
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/kea-loaders/-/kea-loaders-3.1.0.tgz#9d3fc93789744bfc286c22587c52d26b881af6a5"
+  integrity sha512-Ng1SWC2ZQUaObV4UlgPzpVNqmveNt+r+e/sSWx3jT8qvKzPpjl5ZK3h+XSK76a6kyLhIr+22ksE2sq7vdqF5jA==
+
 kea-router@^3.1.4:
   version "3.1.4"
   resolved "https://registry.yarnpkg.com/kea-router/-/kea-router-3.1.4.tgz#8356f6208857dcfb91dbbfdd64ce3ce81c8361f7"

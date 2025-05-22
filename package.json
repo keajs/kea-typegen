@@ -43,6 +43,7 @@
         "jest": "^27.0.5",
         "kea": "^3.1.5",
         "kea-router": "^3.1.4",
+        "kea-loaders": "^3.1.0",
         "lint-staged": ">=12.1.2",
         "react": "^16.13.1",
         "react-redux": "^7.2.6",
