@@ -25,6 +25,7 @@ import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
 import { cloneNode } from 'ts-clone-node'
+import {NodeBuilderFlags} from "typescript";
 
 const visitFunctions = {
     actions: visitActions,
@@ -260,7 +261,7 @@ export function visitKeaCalls(
                 }
                 const name = symbol.getName()
                 const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
-                const typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                const typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
                 calls.push({ name, type, typeNode, expression: inputProperty.initializer, typeBuilders: [] })
             }
         } else if (ts.isArrayLiteralExpression(input)) {
@@ -272,7 +273,7 @@ export function visitKeaCalls(
                 const builderName = callExpression.expression.getText()
                 const argument = callExpression.arguments[0]
                 const type = checker.getTypeAtLocation(argument)
-                const typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                const typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
 
                 const identifier = callExpression.expression
                 const symbol = checker.getSymbolAtLocation(identifier)
@@ -364,7 +365,7 @@ export function visitKeaCalls(
 
             if (typeNode && ts.isFunctionTypeNode(typeNode)) {
                 type = type.getCallSignatures()[0].getReturnType()
-                typeNode = type ? checker.typeToTypeNode(type, undefined, undefined) : null
+                typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
             }
 
             visitFunctions[name]?.(parsedLogic, type, expression)

@@ -1,3 +1,6 @@
+## 3.4.0 - 2025-06-13
+- Upgrade to TypeScript 5.0
+
 ## 3.3.7 - 2025-05-22
 - Support `lazyLoaders`
 

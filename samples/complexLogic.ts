@@ -34,6 +34,26 @@ export type DashboardItemType = {
     key17: string
     key18: string
     key19: string
+    key20: string
+    key21: string
+    key22: string
+    key23: string
+    key24: string
+    key25: string
+    key26: string
+    key27: string
+    key28: string
+    key29: string
+    key30: string
+    key31: string
+    key32: string
+    key33: string
+    key34: string
+    key35: string
+    key36: string
+    key37: string
+    key38: string
+    key39: string
 }
 function newAction(element: HTMLElement | null): Partial<ActionType> {
     return {

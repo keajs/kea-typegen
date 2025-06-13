@@ -70,7 +70,7 @@ export function getTypeNodeForNode(node: ts.Node, checker: ts.TypeChecker): ts.T
         } else if (ts.isArrayLiteralExpression(node) && node.elements.length === 0) {
             typeNode = factory.createArrayTypeNode(factory.createKeywordTypeNode(SyntaxKind.AnyKeyword))
         } else {
-            typeNode = checker.typeToTypeNode(checker.getTypeAtLocation(node), undefined, undefined)
+            typeNode = checker.typeToTypeNode(checker.getTypeAtLocation(node), undefined, NodeBuilderFlags.NoTruncation)
         }
     } else {
         typeNode = factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)

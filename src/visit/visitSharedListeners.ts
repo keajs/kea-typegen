@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { cloneNodeSorted, gatherImports } from '../utils'
-import { Expression, Type } from 'typescript'
+import {Expression, NodeBuilderFlags, Type} from 'typescript'
 
 export function visitSharedListeners(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
@@ -15,7 +15,7 @@ export function visitSharedListeners(parsedLogic: ParsedLogic, type: Type, expre
             const firstParameter = value.parameters[0]
             if (firstParameter) {
                 typeNode = cloneNodeSorted(
-                    checker.typeToTypeNode(checker.getTypeAtLocation(firstParameter), undefined, undefined),
+                    checker.typeToTypeNode(checker.getTypeAtLocation(firstParameter), undefined, NodeBuilderFlags.NoTruncation),
                 )
                 gatherImports(typeNode, checker, parsedLogic)
             }

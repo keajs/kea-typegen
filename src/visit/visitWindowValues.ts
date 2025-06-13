@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { gatherImports } from '../utils'
-import { Expression, Type } from 'typescript'
+import {Expression, NodeBuilderFlags, Type} from 'typescript'
 
 export function visitWindowValues(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
@@ -14,7 +14,7 @@ export function visitWindowValues(parsedLogic: ParsedLogic, type: Type, expressi
             if (value && ts.isFunctionLike(value)) {
                 const type = checker.getTypeOfSymbolAtLocation(property, value)
                 const signature = type.getCallSignatures()[0]
-                const typeNode = checker.typeToTypeNode(signature.getReturnType(), undefined, undefined)
+                const typeNode = checker.typeToTypeNode(signature.getReturnType(), undefined, NodeBuilderFlags.NoTruncation)
                 gatherImports(typeNode, checker, parsedLogic)
 
                 parsedLogic.reducers.push({ name, typeNode })
