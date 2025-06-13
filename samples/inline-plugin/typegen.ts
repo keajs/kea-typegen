@@ -1,5 +1,6 @@
 import { Plugin } from '../../src/types'
 import * as ts from 'typescript'
+import { factory } from 'typescript'
 
 export default {
     visitKeaProperty({ name, parsedLogic, type }) {
@@ -10,13 +11,12 @@ export default {
             parsedLogic.actions.push({
                 name: 'inlineAction',
                 parameters: [],
-                returnTypeNode: ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
+                returnTypeNode: factory.createTypeLiteralNode([
+                    factory.createPropertySignature(
                         undefined,
-                        ts.createIdentifier('value'),
+                        factory.createIdentifier('value'),
                         undefined,
-                        ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
-                        undefined,
+                        factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
                     ),
                 ]),
             })
@@ -24,12 +24,12 @@ export default {
             // add reducer "form" to parsedLogic
             parsedLogic.reducers.push({
                 name: 'inlineReducer',
-                typeNode: ts.createTypeLiteralNode([
-                    ts.createPropertySignature(
+                typeNode: factory.createTypeLiteralNode([
+                    factory.createPropertySignature(
                         undefined,
-                        ts.createIdentifier('asd'),
+                        factory.createIdentifier('asd'),
                         undefined,
-                        ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
+                        factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
                     ),
                 ]),
             })
