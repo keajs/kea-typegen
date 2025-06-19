@@ -1,3 +1,6 @@
+## 3.4.4 - 2025-06-19
+- Upgrade to TypeScript 5.4
+
 ## 3.4.3 - 2025-06-19
 - Upgrade to TypeScript 5.2
 
