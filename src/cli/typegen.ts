@@ -62,6 +62,10 @@ yargs
         describe: 'Show TypeScript errors',
         type: 'boolean',
     })
+    .option('cache', {
+        describe: 'Use cache to skip processing unchanged files',
+        type: 'boolean',
+    })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()

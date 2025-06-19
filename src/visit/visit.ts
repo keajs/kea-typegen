@@ -25,7 +25,7 @@ import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
 import { cloneNode } from 'ts-clone-node'
-import {NodeBuilderFlags} from "typescript";
+import { NodeBuilderFlags } from "typescript";
 
 const visitFunctions = {
     actions: visitActions,
@@ -44,19 +44,21 @@ const visitFunctions = {
     windowValues: visitWindowValues,
 }
 
-export function visitProgram(program: ts.Program, appOptions?: AppOptions): ParsedLogic[] {
+export function visitProgram(program: ts.Program, appOptions?: AppOptions, filesToProcess?: ts.SourceFile[]): ParsedLogic[] {
     const checker = program.getTypeChecker()
     const parsedLogics: ParsedLogic[] = []
     const pluginModules: PluginModule[] = []
     const typeBuilderModules: TypeBuilderModule[] = []
 
-    for (const sourceFile of program.getSourceFiles()) {
+    const sourceFiles = filesToProcess || program.getSourceFiles()
+
+    for (const sourceFile of sourceFiles) {
         if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
             ts.forEachChild(sourceFile, visitResetContext(checker, pluginModules))
         }
     }
 
-    for (const sourceFile of program.getSourceFiles()) {
+    for (const sourceFile of sourceFiles) {
         if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
             if (appOptions?.verbose) {
                 appOptions.log(`👀 Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
