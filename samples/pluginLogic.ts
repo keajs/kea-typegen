@@ -20,7 +20,7 @@ export const pluginLogic = kea<pluginLogicType>({
 })
 
 export const anotherPluginLogic = kea<anotherPluginLogicType>({
-    path: ['pluginLogic'],
+    path: ['anotherPluginLogic'],
     form: ({ values }) => ({
         default: {
             name: 'john',
