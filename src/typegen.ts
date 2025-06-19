@@ -5,6 +5,7 @@ import { printToFiles } from './print/print'
 import { AppOptions } from './types'
 import { Program } from 'typescript'
 import { version } from '../package.json'
+import { KeaTypegenCache } from './cache'
 
 // The undocumented defaultMaximumTruncationLength setting determines at what point printed types are truncated in versions less than 5.
 // In kea-typegen output, we NEVER want the types truncated, as that results in a syntax error –
@@ -18,9 +19,15 @@ if (parseInt(ts.versionMajorMinor.split('.')[0]) < 5) {
 export function runTypeGen(appOptions: AppOptions) {
     let program: Program
     let resetProgram: () => void
+    let cache: KeaTypegenCache | null = null
 
     const { log } = appOptions
     log(`🦜 Kea-TypeGen v${version}`)
+
+    if (appOptions.cache && !appOptions.watch && appOptions.tsConfigPath) {
+        const rootPath = path.dirname(appOptions.tsConfigPath)
+        cache = new KeaTypegenCache(rootPath)
+    }
 
     if (appOptions.sourceFilePath) {
         log(`❇️ Loading file: ${appOptions.sourceFilePath}`)
@@ -111,12 +118,33 @@ export function runTypeGen(appOptions: AppOptions) {
         program,
         appOptions,
     ): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
-        const parsedLogics = visitProgram(program, appOptions)
-        if (appOptions.verbose) {
+        let allSourceFiles = program.getSourceFiles()
+            .filter(sf => !sf.isDeclarationFile && !sf.fileName.endsWith('Type.ts'))
+
+        let filesToProcess = allSourceFiles
+
+        if (cache && !appOptions.watch) {
+            const fileNames = allSourceFiles.map(sf => sf.fileName)
+            const changedFileNames = cache.getChangedFiles(fileNames)
+            filesToProcess = allSourceFiles.filter(sf => changedFileNames.includes(sf.fileName))
+
+            if (appOptions.verbose && filesToProcess.length < allSourceFiles.length) {
+                log(`🚀 Cache hit: processing ${filesToProcess.length}/${allSourceFiles.length} files`)
+            }
+        }
+
+        const parsedLogics = visitProgram(program, appOptions, filesToProcess)
+        if (appOptions.verbose && !appOptions.cache) {
             log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
         }
 
         const response = printToFiles(program, appOptions, parsedLogics)
+
+        if (cache && filesToProcess && appOptions.write) {
+            for (const sourceFile of filesToProcess) {
+                cache.updateFile(sourceFile.fileName)
+            }
+        }
 
         // running "kea-typegen check" and would write files?
         // exit with 1
@@ -134,6 +162,9 @@ export function runTypeGen(appOptions: AppOptions) {
                 const { writtenFiles, filesToModify } = goThroughAllTheFiles(program, appOptions)
 
                 if (writtenFiles === 0 && filesToModify === 0) {
+                    if (cache) {
+                        cache.persistCache()
+                    }
                     log(`👋 Finished writing files! Exiting.`)
                     process.exit(0)
                 }

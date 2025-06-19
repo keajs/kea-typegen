@@ -12,7 +12,7 @@ export interface NameType {
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
 }
 
-export interface ReducerTransform extends NameType {}
+export interface ReducerTransform extends NameType { }
 
 export interface SelectorTransform extends NameType {
     functionTypes?: { name: string; type: ts.TypeNode }[]
@@ -80,6 +80,8 @@ export interface AppOptions {
     convertToBuilders?: boolean
     /** Show TypeScript errors */
     showTsErrors?: boolean
+    /** Use a cache to avoid processing unchanged files */
+    cache?: boolean
 
     log: (message: string) => void
 }

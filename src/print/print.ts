@@ -77,14 +77,14 @@ export function printToFiles(
     const defaultGlobalTypePaths = appOptions.importGlobalTypes
         ? []
         : (program.getCompilerOptions().types || []).map(
-              (type) =>
-                  path.join(
-                      appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
-                      'node_modules',
-                      '@types',
-                      type,
-                  ) + path.sep,
-          )
+            (type) =>
+                path.join(
+                    appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
+                    'node_modules',
+                    '@types',
+                    type,
+                ) + path.sep,
+        )
 
     // Manually ignored
     const ignoredImportPaths = (appOptions.ignoreImportPaths || []).map((importPath) =>
@@ -197,7 +197,7 @@ export function printToFiles(
 
         try {
             existingOutput = fs.readFileSync(typeFileName)?.toString()
-        } catch (error) {}
+        } catch (error) { }
 
         if (
             !existingOutput ||
@@ -234,8 +234,7 @@ export function printToFiles(
                 filesToModify += logicsNeedingImports.length
             } else {
                 log(
-                    `❌ Will not write ${logicsNeedingImports.length} logic type import${
-                        logicsNeedingImports.length === 1 ? '' : 's'
+                    `❌ Will not write ${logicsNeedingImports.length} logic type import${logicsNeedingImports.length === 1 ? '' : 's'
                     }`,
                 )
             }
@@ -250,8 +249,7 @@ export function printToFiles(
                 filesToModify += logicsNeedingPaths.length
             } else {
                 log(
-                    `❌ Will not write ${logicsNeedingPaths.length} logic path${
-                        logicsNeedingPaths.length === 1 ? '' : 's'
+                    `❌ Will not write ${logicsNeedingPaths.length} logic path${logicsNeedingPaths.length === 1 ? '' : 's'
                     }`,
                 )
             }
@@ -268,8 +266,7 @@ export function printToFiles(
                 filesToModify += logicsNeedingConversion.length
             } else {
                 log(
-                    `❌ Will not write ${logicsNeedingConversion.length} logic path${
-                        logicsNeedingConversion.length === 1 ? '' : 's'
+                    `❌ Will not write ${logicsNeedingConversion.length} logic path${logicsNeedingConversion.length === 1 ? '' : 's'
                     }`,
                 )
             }
@@ -278,12 +275,11 @@ export function printToFiles(
 
     if (writtenFiles === 0 && filesToModify === 0) {
         if (appOptions.write) {
-            log(`💚 ${parsedLogics.length} logic type${parsedLogics.length === 1 ? '' : 's'} up to date!`)
+            log(`💚 ${parsedLogics.length} logic type${parsedLogics.length === 1 ? '' : 's'} updated.`)
             log('')
         } else if (filesToWrite > 0 || filesToModify > 0) {
             log(
-                `🚨 Run "kea-typegen write" to save ${filesToWrite + filesToModify} file${
-                    filesToWrite === 1 ? '' : 's'
+                `🚨 Run "kea-typegen write" to save ${filesToWrite + filesToModify} file${filesToWrite === 1 ? '' : 's'
                 } to disk`,
             )
         }
