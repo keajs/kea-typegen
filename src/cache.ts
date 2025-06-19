@@ -1,15 +1,25 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import * as crypto from 'crypto'
+import { version } from '../package.json'
 
 export interface FileCache {
-    [filePath: string]: number
+    [filePath: string]: string
+}
+
+export interface CacheData {
+    version: string
+    files: FileCache
 }
 
 export class KeaTypegenCache {
     private cache: FileCache = {}
     private cacheFilePath: string | null = null
+    private rootPath: string
+    private cacheVersion: string = version
 
     constructor(rootPath: string) {
+        this.rootPath = rootPath;
         const nodeModulesCacheDir = path.join(rootPath, 'node_modules', '.cache', 'kea-typegen')
         const nodeModulesCachePath = path.join(nodeModulesCacheDir, 'cache.json')
 
@@ -30,8 +40,15 @@ export class KeaTypegenCache {
         }
 
         try {
-            const cacheData = fs.readFileSync(this.cacheFilePath, 'utf8')
-            this.cache = JSON.parse(cacheData)
+            const rawData = fs.readFileSync(this.cacheFilePath, 'utf8')
+            const cacheData: CacheData = JSON.parse(rawData)
+            
+            // Invalidate cache if version changed
+            if (cacheData.version === this.cacheVersion) {
+                this.cache = cacheData.files || {}
+            } else {
+                this.cache = {}
+            }
         } catch (error) {
             this.cache = {}
         }
@@ -43,17 +60,31 @@ export class KeaTypegenCache {
         }
 
         try {
-            fs.writeFileSync(this.cacheFilePath, JSON.stringify(this.cache, null, 2))
+            const cacheData: CacheData = {
+                version: this.cacheVersion,
+                files: this.cache
+            }
+            fs.writeFileSync(this.cacheFilePath, JSON.stringify(cacheData, null, 2))
         } catch (error) {
             console.warn('Failed to save cache file:', error.message)
         }
     }
 
+    private getFileHash(filePath: string): string {
+        const content = fs.readFileSync(filePath)
+        return crypto.createHash('md5').update(content).digest('hex')
+    }
+
+    private toRelativePath(absolutePath: string): string {
+        return path.relative(this.rootPath, absolutePath)
+    }
+
     public isFileChanged(filePath: string): boolean {
         try {
-            const stats = fs.statSync(filePath)
-            const cachedMtime = this.cache[filePath]
-            return !cachedMtime || cachedMtime < stats.mtimeMs
+            const relativePath = this.toRelativePath(filePath)
+            const currentHash = this.getFileHash(filePath)
+            const cachedHash = this.cache[relativePath]
+            return !cachedHash || cachedHash !== currentHash
         } catch (error) {
             return true
         }
@@ -62,10 +93,11 @@ export class KeaTypegenCache {
 
     public updateFile(filePath: string): void {
         try {
-            const stats = fs.statSync(filePath)
-            this.cache[filePath] = stats.mtimeMs
+            const relativePath = this.toRelativePath(filePath)
+            this.cache[relativePath] = this.getFileHash(filePath)
         } catch (error) {
-            delete this.cache[filePath]
+            const relativePath = this.toRelativePath(filePath)
+            delete this.cache[relativePath]
         }
     }
 
