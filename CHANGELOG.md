@@ -1,4 +1,7 @@
-## 3.4.5 - 2025-06-19
+## 3.4.6 - 2025-06-23
+- Create a "--use-cache" option to cache the generated types in ".typegen"
+
+## 3.4.5 - 2025-06-23
 - Reuse old program when running "typegen:write" (small speedup)
 
 ## 3.4.4 - 2025-06-19

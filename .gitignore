@@ -4,3 +4,4 @@ dist/
 .yalc
 form-plugin/lib/tsconfig.tsbuildinfo
 form-plugin/lib/**/*.map
+samples/.typegen

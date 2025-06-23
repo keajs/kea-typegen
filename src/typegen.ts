@@ -5,6 +5,7 @@ import { printToFiles } from './print/print'
 import { AppOptions } from './types'
 import { Program } from 'typescript'
 import { version } from '../package.json'
+import { restoreCachedTypes } from './cache'
 
 // The undocumented defaultMaximumTruncationLength setting determines at what point printed types are truncated in versions less than 5.
 // In kea-typegen output, we NEVER want the types truncated, as that results in a syntax error –
@@ -12,7 +13,7 @@ import { version } from '../package.json'
 // See https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/utilities.ts#L563
 // and https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/checker.ts#L6331-L6334.
 if (parseInt(ts.versionMajorMinor.split('.')[0]) < 5) {
-    (ts as any).defaultMaximumTruncationLength = Infinity
+    ;(ts as any).defaultMaximumTruncationLength = Infinity
 }
 
 export function runTypeGen(appOptions: AppOptions) {
@@ -129,6 +130,10 @@ export function runTypeGen(appOptions: AppOptions) {
 
     if (program && !appOptions.watch && !appOptions.sourceFilePath) {
         if (appOptions.write) {
+            if (restoreCachedTypes(program, appOptions, log)) {
+                resetProgram()
+            }
+
             let round = 0
             while ((round += 1)) {
                 const { writtenFiles, filesToModify } = goThroughAllTheFiles(program, appOptions)

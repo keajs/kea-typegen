@@ -62,6 +62,10 @@ yargs
         describe: 'Show TypeScript errors',
         type: 'boolean',
     })
+    .option('use-cache', {
+        describe: 'Cache generated logic files into .typegen, use them if generating a logic type for the first time',
+        type: 'boolean',
+    })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()

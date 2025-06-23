@@ -38,6 +38,7 @@ import { writePaths } from '../write/writePaths'
 import { writeTypeImports } from '../write/writeTypeImports'
 import { printInternalExtraInput } from './printInternalExtraInput'
 import { convertToBuilders } from '../write/convertToBuilders'
+import { cacheWrittenFile } from '../cache'
 
 export function runThroughPrettier(sourceText: string, filePath: string): string {
     const options = prettier.resolveConfig.sync(filePath)
@@ -210,6 +211,7 @@ export function printToFiles(
                 fs.writeFileSync(typeFileName, finalOutput)
                 writtenFiles += 1
                 log(`🔥 Writing: ${path.relative(process.cwd(), typeFileName)}`)
+                cacheWrittenFile(typeFileName, appOptions)
             } else {
                 log(`❌ Will not write: ${path.relative(process.cwd(), typeFileName)}`)
             }

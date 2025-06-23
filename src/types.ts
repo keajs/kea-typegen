@@ -80,6 +80,8 @@ export interface AppOptions {
     convertToBuilders?: boolean
     /** Show TypeScript errors */
     showTsErrors?: boolean
+    /** Cache generated logic files into .typegen, use them if generating a logic type for the first time */
+    useCache?: boolean
 
     log: (message: string) => void
 }
