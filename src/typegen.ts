@@ -97,9 +97,9 @@ export function runTypeGen(appOptions: AppOptions) {
 
             ts.createWatchProgram(host)
         } else {
+            const host = ts.createCompilerHost(compilerOptions.options)
             resetProgram = () => {
-                const host = ts.createCompilerHost(compilerOptions.options)
-                program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
+                program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host, program)
             }
             resetProgram()
         }

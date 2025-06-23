@@ -1,3 +1,6 @@
+## 3.4.5 - 2025-06-19
+- Reuse old program when running "typegen:write" (small speedup)
+
 ## 3.4.4 - 2025-06-19
 - Upgrade to TypeScript 5.4
 
