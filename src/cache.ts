@@ -5,7 +5,7 @@ import { Program } from 'typescript'
 import { visitProgram } from './visit/visit'
 
 export function cachePath(appOptions: AppOptions, fileName: string): string {
-    return path.join(appOptions.rootPath || process.cwd(), '.typegen', path.relative(appOptions.rootPath || process.cwd(), fileName))
+    return path.join(process.cwd(), '.typegen', path.relative(process.cwd(), fileName))
 }
 
 export function restoreCachedTypes(program: Program, appOptions: AppOptions, log: (msg: string) => void): boolean {

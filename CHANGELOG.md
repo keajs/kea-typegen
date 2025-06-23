@@ -1,4 +1,7 @@
 ## 3.4.6 - 2025-06-23
+- Write the cache into the <root>/.typegen folder
+
+## 3.4.6 - 2025-06-23
 - Create a "--use-cache" option to cache the generated types in ".typegen"
 
 ## 3.4.5 - 2025-06-23
