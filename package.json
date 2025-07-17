@@ -8,7 +8,7 @@
         "build": "tsc -p .",
         "prepublishOnly": "npm run test && npm run clean && npm run build",
         "run-built-cli": "node dist/src/cli/typegen.js",
-        "test": "jest",
+        "test": "node --experimental-vm-modules node_modules/.bin/jest",
         "samples:check": "ts-node ./src/cli/typegen.ts check -r ./samples",
         "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths --delete",
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
