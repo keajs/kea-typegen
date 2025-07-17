@@ -16,7 +16,7 @@ if (parseInt(ts.versionMajorMinor.split('.')[0]) < 5) {
     ;(ts as any).defaultMaximumTruncationLength = Infinity
 }
 
-export function runTypeGen(appOptions: AppOptions) {
+export async function runTypeGen(appOptions: AppOptions) {
     let program: Program
     let resetProgram: () => void
 
@@ -49,7 +49,7 @@ export function runTypeGen(appOptions: AppOptions) {
                 compilerOptions.options,
                 {
                     ...ts.sys,
-                    writeFile(path: string, data: string, writeByteOrderMark?: boolean) {
+                    writeFile(_path: string, _data: string, _writeByteOrderMark?: boolean) {
                         // skip emit
                         // https://github.com/microsoft/TypeScript/issues/32385
                         // https://github.com/microsoft/TypeScript/issues/36917
@@ -89,11 +89,11 @@ export function runTypeGen(appOptions: AppOptions) {
             }
             const origPostProgramCreate = host.afterProgramCreate
 
-            host.afterProgramCreate = (prog) => {
+            host.afterProgramCreate = async (prog) => {
                 program = prog.getProgram()
                 origPostProgramCreate!(prog)
 
-                goThroughAllTheFiles(program, appOptions)
+                await goThroughAllTheFiles(program, appOptions)
             }
 
             ts.createWatchProgram(host)
@@ -108,16 +108,16 @@ export function runTypeGen(appOptions: AppOptions) {
         log(`⛔ No tsconfig.json found! No source file specified.`)
     }
 
-    function goThroughAllTheFiles(
+    async function goThroughAllTheFiles(
         program,
         appOptions,
-    ): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
+    ): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
         const parsedLogics = visitProgram(program, appOptions)
         if (appOptions.verbose) {
             log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
         }
 
-        const response = printToFiles(program, appOptions, parsedLogics)
+        const response = await printToFiles(program, appOptions, parsedLogics)
 
         // running "kea-typegen check" and would write files?
         // exit with 1
@@ -136,7 +136,7 @@ export function runTypeGen(appOptions: AppOptions) {
 
             let round = 0
             while ((round += 1)) {
-                const { writtenFiles, filesToModify } = goThroughAllTheFiles(program, appOptions)
+                const { writtenFiles, filesToModify } = await goThroughAllTheFiles(program, appOptions)
 
                 if (writtenFiles === 0 && filesToModify === 0) {
                     log(`👋 Finished writing files! Exiting.`)

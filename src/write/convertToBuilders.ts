@@ -4,7 +4,7 @@ import { print, visit } from 'recast'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import * as osPath from 'path'
-import { t, b, visitAllKeaCalls, assureImport, getAst } from "./utils";
+import { t, b, visitAllKeaCalls, assureImport, getAst } from './utils'
 
 const supportedProperties = {
     props: 'kea',
@@ -33,7 +33,7 @@ const supportedProperties = {
     events: 'kea',
 }
 
-export function convertToBuilders(
+export async function convertToBuilders(
     appOptions: AppOptions,
     program: ts.Program,
     filename: string,
@@ -120,7 +120,7 @@ export function convertToBuilders(
         }
     }
 
-    const newText = runThroughPrettier(print(ast).code, filename)
+    const newText = await runThroughPrettier(print(ast).code, filename)
     fs.writeFileSync(filename, newText)
 
     log(`🔥 Converted to builders: ${osPath.relative(process.cwd(), filename)}`)

@@ -40,11 +40,11 @@ import { printInternalExtraInput } from './printInternalExtraInput'
 import { convertToBuilders } from '../write/convertToBuilders'
 import { cacheWrittenFile } from '../cache'
 
-export function runThroughPrettier(sourceText: string, filePath: string): string {
-    const options = prettier.resolveConfig.sync(filePath)
+export async function runThroughPrettier(sourceText: string, filePath: string): Promise<string> {
+    const options = await prettier.resolveConfig(filePath)
     if (options) {
         try {
-            return prettier.format(sourceText, { ...options, filepath: filePath })
+            return await prettier.format(sourceText, { ...options, filepath: filePath })
         } catch (e) {
             console.error(`!! Prettier: Error formatting "${filePath}"`)
             console.error(e.message)
@@ -56,11 +56,11 @@ export function runThroughPrettier(sourceText: string, filePath: string): string
 }
 
 // returns files to write
-export function printToFiles(
+export async function printToFiles(
     program: Program,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
-): { filesToWrite: number; writtenFiles: number; filesToModify: number } {
+): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
     const { log } = appOptions
 
     const groupedByFile: Record<string, ParsedLogic[]> = {}
@@ -101,13 +101,16 @@ export function printToFiles(
     let filesToWrite = 0
     let filesToModify = 0
 
-    Object.entries(groupedByFile).forEach(([fileName, parsedLogics]) => {
+    for (const [fileName, parsedLogics] of Object.entries(groupedByFile)) {
         const typeFileName = parsedLogics[0].typeFileName
 
         const logicStrings = []
         const requiredKeys = new Set(['Logic'])
         for (const parsedLogic of parsedLogics) {
-            const logicTypeStirng = runThroughPrettier(nodeToString(parsedLogic.interfaceDeclaration), typeFileName)
+            const logicTypeStirng = await runThroughPrettier(
+                nodeToString(parsedLogic.interfaceDeclaration),
+                typeFileName,
+            )
             logicStrings.push(logicTypeStirng)
             for (const string of parsedLogic.importFromKeaInLogicType.values()) {
                 requiredKeys.add(string)
@@ -232,7 +235,7 @@ export function printToFiles(
         const logicsNeedingImports = parsedLogics.filter(parsedLogicNeedsTypeImport)
         if (logicsNeedingImports.length > 0) {
             if (appOptions.write && !appOptions.noImport) {
-                writeTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
+                await writeTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
                 filesToModify += logicsNeedingImports.length
             } else {
                 log(
@@ -276,7 +279,7 @@ export function printToFiles(
                 )
             }
         }
-    })
+    }
 
     if (writtenFiles === 0 && filesToModify === 0) {
         if (appOptions.write) {

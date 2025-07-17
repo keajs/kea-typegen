@@ -6,7 +6,7 @@ import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import { t, b, visitAllKeaCalls, getAst } from './utils'
 
-export function writeTypeImports(
+export async function writeTypeImports(
     appOptions: AppOptions,
     program: ts.Program,
     filename: string,
@@ -75,7 +75,7 @@ export function writeTypeImports(
         ])
     })
 
-    const newText = runThroughPrettier(print(ast).code, filename)
+    const newText = await runThroughPrettier(print(ast).code, filename)
     fs.writeFileSync(filename, newText)
 
     log(`🔥 Import added: ${osPath.relative(process.cwd(), filename)}`)

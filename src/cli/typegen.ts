@@ -8,30 +8,15 @@ import { AppOptions } from '../types'
 import { runTypeGen } from '../typegen'
 
 yargs
-    .command(
-        'check',
-        '- check what should be done',
-        (yargs) => {},
-        (argv) => {
-            runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: false, watch: false })
-        },
-    )
-    .command(
-        'write',
-        '- write logicType.ts files',
-        (yargs) => {},
-        (argv) => {
-            runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: false })
-        },
-    )
-    .command(
-        'watch',
-        '- watch for changes and write logicType.ts files',
-        (yargs) => {},
-        (argv) => {
-            runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: true })
-        },
-    )
+    .command('check', '- check what should be done', {}, async (argv) => {
+        await runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: false, watch: false })
+    })
+    .command('write', '- write logicType.ts files', {}, async (argv) => {
+        await runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: false })
+    })
+    .command('watch', '- watch for changes and write logicType.ts files', {}, async (argv) => {
+        await runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: true })
+    })
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json (otherwise auto-detected)', type: 'string' })
     .option('file', { alias: 'f', describe: "Single file to evaluate (can't be used with --config)", type: 'string' })
     .option('root', {
@@ -69,7 +54,8 @@ yargs
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()
     .help()
-    .wrap(80).argv
+    .wrap(80)
+    .parse()
 
 function parsedToAppOptions(parsedOptions) {
     const { root, types, config, file, ...rest } = parsedOptions
@@ -110,13 +96,13 @@ function includeKeaConfig(appOptions: AppOptions): AppOptions {
         const configDirPath = path.dirname(configFilePath)
         try {
             rawData = fs.readFileSync(configFilePath)
-        } catch (e) {
+        } catch {
             console.error(`Error reading Kea config file: ${configFilePath}`)
             process.exit(1)
         }
         try {
             keaConfig = JSON.parse(rawData)
-        } catch (e) {
+        } catch {
             console.error(`Error parsing Kea config JSON: ${configFilePath}`)
             process.exit(1)
         }
