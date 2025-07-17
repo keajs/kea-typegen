@@ -4,9 +4,14 @@ import { print, visit } from 'recast'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import * as osPath from 'path'
-import { t, b, visitAllKeaCalls, assureImport, getAst } from "./utils";
+import { t, b, visitAllKeaCalls, assureImport, getAst } from './utils'
 
-export function writePaths(appOptions: AppOptions, program: ts.Program, filename: string, parsedLogics: ParsedLogic[]) {
+export async function writePaths(
+    appOptions: AppOptions,
+    program: ts.Program,
+    filename: string,
+    parsedLogics: ParsedLogic[],
+) {
     const { log } = appOptions
     const sourceFile = program.getSourceFile(filename)
     const rawCode = sourceFile.getText()
@@ -52,7 +57,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
     visitAllKeaCalls(ast, parsedLogics, filename, ({ path, parsedLogic }) => {
         const stmt = path.node
         const arg = stmt.arguments[0]
-        const logicPath = parsedLogic.path.filter(p => p !== '..')
+        const logicPath = parsedLogic.path.filter((p) => p !== '..')
 
         if (t.ObjectExpression.check(arg)) {
             const pathProperty = arg.properties.find(
@@ -80,7 +85,7 @@ export function writePaths(appOptions: AppOptions, program: ts.Program, filename
         }
     })
 
-    const newText = runThroughPrettier(print(ast).code, filename)
+    const newText = await runThroughPrettier(print(ast).code, filename)
     fs.writeFileSync(filename, newText)
 
     log(`🔥 Path added: ${osPath.relative(process.cwd(), filename)}`)
