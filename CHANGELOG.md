@@ -1,3 +1,7 @@
+## 3.6.0 - 2026-02-24
+
+- Fix aliased typename paths in logic type files (e.g. `kea/lib/index` -> `kea`)
+
 ## 3.5.0 - 2025-07-17
 
 - Update to Prettier v3 adding `async` support
