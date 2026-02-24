@@ -24,7 +24,7 @@ export function programFromSource(sourceCode: string) {
 }
 
 function rejectImportPath(path: string): boolean {
-    if (path.includes('/node_modules/typescript/')) {
+    if (path.includes('/node_modules/typescript/') || path === 'typescript' || path.startsWith('typescript/')) {
         return true
     }
     return false
@@ -274,11 +274,114 @@ export function storeExtractedSymbol(
     // Also checking isTypeNameAlreadyImported to prevent multiple imports of the same type,
     // which we were seeing when importing from `export * from ...` files
     if (typeName && !isTypeNameAlreadyImported(parsedLogic, typeName)) {
-        const importFilename = getFilenameForNode(declaration, checker)
+        const importFilenameFromNode = getFilenameForNode(declaration, checker)
+        const sourceFileImportedPackagePath =
+            importFilenameFromNode &&
+            findImportPathForPackageInSourceFile(
+                parsedLogic.node.getSourceFile(),
+                importFilenameFromNode,
+                typeName.split('.')[0],
+                checker,
+            )
+        const importFilename = sourceFileImportedPackagePath || importFilenameFromNode
         if (importFilename && !rejectImportPath(importFilename)) {
             addTypeImport(parsedLogic, importFilename, typeName)
         }
     }
+}
+
+function findImportPathForPackageInSourceFile(
+    sourceFile: ts.SourceFile,
+    importFilename: string,
+    typeName: string,
+    checker: ts.TypeChecker,
+): string | undefined {
+    const packageName = extractNpmPackageName(importFilename)
+    if (!packageName) {
+        return
+    }
+
+    for (const statement of sourceFile.statements) {
+        if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
+            continue
+        }
+        const importPath = statement.moduleSpecifier.text
+        if (
+            extractNpmPackageName(importPath) === packageName &&
+            moduleSpecifierExportsTypeName(statement.moduleSpecifier, typeName, checker)
+        ) {
+            return importPath
+        }
+    }
+}
+
+function moduleSpecifierExportsTypeName(
+    moduleSpecifier: ts.Expression,
+    typeName: string,
+    checker: ts.TypeChecker,
+): boolean {
+    const moduleSymbol = checker.getSymbolAtLocation(moduleSpecifier)
+    if (!moduleSymbol) {
+        return false
+    }
+
+    return checker.getExportsOfModule(moduleSymbol).some((moduleExport) => moduleExport.getName() === typeName)
+}
+
+function extractNpmPackageName(input: string): string | undefined {
+    const packagePath = extractNodeModulesPackagePath(input)
+    if (packagePath) {
+        const normalizedPackagePath = packagePath.replace(/\\/g, '/')
+        if (normalizedPackagePath === 'typescript' || normalizedPackagePath.startsWith('typescript/')) {
+            return
+        }
+        if (normalizedPackagePath.startsWith('@types/')) {
+            return
+        }
+        if (normalizedPackagePath.startsWith('@')) {
+            const [scope, name] = normalizedPackagePath.split('/')
+            return scope && name ? `${scope}/${name}` : undefined
+        }
+        return normalizedPackagePath.split('/')[0]
+    }
+
+    if (input.startsWith('@types/')) {
+        return
+    }
+    if (input.startsWith('@')) {
+        const [scope, name] = input.split('/')
+        if (!scope || scope.length <= 1 || !name) {
+            return
+        }
+        return `${scope}/${name}`
+    }
+    if (!input.startsWith('.') && !input.startsWith('/') && !input.startsWith('~')) {
+        return input.split('/')[0]
+    }
+}
+
+function extractNodeModulesPackagePath(input: string): string | undefined {
+    const normalizedInput = input.replace(/\\/g, '/')
+    const nodeModulesMarker = '/node_modules/'
+    if (!normalizedInput.includes(nodeModulesMarker)) {
+        return
+    }
+
+    let packagePath = normalizedInput.split(nodeModulesMarker).pop()
+    if (!packagePath) {
+        return
+    }
+    if (packagePath.startsWith('.pnpm/')) {
+        const pnpmNodeModulesMarker = '/node_modules/'
+        if (!packagePath.includes(pnpmNodeModulesMarker)) {
+            return
+        }
+        packagePath = packagePath.split(pnpmNodeModulesMarker).pop()
+        if (!packagePath) {
+            return
+        }
+    }
+    return packagePath
 }
 
 export function getFilenameForImportDeclaration(checker: ts.TypeChecker, importNode: ts.ImportDeclaration): string {
