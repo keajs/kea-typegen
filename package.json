@@ -53,10 +53,10 @@
         "rimraf": "^3.0.2",
         "ts-jest": "^28.0.8",
         "ts-node": "^10.7.0",
-        "typescript": "5.8.2"
+        "typescript": "5.9.3"
     },
     "peerDependencies": {
-        "typescript": ">=5.8.0"
+        "typescript": ">=5.9.0"
     },
     "jest": {
         "testPathIgnorePatterns": [

@@ -1,3 +1,7 @@
+## 3.6.6 - 2026-03-05
+
+Upgrade to TypeScript 5.9
+
 ## 3.6.5 - 2026-03-05
 
 Upgrade to TypeScript 5.8
