@@ -13,7 +13,7 @@
         "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths --delete",
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples --delete",
-        "samples:write:posthog": "ts-node ./src/cli/typegen.ts watch -c ../../PostHog/posthog/tsconfig.json --show-ts-errors",
+        "samples:write:posthog": "ts-node ./src/cli/typegen.ts write --show-ts-errors -c",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },
@@ -53,10 +53,10 @@
         "rimraf": "^3.0.2",
         "ts-jest": "^28.0.8",
         "ts-node": "^10.7.0",
-        "typescript": "5.4.5"
+        "typescript": "5.5.4"
     },
     "peerDependencies": {
-        "typescript": ">=5.4.5"
+        "typescript": ">=5.5.4"
     },
     "jest": {
         "testPathIgnorePatterns": [

@@ -84,7 +84,7 @@ export async function convertToBuilders(
                     const renameTo =
                         Array.isArray(importFromOrArray) && importFromOrArray.length > 1 ? importFromOrArray[1] : key
 
-                    newEntries.push(b.callExpression(b.identifier(renameTo), [propertiesMap[key].value]))
+                    newEntries.push(b.callExpression(b.identifier(renameTo), [propertiesMap[key].value as any]))
                     neededImports[importFrom] ??= []
                     if (!neededImports[importFrom].find(([l]) => l === renameTo)) {
                         neededImports[importFrom].push([renameTo, renameTo])
@@ -102,7 +102,7 @@ export async function convertToBuilders(
             }
             for (const key of unsupported) {
                 if (propertiesMap[key] && t.ObjectProperty.check(propertiesMap[key])) {
-                    newEntries.push(b.callExpression(b.identifier(key), [propertiesMap[key].value]))
+                    newEntries.push(b.callExpression(b.identifier(key), [propertiesMap[key].value as any]))
                 }
             }
 
