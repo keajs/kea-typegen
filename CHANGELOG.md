@@ -1,3 +1,7 @@
+## 3.6.1 - 2026-03-05
+
+Upgrade to TypeScript 5.5
+
 ## 3.6.0 - 2026-02-24
 
 - Fix aliased typename paths in logic type files (e.g. `kea/lib/index` -> `kea`)
