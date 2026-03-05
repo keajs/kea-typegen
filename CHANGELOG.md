@@ -1,3 +1,7 @@
+## 3.6.3 - 2026-03-05
+
+Upgrade to TypeScript 5.6
+
 ## 3.6.2 - 2026-03-05
 
 Slightly faster watch mode
