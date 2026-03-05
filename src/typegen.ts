@@ -42,7 +42,9 @@ export async function runTypeGen(appOptions: AppOptions) {
         const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
 
         if (appOptions.watch) {
-            const createProgram = ts.createEmitAndSemanticDiagnosticsBuilderProgram
+            // We don't emit JavaScript files in typegen watch mode, so the semantic-only
+            // builder is enough and avoids extra emit-related work on every rebuild.
+            const createProgram = ts.createSemanticDiagnosticsBuilderProgram
 
             const host = ts.createWatchCompilerHost(
                 appOptions.tsConfigPath,
