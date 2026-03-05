@@ -72,6 +72,7 @@ export interface AppOptions {
     addTsNocheck?: boolean;
     convertToBuilders?: boolean;
     showTsErrors?: boolean;
+    useCache?: boolean;
     log: (message: string) => void;
 }
 export interface VisitKeaPropertyArguments {
