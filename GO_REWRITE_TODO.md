@@ -237,6 +237,46 @@ ln -s /Users/marius/Projects/PostHog/posthog/node_modules /tmp/posthog-typegen-g
   - `frontend/src/lib/components/Command/commandLogicType.ts`
   - `frontend/src/toolbar/shims/featureFlagLogicType.ts`
   - `frontend/src/toolbar/shims/userLogicType.ts`
+- A fresh full sweep on March 12, 2026 now uses the repo-local helper [`scripts/compare-generated-typegen.js`](/Users/marius/Projects/Kea/kea-typegen/scripts/compare-generated-typegen.js) instead of an ad hoc heredoc:
+  - fresh clones:
+    - `/tmp/posthog-typegen-sweep.W8Co3b/js`
+    - `/tmp/posthog-typegen-sweep.W8Co3b/go`
+  - JS command:
+    - `/Users/marius/Projects/Kea/kea-typegen/bin/kea-typegen-js write -q`
+  - Go command:
+    - `/Users/marius/Projects/Kea/kea-typegen/rewrite/bin/kea-typegen-go write -q --tsgo-bin /Users/marius/Projects/Kea/kea-typegen/.tsgo/node_modules/.bin/tsgo`
+  - semantic compare command:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir /tmp/posthog-typegen-sweep.W8Co3b/js --go-dir /tmp/posthog-typegen-sweep.W8Co3b/go --top 30`
+  - fresh-sweep result:
+    - total files: `739`
+    - semantic matches: `44`
+    - semantic accuracy: `5.95%`
+    - exact matches: `0`
+    - `TS_ONLY: 0`
+    - `GO_ONLY: 0`
+    - semantic diffs: `695`
+  - this is a real improvement over the March 11 baseline (`14/739` -> `44/739`), but parity is still low overall
+  - broad March 11 failure buckets are no longer the main issue in this snapshot:
+    - generated `key: any` now appears in `0` Go files in the fresh sweep
+    - aliased generated imports like `~/`, `lib/`, `scenes/`, or `products/` now appear in `0` Go files in the fresh sweep
+    - `props: any` is no longer broadly overused in the generated outputs checked here
+  - fresh-run convergence is still not solved:
+    - the fresh Go run reached the full `739` generated-file set but still did not exit cleanly
+    - an immediate rerun on the already-generated clone also stayed alive after the full file set was present
+    - use the post-rerun clone state for semantic comparison for now, but keep treating fresh-run shutdown/churn as an active blocker
+  - biggest remaining diff buckets in this sweep are now concentrated by feature area rather than by the earlier global `key`/import-path regressions:
+    - `77` diffs under `frontend/src/lib/components`
+    - `36` diffs under `frontend/src/scenes/session-recordings`
+    - `24` diffs under `frontend/src/scenes/insights`
+    - `23` diffs under `frontend/src/scenes/data-warehouse`
+    - `22` diffs under `frontend/src/scenes/settings`
+    - `21` diffs under `frontend/src/layout/navigation-3000`
+    - `21` diffs under `frontend/src/scenes/experiments`
+  - representative still-open semantic gaps from the March 12 sweep:
+    - [`frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts): `key` and `props` are now correct, but Go still misses the connected `loadPropertyValues` surface that JS emits
+    - [`frontend/src/scenes/billing/billingLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/billing/billingLogicType.ts): Go now emits `loadBilling`, `updateBillingLimits`, and `switchFlatrateSubscriptionPlan`, but still misses JS-only `deactivateProduct` and still keeps an extra `breakpoint` parameter where JS emits a flatter action signature
+    - [`frontend/src/scenes/insights/insightLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/insights/insightLogicType.ts): `key` and `props` are now correct, but Go still misses connected value typing such as `featureFlags: FeatureFlagsSet`
+    - [`frontend/src/scenes/experiments/ExperimentForm/variantsPanelLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/experiments/ExperimentForm/variantsPanelLogicType.ts): selector/helper instability remains visible as `Set<any>` instead of `Set<string>` and `any`-heavy `validateFeatureFlagKeySuccess` payloads
 - Runtime note:
   - the `go run ./cmd/kea-typegen-go ...` development path was misleading here because it includes compile overhead; that path exceeded the earlier `180s` timeout on a fresh clone
   - the compiled binary is better, but fresh-project runtime is still not healthy enough:
@@ -277,16 +317,17 @@ ln -s /Users/marius/Projects/PostHog/posthog/node_modules /tmp/posthog-typegen-g
     - multiline local value initializers no longer truncate at the first top-level newline, which matters for curried helper exports
     - multiline interface expansion no longer flattens callback-bearing members into malformed inline object text, which was poisoning member lookups like `props.key`
     - there is now a state-aware source fallback for imported callback helpers that can resolve named imports through tsconfig `baseUrl` / `paths`
-  - there is a new synthetic regression test for the imported-helper path:
-    - aliased `key(keyForInsightLogicProps('new'))` source recovery now passes in-package with a temp tsconfig-style `paths` mapping
-  - still unresolved in the real PostHog legacy-model path:
-    - [`frontend/src/scenes/insights/insightLogic.tsx`](/Users/marius/Projects/PostHog/posthog/frontend/src/scenes/insights/insightLogic.tsx): `keyType` is still `any`
-    - [`frontend/src/lib/components/AddToDashboard/addToDashboardModalLogic.ts`](/Users/marius/Projects/PostHog/posthog/frontend/src/lib/components/AddToDashboard/addToDashboardModalLogic.ts): `keyType` is still `any`
-  - that discrepancy now looks narrower than before:
-    - the raw source fallback path works against a synthetic aliased-helper test
-    - the remaining failure is likely in the live `BuildParsedLogics(report)` runtime context for actual PostHog files, not in the basic source inference logic itself
-  - next debugging target for this exact blocker:
-    - instrument the actual `BuildParsedLogics(report)` path for the two files above and confirm whether runtime config/path metadata differs from the synthetic test setup, or whether some earlier step still prevents the helper-based fallback from being used
+  - the imported-helper path is now covered more realistically:
+    - aliased `key(keyForInsightLogicProps('new'))` source recovery now passes with an absolute tsconfig `baseUrl`
+    - a higher-fidelity temp-project regression now also covers the real PostHog helper shape, including `~/types` plus the block-bodied curried helper body
+  - the live legacy-model blocker from those helper paths is now closed:
+    - [`frontend/src/scenes/insights/insightLogic.tsx`](/Users/marius/Projects/PostHog/posthog/frontend/src/scenes/insights/insightLogic.tsx): `keyType` now resolves to `string`
+    - [`frontend/src/lib/components/AddToDashboard/addToDashboardModalLogic.ts`](/Users/marius/Projects/PostHog/posthog/frontend/src/lib/components/AddToDashboard/addToDashboardModalLogic.ts): `keyType` now resolves to `string`
+  - the runtime fix behind that was config-specific:
+    - source-backed aliased import resolution now treats parsed tsconfig `baseUrl` values as either relative or already-absolute, which matters in real `BuildParsedLogics(report)` runs where tsgo returns absolute `baseUrl` paths
+  - the sample benchmark caught an unrelated regression while verifying that change:
+    - block-bodied selector object spread recovery had stopped expanding local type aliases in shapes such as `const a = {} as DashboardItemType; return { ...a, bla: true }`
+    - that is now fixed again, and `samples/complexLogic.ts` keeps `miscSelector` plus the related internal selector helpers fully expanded in the native write path
   - fresh PostHog runtime behavior improved materially after native write-path fast paths:
     - files with no detected Kea logic now return before tsgo client startup / per-file project lookup
     - files that do not even contain the token `kea` now skip the heavier logic scan entirely

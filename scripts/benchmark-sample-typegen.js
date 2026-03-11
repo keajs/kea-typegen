@@ -766,9 +766,17 @@ function main() {
     }
 }
 
-try {
-    main()
-} catch (error) {
-    console.error(error.message || String(error))
-    process.exit(1)
+module.exports = {
+    compareOutputs,
+    listGeneratedTypeFiles,
+    normalizeGeneratedFile,
+}
+
+if (require.main === module) {
+    try {
+        main()
+    } catch (error) {
+        console.error(error.message || String(error))
+        process.exit(1)
+    }
 }

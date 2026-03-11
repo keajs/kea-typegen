@@ -15,6 +15,7 @@
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples --delete",
         "samples:write:posthog": "ts-node ./src/cli/typegen.ts write --show-ts-errors -c",
         "bench:samples": "./bin/benchmark",
+        "compare:typegen": "node ./scripts/compare-generated-typegen.js",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },

@@ -1099,7 +1099,7 @@ func TestSourceMemberPathTypeTextHandlesMultilineInterfaceCallbacks(t *testing.T
 	}
 }
 
-func TestSourceKeyTypeFromSourceResolvesAliasedImportedHelper(t *testing.T) {
+func TestSourceKeyTypeFromSourceResolvesAliasedImportedHelperWithAbsoluteBaseURL(t *testing.T) {
 	tempDir := t.TempDir()
 	sharedUtilsDir := filepath.Join(tempDir, "frontend", "src", "scenes", "insights")
 	if err := os.MkdirAll(sharedUtilsDir, 0o755); err != nil {
@@ -1155,7 +1155,7 @@ func TestSourceKeyTypeFromSourceResolvesAliasedImportedHelper(t *testing.T) {
 		configFile: filepath.Join(tempDir, "tsconfig.json"),
 		config: &tsgoapi.ConfigResponse{
 			Options: map[string]any{
-				"baseUrl": "frontend",
+				"baseUrl": filepath.Join(tempDir, "frontend"),
 				"paths": map[string]any{
 					"scenes/*": []any{"src/scenes/*"},
 				},
@@ -1216,6 +1216,223 @@ func TestSourceKeyTypeFromSourceResolvesAliasedImportedHelper(t *testing.T) {
 	got := sourceKeyTypeFromSource(logicSource, logicFile, keyProperty, "", state)
 	if got != "string" {
 		t.Fatalf("expected imported helper key type %q, got %q", "string", got)
+	}
+}
+
+func TestSourceKeyTypeFromSourceResolvesRealisticPostHogHelper(t *testing.T) {
+	tempDir := t.TempDir()
+	frontendDir := filepath.Join(tempDir, "frontend")
+	sharedUtilsDir := filepath.Join(frontendDir, "src", "scenes", "insights")
+	if err := os.MkdirAll(sharedUtilsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(frontendDir, "src", "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface InsightLogicProps {",
+		"    dashboardId?: string",
+		"    dashboardItemId?: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	sharedUtilsFile := filepath.Join(sharedUtilsDir, "sharedUtils.ts")
+	sharedUtilsSource := strings.Join([]string{
+		"import { InsightLogicProps } from '~/types'",
+		"",
+		"export const keyForInsightLogicProps =",
+		"    (defaultKey = 'new') =>",
+		"    (props: InsightLogicProps): string => {",
+		"        if (!('dashboardItemId' in props)) {",
+		"            throw new Error('Must init with dashboardItemId, even if undefined')",
+		"        }",
+		"        return props.dashboardItemId",
+		"            ? `${props.dashboardItemId}${props.dashboardId ? `/on-dashboard-${props.dashboardId}` : ''}`",
+		"            : defaultKey",
+		"    }",
+	}, "\n")
+	if err := os.WriteFile(sharedUtilsFile, []byte(sharedUtilsSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(frontendDir, "src", "lib", "components", "AddToDashboard", "addToDashboardModalLogic.ts")
+	if err := os.MkdirAll(filepath.Dir(logicFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	logicSource := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"import { keyForInsightLogicProps } from 'scenes/insights/sharedUtils'",
+		"import { InsightLogicProps } from '~/types'",
+		"",
+		"export const demoLogic = kea([",
+		"    props({} as InsightLogicProps),",
+		"    path(['demoLogic']),",
+		"    key(keyForInsightLogicProps('new')),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logics, err := FindLogics(logicSource)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+
+	properties := map[string]SourceProperty{}
+	for _, property := range logics[0].Properties {
+		properties[property.Name] = property
+	}
+	keyProperty, ok := properties["key"]
+	if !ok {
+		t.Fatalf("expected key property in %+v", logics[0].Properties)
+	}
+
+	state := &buildState{
+		configFile: filepath.Join(tempDir, "tsconfig.json"),
+		config: &tsgoapi.ConfigResponse{
+			Options: map[string]any{
+				"baseUrl": frontendDir,
+				"paths": map[string]any{
+					"scenes/*": []any{"src/scenes/*"},
+					"~/*":      []any{"src/*"},
+				},
+			},
+		},
+	}
+
+	importedSource, importedFile, initializer, ok := sourceImportedValueInitializer(
+		logicSource,
+		logicFile,
+		"keyForInsightLogicProps",
+		state,
+	)
+	if !ok {
+		t.Fatalf("expected imported initializer for keyForInsightLogicProps")
+	}
+	if importedFile != sharedUtilsFile {
+		t.Fatalf("expected imported file %q, got %q", sharedUtilsFile, importedFile)
+	}
+
+	importedType := sourceExpressionTypeTextWithContext(importedSource, importedFile, initializer, nil, state)
+	if importedType != "(defaultKey = 'new') => (props: InsightLogicProps) => string" {
+		t.Fatalf("expected imported helper type %q, got %q", "(defaultKey = 'new') => (props: InsightLogicProps) => string", importedType)
+	}
+
+	keyExpressionType := sourceExpressionTypeTextWithContext(logicSource, logicFile, sourcePropertyText(logicSource, keyProperty), nil, state)
+	if keyExpressionType != "(props: InsightLogicProps) => string" {
+		t.Fatalf("expected key expression type %q, got %q", "(props: InsightLogicProps) => string", keyExpressionType)
+	}
+
+	got := sourceKeyTypeFromSource(logicSource, logicFile, keyProperty, "InsightLogicProps", state)
+	if got != "string" {
+		t.Fatalf("expected imported helper key type %q, got %q", "string", got)
+	}
+}
+
+func TestBuildParsedLogicsRecoversRealisticPostHogKeyTypeEndToEnd(t *testing.T) {
+	tempDir := t.TempDir()
+	frontendDir := filepath.Join(tempDir, "frontend")
+	sharedUtilsDir := filepath.Join(frontendDir, "src", "scenes", "insights")
+	if err := os.MkdirAll(sharedUtilsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "baseUrl": "frontend",`,
+		`    "paths": {`,
+		`      "scenes/*": ["src/scenes/*"],`,
+		`      "~/*": ["src/*"]`,
+		`    }`,
+		`  },`,
+		`  "include": ["frontend/src/**/*"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(frontendDir, "src", "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface InsightLogicProps {",
+		"    dashboardId?: string",
+		"    dashboardItemId?: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	sharedUtilsFile := filepath.Join(sharedUtilsDir, "sharedUtils.ts")
+	sharedUtilsSource := strings.Join([]string{
+		"import { InsightLogicProps } from '~/types'",
+		"",
+		"export const keyForInsightLogicProps =",
+		"    (defaultKey = 'new') =>",
+		"    (props: InsightLogicProps): string => {",
+		"        if (!('dashboardItemId' in props)) {",
+		"            throw new Error('Must init with dashboardItemId, even if undefined')",
+		"        }",
+		"        return props.dashboardItemId",
+		"            ? `${props.dashboardItemId}${props.dashboardId ? `/on-dashboard-${props.dashboardId}` : ''}`",
+		"            : defaultKey",
+		"    }",
+	}, "\n")
+	if err := os.WriteFile(sharedUtilsFile, []byte(sharedUtilsSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(frontendDir, "src", "lib", "components", "AddToDashboard", "addToDashboardModalLogic.ts")
+	if err := os.MkdirAll(filepath.Dir(logicFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	logicSource := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"import { keyForInsightLogicProps } from 'scenes/insights/sharedUtils'",
+		"import { InsightLogicProps } from '~/types'",
+		"",
+		"export const demoLogic = kea([",
+		"    props({} as InsightLogicProps),",
+		"    path(['demoLogic']),",
+		"    key(keyForInsightLogicProps('new')),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+	if logics[0].PropsType != "InsightLogicProps" {
+		t.Fatalf("expected props type %q, got %q", "InsightLogicProps", logics[0].PropsType)
+	}
+	if logics[0].KeyType != "string" {
+		t.Fatalf("expected key type %q, got %q", "string", logics[0].KeyType)
 	}
 }
 
@@ -2026,6 +2243,9 @@ func TestBuildParsedLogicsComplexSamplePreservesReducerUnionState(t *testing.T) 
 		"selectedActionId: (state: any, props?: any) => number | 'new' | null",
 		"newActionForElement: HTMLElement | null",
 		"inspectingElement: number | null",
+		"miscSelector: {",
+		"key39: string",
+		"miscSelector: (state: any, props?: any) => {",
 		"__keaTypeGenInternalSelectorTypes: {",
 		"selectedAction: (selectedActionId: number | 'new', newActionForElement: HTMLElement) => ActionType | null",
 		"initialValuesForForm: (selectedAction: ActionType) => ActionForm",

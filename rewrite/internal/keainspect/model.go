@@ -609,6 +609,9 @@ func sourceObjectLiteralTypeText(source, expression string) string {
 			if spreadType == "" {
 				continue
 			}
+			if expanded := expandLocalSourceTypeText(source, spreadType); expanded != "" {
+				spreadType = normalizeSourceTypeText(expanded)
+			}
 			spreadMembers, ok := parseObjectTypeMembers(spreadType)
 			if !ok {
 				continue
@@ -1805,6 +1808,9 @@ func sourceObjectLiteralTypeTextWithHints(source, expression string, hints map[s
 			spreadType := sourceExpressionTypeTextWithHints(source, strings.TrimSpace(text[3:]), hints)
 			if spreadType == "" {
 				continue
+			}
+			if expanded := expandLocalSourceTypeText(source, spreadType); expanded != "" {
+				spreadType = normalizeSourceTypeText(expanded)
 			}
 			spreadMembers, ok := parseObjectTypeMembers(spreadType)
 			if !ok {
@@ -6851,7 +6857,11 @@ func resolveConfiguredImportFile(importPath string, state *buildState) (string, 
 		baseURL = strings.TrimSpace(rawBaseURL)
 	}
 	configDir := filepath.Dir(state.configFile)
-	root := filepath.Clean(filepath.Join(configDir, filepath.FromSlash(baseURL)))
+	rootPath := filepath.FromSlash(baseURL)
+	root := filepath.Clean(filepath.Join(configDir, rootPath))
+	if filepath.IsAbs(rootPath) {
+		root = filepath.Clean(rootPath)
+	}
 
 	for _, candidate := range configuredImportCandidates(importPath, root, state.config.Options["paths"]) {
 		if resolvedFile, ok := resolveAbsoluteImportBase(candidate); ok {
