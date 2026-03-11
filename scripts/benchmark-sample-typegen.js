@@ -12,7 +12,7 @@ function parseArgs(argv) {
         command: 'write',
         iterations: 5,
         warmup: 1,
-        keepWorkspace: true,
+        keepWorkspace: false,
         skipPrepare: false,
         samples: undefined,
     }
@@ -29,6 +29,8 @@ function parseArgs(argv) {
             options.samples = path.resolve(argv[++i])
         } else if (arg === '--skip-prepare') {
             options.skipPrepare = true
+        } else if (arg === '--keep-workspace') {
+            options.keepWorkspace = true
         } else if (arg === '--cleanup') {
             options.keepWorkspace = false
         } else if (arg === '--help' || arg === '-h') {
@@ -61,7 +63,8 @@ Options:
   -w, --warmup <count>          Warmup iterations per implementation (default: 1)
       --samples <path>          Override the samples directory
       --skip-prepare            Assume dist/ and rewrite/bin are already prepared
-      --cleanup                 Remove the temporary benchmark workspace afterwards
+      --keep-workspace          Keep the temporary benchmark workspace afterwards
+      --cleanup                 Remove the temporary benchmark workspace afterwards (default)
   -h, --help                    Show this help
 `)
 }
@@ -584,145 +587,188 @@ function compareOutputs(tsDir, goDir) {
 }
 
 function main() {
-    const options = parseArgs(process.argv.slice(2))
+    const argv = process.argv.slice(2)
+    if (argv.length === 0) {
+        printHelp()
+        process.exit(1)
+    }
+
+    const options = parseArgs(argv)
     const repoRoot = path.resolve(__dirname, '..')
     const samplesSource = options.samples || path.join(repoRoot, 'samples')
     const workspaceRoot = fs.mkdtempSync(path.join(repoRoot, '.benchmark-work-'))
     const jsCLI = path.join(repoRoot, 'bin', 'kea-typegen-js')
     const goCLI = path.join(repoRoot, 'bin', 'kea-typegen-go')
     const benchmarkPaths = []
+    const cleanupTargets = new Set([workspaceRoot])
+    let cleaned = false
 
-    ensurePrepared(repoRoot, options)
-
-    const jsRunner = (suffix) => {
-        const { cloneRoot } = createBenchmarkClone(repoRoot, samplesSource, `js-${suffix}`)
-        benchmarkPaths.push(cloneRoot)
-        const duration = timedRun(jsCLI, buildTypegenArgs(options.command, cloneRoot), {
-            cwd: repoRoot,
-            expectedStatuses: options.command === 'check' ? [0, 1] : [0],
-        })
-        if (!options.keepWorkspace) {
-            fs.rmSync(cloneRoot, { recursive: true, force: true })
+    const cleanup = () => {
+        if (cleaned || options.keepWorkspace) {
+            return
         }
-        return duration
-    }
-
-    const goRunner = (suffix) => {
-        const { cloneRoot } = createBenchmarkClone(repoRoot, samplesSource, `go-${suffix}`)
-        benchmarkPaths.push(cloneRoot)
-        const duration = timedRun(goCLI, buildTypegenArgs(options.command, cloneRoot), {
-            cwd: repoRoot,
-            expectedStatuses: options.command === 'check' ? [0, 1] : [0],
-        })
-        if (!options.keepWorkspace) {
-            fs.rmSync(cloneRoot, { recursive: true, force: true })
-        }
-        return duration
-    }
-
-    const tsStats = benchmarkImplementation('TypeScript', options.iterations, options.warmup, jsRunner)
-    const goStats = benchmarkImplementation('Go', options.iterations, options.warmup, goRunner)
-
-    let accuracy = null
-    let cleanupSummary = null
-    if (options.command === 'write') {
-        const jsAccuracyClone = createBenchmarkClone(repoRoot, samplesSource, 'accuracy-js')
-        const goAccuracyClone = createBenchmarkClone(repoRoot, samplesSource, 'accuracy-go')
-        benchmarkPaths.push(jsAccuracyClone.cloneRoot, goAccuracyClone.cloneRoot)
-        cleanupSummary = jsAccuracyClone.cleanup
-
-        run(jsCLI, buildTypegenArgs('write', jsAccuracyClone.cloneRoot), { cwd: repoRoot })
-        run(goCLI, buildTypegenArgs('write', goAccuracyClone.cloneRoot), { cwd: repoRoot })
-
-        accuracy = compareOutputs(jsAccuracyClone.cloneRoot, goAccuracyClone.cloneRoot)
-
-        if (!options.keepWorkspace) {
-            fs.rmSync(jsAccuracyClone.cloneRoot, { recursive: true, force: true })
-            fs.rmSync(goAccuracyClone.cloneRoot, { recursive: true, force: true })
+        cleaned = true
+        for (const target of [...cleanupTargets].sort((a, b) => b.length - a.length)) {
+            fs.rmSync(target, { recursive: true, force: true })
         }
     }
 
-    const speedup = tsStats.mean / goStats.mean
-    const faster = speedup > 1
-    const timeDeltaPercent = faster ? (1 - goStats.mean / tsStats.mean) * 100 : (goStats.mean / tsStats.mean - 1) * 100
-
-    const report = {
-        generatedAt: new Date().toISOString(),
-        repoRoot,
-        workspaceRoot,
-        samplesSource,
-        options,
-        cleanupSummary,
-        benchmarkPaths: options.keepWorkspace ? benchmarkPaths : [],
-        performance: {
-            typeScript: tsStats,
-            go: goStats,
-            speedup,
-            faster,
-            timeDeltaPercent,
-        },
-        accuracy,
+    const handleSignal = (signal) => {
+        cleanup()
+        process.stderr.write(`\n${signal}\n`)
+        process.exit(130)
     }
 
-    const reportPath = path.join(workspaceRoot, 'benchmark-report.json')
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
+    process.on('SIGINT', () => handleSignal('SIGINT'))
+    process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
-    console.log(`Benchmark command: ${options.command}`)
-    console.log(`Samples source: ${samplesSource}`)
-    if (cleanupSummary) {
-        console.log(
-            `Clean baseline: removed ${cleanupSummary.removedTypeFiles} generated type files and ${cleanupSummary.removedCacheDirs} cache directories per clone`,
-        )
-    }
-    console.log(`Warmup iterations: ${options.warmup}`)
-    console.log(`Measured iterations: ${options.iterations}`)
-    console.log('')
-    console.log(
-        `TypeScript mean: ${formatMs(tsStats.mean)} (median ${formatMs(tsStats.median)}, min ${formatMs(tsStats.min)}, max ${formatMs(tsStats.max)})`,
-    )
-    console.log(`TypeScript runs: ${formatRuns(tsStats.timings)}`)
-    console.log(
-        `Go mean: ${formatMs(goStats.mean)} (median ${formatMs(goStats.median)}, min ${formatMs(goStats.min)}, max ${formatMs(goStats.max)})`,
-    )
-    console.log(`Go runs: ${formatRuns(goStats.timings)}`)
-    console.log('')
-    if (faster) {
-        console.log(`Go is ${speedup.toFixed(2)}x faster on mean runtime (${timeDeltaPercent.toFixed(1)}% less time).`)
-    } else {
-        console.log(
-            `Go is ${(1 / speedup).toFixed(2)}x slower on mean runtime (${timeDeltaPercent.toFixed(1)}% more time).`,
-        )
-    }
+    try {
+        ensurePrepared(repoRoot, options)
 
-    if (accuracy) {
+        const jsRunner = (suffix) => {
+            const { cloneRoot } = createBenchmarkClone(repoRoot, samplesSource, `js-${suffix}`)
+            benchmarkPaths.push(cloneRoot)
+            cleanupTargets.add(cloneRoot)
+            const duration = timedRun(jsCLI, buildTypegenArgs(options.command, cloneRoot), {
+                cwd: repoRoot,
+                expectedStatuses: options.command === 'check' ? [0, 1] : [0],
+            })
+            if (!options.keepWorkspace) {
+                fs.rmSync(cloneRoot, { recursive: true, force: true })
+                cleanupTargets.delete(cloneRoot)
+            }
+            return duration
+        }
+
+        const goRunner = (suffix) => {
+            const { cloneRoot } = createBenchmarkClone(repoRoot, samplesSource, `go-${suffix}`)
+            benchmarkPaths.push(cloneRoot)
+            cleanupTargets.add(cloneRoot)
+            const duration = timedRun(goCLI, buildTypegenArgs(options.command, cloneRoot), {
+                cwd: repoRoot,
+                expectedStatuses: options.command === 'check' ? [0, 1] : [0],
+            })
+            if (!options.keepWorkspace) {
+                fs.rmSync(cloneRoot, { recursive: true, force: true })
+                cleanupTargets.delete(cloneRoot)
+            }
+            return duration
+        }
+
+        const tsStats = benchmarkImplementation('TypeScript', options.iterations, options.warmup, jsRunner)
+        const goStats = benchmarkImplementation('Go', options.iterations, options.warmup, goRunner)
+
+        let accuracy = null
+        let cleanupSummary = null
+        if (options.command === 'write') {
+            const jsAccuracyClone = createBenchmarkClone(repoRoot, samplesSource, 'accuracy-js')
+            const goAccuracyClone = createBenchmarkClone(repoRoot, samplesSource, 'accuracy-go')
+            benchmarkPaths.push(jsAccuracyClone.cloneRoot, goAccuracyClone.cloneRoot)
+            cleanupTargets.add(jsAccuracyClone.cloneRoot)
+            cleanupTargets.add(goAccuracyClone.cloneRoot)
+            cleanupSummary = jsAccuracyClone.cleanup
+
+            run(jsCLI, buildTypegenArgs('write', jsAccuracyClone.cloneRoot), { cwd: repoRoot })
+            run(goCLI, buildTypegenArgs('write', goAccuracyClone.cloneRoot), { cwd: repoRoot })
+
+            accuracy = compareOutputs(jsAccuracyClone.cloneRoot, goAccuracyClone.cloneRoot)
+
+            if (!options.keepWorkspace) {
+                fs.rmSync(jsAccuracyClone.cloneRoot, { recursive: true, force: true })
+                fs.rmSync(goAccuracyClone.cloneRoot, { recursive: true, force: true })
+                cleanupTargets.delete(jsAccuracyClone.cloneRoot)
+                cleanupTargets.delete(goAccuracyClone.cloneRoot)
+            }
+        }
+
+        const speedup = tsStats.mean / goStats.mean
+        const faster = speedup > 1
+        const timeDeltaPercent = faster
+            ? (1 - goStats.mean / tsStats.mean) * 100
+            : (goStats.mean / tsStats.mean - 1) * 100
+
+        const report = {
+            generatedAt: new Date().toISOString(),
+            repoRoot,
+            workspaceRoot,
+            samplesSource,
+            options,
+            cleanupSummary,
+            benchmarkPaths: options.keepWorkspace ? benchmarkPaths : [],
+            performance: {
+                typeScript: tsStats,
+                go: goStats,
+                speedup,
+                faster,
+                timeDeltaPercent,
+            },
+            accuracy,
+        }
+
+        const reportPath = path.join(workspaceRoot, 'benchmark-report.json')
+        fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
+
+        console.log(`Benchmark command: ${options.command}`)
+        console.log(`Samples source: ${samplesSource}`)
+        if (cleanupSummary) {
+            console.log(
+                `Clean baseline: removed ${cleanupSummary.removedTypeFiles} generated type files and ${cleanupSummary.removedCacheDirs} cache directories per clone`,
+            )
+        }
+        console.log(`Warmup iterations: ${options.warmup}`)
+        console.log(`Measured iterations: ${options.iterations}`)
         console.log('')
         console.log(
-            `Semantic accuracy: ${accuracy.semanticMatches}/${accuracy.totalFiles} (${formatPercent(accuracy.semanticAccuracy)})`,
+            `TypeScript mean: ${formatMs(tsStats.mean)} (median ${formatMs(tsStats.median)}, min ${formatMs(tsStats.min)}, max ${formatMs(tsStats.max)})`,
         )
+        console.log(`TypeScript runs: ${formatRuns(tsStats.timings)}`)
         console.log(
-            `Exact accuracy: ${accuracy.exactMatches}/${accuracy.totalFiles} (${formatPercent(accuracy.exactAccuracy)})`,
+            `Go mean: ${formatMs(goStats.mean)} (median ${formatMs(goStats.median)}, min ${formatMs(goStats.min)}, max ${formatMs(goStats.max)})`,
         )
-        console.log(`TS_ONLY: ${accuracy.tsOnly.length}`)
-        console.log(`GO_ONLY: ${accuracy.goOnly.length}`)
-        console.log(`Semantic diffs: ${accuracy.semanticDiffs.length}`)
-
-        const noteworthy = [
-            ...accuracy.tsOnly.map((file) => `TS_ONLY ${file}`),
-            ...accuracy.goOnly.map((file) => `GO_ONLY ${file}`),
-            ...accuracy.semanticDiffs.map((file) => `DIFF ${file}`),
-        ].slice(0, 10)
-        if (noteworthy.length > 0) {
-            console.log(`Top differences: ${noteworthy.join(', ')}`)
+        console.log(`Go runs: ${formatRuns(goStats.timings)}`)
+        console.log('')
+        if (faster) {
+            console.log(
+                `Go is ${speedup.toFixed(2)}x faster on mean runtime (${timeDeltaPercent.toFixed(1)}% less time).`,
+            )
+        } else {
+            console.log(
+                `Go is ${(1 / speedup).toFixed(2)}x slower on mean runtime (${timeDeltaPercent.toFixed(1)}% more time).`,
+            )
         }
-    }
 
-    console.log(`Benchmark report: ${reportPath}`)
+        if (accuracy) {
+            console.log('')
+            console.log(
+                `Semantic accuracy: ${accuracy.semanticMatches}/${accuracy.totalFiles} (${formatPercent(accuracy.semanticAccuracy)})`,
+            )
+            console.log(
+                `Exact accuracy: ${accuracy.exactMatches}/${accuracy.totalFiles} (${formatPercent(accuracy.exactAccuracy)})`,
+            )
+            console.log(`TS_ONLY: ${accuracy.tsOnly.length}`)
+            console.log(`GO_ONLY: ${accuracy.goOnly.length}`)
+            console.log(`Semantic diffs: ${accuracy.semanticDiffs.length}`)
 
-    if (!options.keepWorkspace) {
-        fs.rmSync(workspaceRoot, { recursive: true, force: true })
-        console.log('Benchmark workspace removed (--cleanup).')
-    } else {
-        console.log(`Benchmark workspace: ${workspaceRoot}`)
+            const noteworthy = [
+                ...accuracy.tsOnly.map((file) => `TS_ONLY ${file}`),
+                ...accuracy.goOnly.map((file) => `GO_ONLY ${file}`),
+                ...accuracy.semanticDiffs.map((file) => `DIFF ${file}`),
+            ].slice(0, 10)
+            if (noteworthy.length > 0) {
+                console.log(`Top differences: ${noteworthy.join(', ')}`)
+            }
+        }
+
+        if (!options.keepWorkspace) {
+            cleanup()
+            console.log('Benchmark workspace removed (--cleanup).')
+        } else {
+            console.log(`Benchmark report: ${reportPath}`)
+            console.log(`Benchmark workspace: ${workspaceRoot}`)
+        }
+    } catch (error) {
+        cleanup()
+        throw error
     }
 }
 
