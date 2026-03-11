@@ -80,6 +80,9 @@
   - existing imports attached by earlier normalization passes are now treated as authoritative so connected/local ownership is not re-resolved onto unrelated package exports
   - source-guided alias preservation now lets the reduced emitter keep richer ownership such as `L1`, `A2`, `D6`, `R6`, `Bla`, `ExportedApi.RandomThing`, `NodeJS.Timeout`, `S7`, and `RandomThing` in `samples/autoImportLogic.ts`, and the emitter now prints namespace/default type imports when ownership depends on them
   - native writer import-path normalization now resolves relative local modules to real files before ignore-path filtering, so external `--types` targets still respect `.kearc` `ignoreImportPaths` entries such as `./donotimport.ts`
+- `samples/githubNamespaceConnectLogic.ts` now uses a checked-in local `githubNamespaceConnectLogicType.ts` like the rest of the sample corpus; stale external import-path rewrite coverage now lives in focused native write tests instead of relying on the shared sample fixture.
+- Source-backed selector recovery now distrusts loose selector `returnTypeString` data when the final tuple function disagrees, and native write rounds now keep `samples/logic.ts` derived selectors such as `capitalizedName` / `upperCaseName` as `string` even after reduced generated `*LogicType` feedback.
+- Reducer/action source recovery now also avoids widening mixed literal unions such as `number | 'new' | null` down to `string`, and native write rounds keep `samples/complexLogic.ts` shorthand `true` actions as `{ value: true }` instead of degrading them to `payload: any`.
 - Reusable `typescript-go` API transport code now lives in [`rewrite/internal/tsgoapi/client.go`](/Users/marius/Projects/Kea/kea-typegen/rewrite/internal/tsgoapi/client.go).
 - Preferred `tsgo` binary discovery now prefers an actually present repo binary, falls back to `tsgo`/`tsgo-upstream` on `PATH`, and reports missing-binary failures explicitly instead of silently defaulting to a dead `poc/.../tsgo-upstream` path.
 
@@ -128,6 +131,9 @@
   - `samples/autoImportLogic.ts` selector recovery for both truncated `sbla` and explicit alias return types such as `randomSpecifiedReturn`
   - `samples/autoImportLogic.ts` native write rounds now keep selector surfaces closer to the TS generator even after reduced generated type feedback, including `EventIndex`, `RandomAPI`, and `Partial<Record<string, S7>>`
   - `samples/autoImportLogic.ts` write-round selector recovery now also preserves the TS generator's inferred-vs-explicit ownership split for `randomDetectedReturn: RandomThing` versus `randomSpecifiedReturn: ExportedApi.RandomThing`
+  - `samples/logic.ts` native write rounds now keep derived selector/value surfaces for `capitalizedName` / `upperCaseName` as `string` instead of collapsing to `any`
+  - `samples/complexLogic.ts` now keeps `selectedActionId: number | 'new' | null` in reducer/selector/value surfaces instead of collapsing to `string`
+  - `samples/complexLogic.ts` native write rounds now keep shorthand `deleteAction` / `hideButtonActions` / `incrementCounter` / `showButtonActions` payloads as `{ value: true }`
   - `samples/githubImportLogic.ts` and `samples/githubImportViaWildcardLogic.ts` imported listener action typing for computed `logic.actionTypes.*` keys
   - `samples/githubImportLogic.ts` and `samples/githubImportViaWildcardLogic.ts` imported selector passthrough plus computed imported listeners now also survive native write rounds with reduced generated type feedback
   - `samples/githubImportLogic.ts` and `samples/githubImportViaWildcardLogic.ts` omission of generic `sharedListeners` entries whose payloads only recover as `any`, keeping `BreakPointFunction` out of the emitted imports
@@ -172,6 +178,11 @@ env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go r
   - `samples/windowValuesLogic.ts`
 - `samples/githubNamespaceConnectLogic.ts` now emits a new `githubNamespaceConnectLogicType.ts` in the Go path. This is progress, not a crash.
 - There are currently no sample files that fail by crashing the Go generator. The remaining work is parity and fidelity, not basic coverage.
+- A second in-repo TS-vs-Go sweep on March 11, 2026 used sibling temp copies under the repo root plus `write -r <temp>/samples --write-paths --delete --no-import` for both implementations:
+  - no `TS_ONLY` or `GO_ONLY` coverage gaps remain in the sample corpus
+  - every generated file still differs textually because formatting, ordering, and omitted `__keaTypeGenInternal*` helpers are still different
+  - the newly fixed `samples/logic.ts` write-round selector drift is no longer a meaningful public-surface gap; its remaining diff is now formatting/internal-helper noise
+  - the highest-signal remaining public gap from the current sweep is `samples/complexLogic.ts`, where reducer/action nullability and `DashboardItemType` payload shaping still diverge semantically
 
 ### Main parity gaps found in the sample sweep
 
@@ -179,6 +190,9 @@ env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go r
   - broader target-expression support and ownership fidelity still need work beyond the current identifier / call / namespace-property / quoted-bracket / default-import / simple assertion-wrapper coverage
   - the remaining gap is no longer basic payload recovery for `routerConnectLogic.ts` or the import-listener samples; it is richer ownership and declaration-source fidelity in more complex connected cases
 - Reducer/default/value normalization is much better across the covered samples, but broader sample-sweep verification is still needed for the remaining object-style and connected edge cases.
+- `samples/complexLogic.ts` still has real public-surface drift in the current sweep:
+  - `inspectForElementWithIndex`, `newAction`, and related action payload nullability still differ from the TS generator
+  - `updateDashboardInsight` still expands away the intended `DashboardItemType` payload owner in the emitted action surface
 - Loader parity is still incomplete:
   - Some loader action signatures still prefer destructured object payloads where the TS generator currently emits a flatter public surface.
 - Import ownership and selector return fidelity are still heuristic in richer files:
@@ -261,4 +275,6 @@ cd /Users/marius/Projects/Kea/kea-typegen/rewrite
 env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go test ./...
 env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go run ./cmd/kea-typegen-go -file ../samples/propsLogic.ts -format typegen
 env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go run ./cmd/kea-typegen-go -file ../samples/builderLogic.ts -format model
+cd /Users/marius/Projects/Kea/kea-typegen
+node ./scripts/benchmark-sample-typegen.js -n 5 -w 1
 ```

@@ -135,6 +135,32 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		}
 	}
 
+	logicTypegen := mustReadFile(t, filepath.Join(tempDir, "logicType.ts"))
+	for _, expected := range []string{
+		"capitalizedName: (state: any, props?: any) => string",
+		"upperCaseName: (state: any, props?: any) => string",
+		"capitalizedName: string",
+		"upperCaseName: string",
+	} {
+		if !strings.Contains(logicTypegen, expected) {
+			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, logicTypegen)
+		}
+	}
+
+	complexTypegen := mustReadFile(t, filepath.Join(tempDir, "complexLogicType.ts"))
+	for _, expected := range []string{
+		"selectedActionId: number | 'new' | null",
+		"selectedActionId: (state: any, props?: any) => number | 'new' | null",
+		"hideButtonActions: ((action: { type: 'hide button actions (complexLogic)'; payload: { value: true } }, previousState: any) => void | Promise<void>)[]",
+	} {
+		if !strings.Contains(complexTypegen, expected) {
+			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, complexTypegen)
+		}
+	}
+	if strings.Contains(complexTypegen, "selectedActionId: string") {
+		t.Fatalf("expected reduced write round output to avoid widened selectedActionId: string:\n%s", complexTypegen)
+	}
+
 	loadersTypegen := mustReadFile(t, filepath.Join(tempDir, "loadersLogicType.ts"))
 	for _, expected := range []string{
 		"loadItSuccess: (misc: { id: number; name: void; pinned: boolean; }, payload?: any) => void",
@@ -150,6 +176,17 @@ func TestRunTypegenRoundsRewritesStaleLogicTypeImports(t *testing.T) {
 	root := repoRoot(t)
 	tempDir := t.TempDir()
 	copyDir(t, filepath.Join(root, "samples"), tempDir)
+	sourcePath := filepath.Join(tempDir, "githubNamespaceConnectLogic.ts")
+	source := mustReadFile(t, sourcePath)
+	source = strings.Replace(
+		source,
+		"import type { githubNamespaceConnectLogicType } from './githubNamespaceConnectLogicType'",
+		"import type { githubNamespaceConnectLogicType } from '../../../../../../tmp/kea-ts-types/githubNamespaceConnectLogicType'",
+		1,
+	)
+	if err := os.WriteFile(sourcePath, []byte(source), 0o644); err != nil {
+		t.Fatalf("os.WriteFile githubNamespaceConnectLogic.ts: %v", err)
+	}
 
 	_, err := runTypegenRounds(context.Background(), AppOptions{
 		BinaryPath:      tsgoapi.PreferredBinary(root),

@@ -983,6 +983,47 @@ func TestBuildParsedLogicsLoadersSample(t *testing.T) {
 	}
 }
 
+func TestBuildParsedLogicsLogicSampleRecoversDerivedSelectorReturnTypes(t *testing.T) {
+	report := inspectSampleReport(t, "logic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	for _, expected := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "capitalizedName", typ: "string"},
+		{name: "upperCaseName", typ: "string"},
+		{name: "randomSelector", typ: "Record<string, any>"},
+		{name: "longSelector", typ: "false"},
+	} {
+		if selector, ok := findParsedField(logic.Selectors, expected.name); !ok || selector.Type != expected.typ {
+			t.Fatalf("expected selector %s: %s, got %+v", expected.name, expected.typ, logic.Selectors)
+		}
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"capitalizedName: (state: any, props?: any) => string",
+		"upperCaseName: (state: any, props?: any) => string",
+		"randomSelector: (state: any, props?: any) => Record<string, any>",
+		"longSelector: (state: any, props?: any) => false",
+		"capitalizedName: string",
+		"upperCaseName: string",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
 func TestBuildParsedLogicsWindowValuesSample(t *testing.T) {
 	report := inspectSampleReport(t, "windowValuesLogic.ts")
 
@@ -1610,6 +1651,44 @@ func TestBuildParsedLogicsNormalizesBooleanActionShorthands(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestBuildParsedLogicsComplexSamplePreservesReducerUnionState(t *testing.T) {
+	report := inspectSampleReport(t, "complexLogic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	logic := logics[0]
+
+	for _, expected := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "selectedActionId", typ: "number | 'new' | null"},
+		{name: "newActionForElement", typ: "HTMLElement | null"},
+		{name: "inspectingElement", typ: "number | null"},
+	} {
+		if field, ok := findParsedField(logic.Reducers, expected.name); !ok || field.Type != expected.typ {
+			t.Fatalf("expected reducer %s: %s, got %+v", expected.name, expected.typ, logic.Reducers)
+		}
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"selectedActionId: number | 'new' | null",
+		"selectedActionId: (state: any, props?: any) => number | 'new' | null",
+		"newActionForElement: HTMLElement | null",
+		"inspectingElement: number | null",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+	if strings.Contains(rendered, "selectedActionId: string") {
+		t.Fatalf("expected emitted output to avoid widened selectedActionId: string:\n%s", rendered)
 	}
 }
 

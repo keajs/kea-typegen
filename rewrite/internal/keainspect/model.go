@@ -254,6 +254,16 @@ func parseActionsWithSource(section SectionReport, source string, property Sourc
 	sourceMembers := sectionSourceProperties(source, property)
 	actions := make([]ParsedAction, 0, len(section.Members))
 	for _, member := range section.Members {
+		if nested, ok := sourceMembers[member.Name]; ok {
+			if strings.TrimSpace(sourcePropertyText(source, nested)) == "true" {
+				actions = append(actions, ParsedAction{
+					Name:         member.Name,
+					FunctionType: "() => { value: true }",
+					PayloadType:  "{ value: true }",
+				})
+				continue
+			}
+		}
 		functionType := strings.TrimSpace(preferredMemberTypeText(member))
 		if functionType == "" {
 			continue
@@ -1215,25 +1225,34 @@ func parseSelectorsWithSource(
 	for _, name := range orderedNames {
 		member, hasMember := memberByName[name]
 		selectorType := ""
+		parsedMemberReturnType := ""
+		if hasMember {
+			if returnType, ok := parseSelectorReturnType(member.TypeString); ok && !isAnyLikeType(returnType) {
+				parsedMemberReturnType = returnType
+			}
+		}
 		if nested, ok := sourceMembers[name]; ok {
 			if explicitReturn := sourceSelectorReturnType(sourcePropertyText(source, nested)); explicitReturn != "" {
 				selectorType = explicitReturn
 			}
 		}
 		if selectorType == "" && hasMember {
-			if returnType := strings.TrimSpace(preferredMemberReturnTypeText(member)); returnType != "" && !strings.Contains(returnType, "...") && !isAnyLikeType(returnType) {
+			if returnType := strings.TrimSpace(preferredMemberReturnTypeText(member)); returnType != "" && !strings.Contains(returnType, "...") && !isAnyLikeType(returnType) && !selectorReturnTypeConflicts(returnType, parsedMemberReturnType) {
 				selectorType = returnType
 			}
 		}
-		if selectorType == "" && hasMember {
-			if returnType, ok := parseSelectorReturnType(member.TypeString); ok && !isAnyLikeType(returnType) {
-				selectorType = returnType
-			}
+		if selectorType == "" && parsedMemberReturnType != "" {
+			selectorType = parsedMemberReturnType
 		}
 		if selectorTypeNeedsSourceRecovery(selectorType) && source != "" {
 			if nested, ok := sourceMembers[name]; ok {
 				if inferred := sourceSelectorInferredType(logic, source, file, sourcePropertyText(source, nested), state); inferred != "" {
 					selectorType = inferred
+				}
+				if selectorTypeNeedsSourceRecovery(selectorType) {
+					if probed := sourceSelectorReturnTypeFromTypeProbe(source, file, nested, state); probed != "" {
+						selectorType = normalizeRecoveredSelectorType(source, file, probed)
+					}
 				}
 			}
 		}
@@ -1405,10 +1424,16 @@ func sourceReducerLiteralStateType(expression string) string {
 }
 
 func sourceWidenReducerStateTypeFromHandlers(stateType, expression string) string {
-	stateType = widenLiteralReducerStateType(stateType)
-	if stateType == "" {
+	originalStateType := normalizeInferredTypeText(strings.TrimSpace(stateType))
+	switch {
+	case originalStateType == "":
 		return ""
+	case originalStateType == "boolean":
+		return "boolean"
+	case !isBooleanLiteralType(originalStateType) && !isQuotedString(originalStateType) && !isNumericLiteralType(originalStateType):
+		return originalStateType
 	}
+	stateType = widenLiteralReducerStateType(originalStateType)
 
 	objectStart, objectEnd, ok, err := FindInspectableObjectLiteral(expression, 0, len(expression))
 	if err != nil || !ok {
@@ -1417,10 +1442,6 @@ func sourceWidenReducerStateTypeFromHandlers(stateType, expression string) strin
 	properties, err := parseTopLevelProperties(expression, objectStart, objectEnd)
 	if err != nil {
 		return stateType
-	}
-
-	if stateType == "boolean" {
-		return "boolean"
 	}
 
 	for _, nested := range properties {
@@ -1822,6 +1843,12 @@ func sourceReturnExpressionType(source, body string, blockBody bool, parameterNa
 		}
 		return normalizeInferredTypeText(dependencyType)
 	}
+	if derivedType := sourceCommonReturnExpressionType(expression); derivedType != "" {
+		if async {
+			return promiseTypeText(derivedType)
+		}
+		return derivedType
+	}
 
 	if inferred := sourceExpressionTypeText(source, expression); inferred != "" {
 		inferred = normalizeInferredTypeText(inferred)
@@ -1831,6 +1858,34 @@ func sourceReturnExpressionType(source, body string, blockBody bool, parameterNa
 		return inferred
 	}
 
+	return ""
+}
+
+func sourceCommonReturnExpressionType(expression string) string {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	if text == "" {
+		return ""
+	}
+	for _, marker := range []string{
+		".join(",
+		".toUpperCase(",
+		".toLowerCase(",
+		".trim(",
+		".charAt(",
+		".slice(",
+		".substring(",
+		".replace(",
+		".padStart(",
+		".padEnd(",
+		".repeat(",
+		".normalize(",
+		".concat(",
+		".toString(",
+	} {
+		if strings.Contains(text, marker) {
+			return "string"
+		}
+	}
 	return ""
 }
 
@@ -3524,6 +3579,15 @@ func selectorTypeNeedsSourceRecovery(typeText string) bool {
 	}
 }
 
+func selectorReturnTypeConflicts(reported, parsed string) bool {
+	reported = normalizeInferredTypeText(strings.TrimSpace(reported))
+	parsed = normalizeInferredTypeText(strings.TrimSpace(parsed))
+	if reported == "" || parsed == "" {
+		return false
+	}
+	return reported != parsed
+}
+
 func parseObjectTypeMembers(typeText string) (map[string]string, bool) {
 	text := strings.TrimSpace(typeText)
 	if !strings.HasPrefix(text, "{") || !strings.HasSuffix(text, "}") {
@@ -3904,6 +3968,24 @@ func shouldProbeSourceArrowReturnType(returnType, explicitReturn string) bool {
 }
 
 func sourceArrowReturnTypeFromTypeProbe(source, file string, property SourceProperty, state *buildState) string {
+	return sourceArrowReturnTypeFromTypeProbeRange(source, file, property, property.ValueStart, property.ValueEnd, state)
+}
+
+func sourceSelectorReturnTypeFromTypeProbe(source, file string, property SourceProperty, state *buildState) string {
+	start := property.ValueStart
+	end := property.ValueEnd
+	probeProperty := property
+	if lastStart, lastEnd, ok, err := FindLastTopLevelArrayElement(source, property.ValueStart, property.ValueEnd); err == nil && ok {
+		start = lastStart
+		end = lastEnd
+		probeProperty.NameStart = lastStart
+		probeProperty.ValueStart = lastStart
+		probeProperty.ValueEnd = lastEnd
+	}
+	return sourceArrowReturnTypeFromTypeProbeRange(source, file, probeProperty, start, end, state)
+}
+
+func sourceArrowReturnTypeFromTypeProbeRange(source, file string, property SourceProperty, valueStart, valueEnd int, state *buildState) string {
 	if state == nil || file == "" {
 		return ""
 	}
@@ -3915,22 +3997,25 @@ func sourceArrowReturnTypeFromTypeProbe(source, file string, property SourceProp
 		return ""
 	}
 
-	if typeText := sourceArrowReturnTypeFromSignatureProbe(file, property, projectID, state); typeText != "" {
-		return typeText
+	var fallback string
+	if typeText := normalizeSourceTypeText(sourceArrowReturnTypeFromSignatureProbe(file, property, projectID, state)); typeText != "" {
+		if !isAnyLikeType(typeText) && !typeTextContainsStandaloneToken(typeText, "any") && !typeTextContainsStandaloneToken(typeText, "unknown") {
+			return typeText
+		}
+		fallback = typeText
 	}
 
-	probePosition, ok, err := FindArrowFunctionReturnProbe(source, property.ValueStart, property.ValueEnd)
+	probePosition, ok, err := FindArrowFunctionReturnProbe(source, valueStart, valueEnd)
 	if err != nil || !ok {
 		return ""
 	}
 
-	probeEnd, err := findPropertyEnd(source, probePosition, property.ValueEnd)
+	probeEnd, err := findPropertyEnd(source, probePosition, valueEnd)
 	if err != nil {
-		probeEnd = property.ValueEnd
+		probeEnd = valueEnd
 	}
 	probeEnd = trimExpressionEnd(source, probeEnd)
 
-	var fallback string
 	for _, position := range selectorTypeProbePositions(source, probePosition, probeEnd) {
 		typeText := normalizeSourceTypeText(typeAtPositionString(
 			context.Background(),
