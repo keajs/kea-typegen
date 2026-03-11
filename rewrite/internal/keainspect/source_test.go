@@ -102,6 +102,124 @@ export const builderLogic = kea([
 	}
 }
 
+func TestFindLogicsBuilderArrayCanonicalizesAliasedImports(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path as logicPath, actions as logicActions, reducers as logicReducers } from 'kea'",
+		"",
+		"export const builderLogic = kea([",
+		"    logicPath(['builderLogic']),",
+		"    logicActions({}),",
+		"    logicReducers({",
+		"        username: ['x', {}],",
+		"    }),",
+		"])",
+		"",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+
+	gotNames := []string{}
+	for _, property := range logics[0].Properties {
+		gotNames = append(gotNames, property.Name)
+	}
+	expectedNames := []string{"path", "actions", "reducers"}
+	if len(gotNames) != len(expectedNames) {
+		t.Fatalf("expected %d builders, got %d (%v)", len(expectedNames), len(gotNames), gotNames)
+	}
+	for index, expected := range expectedNames {
+		if gotNames[index] != expected {
+			t.Fatalf("expected builder %d to be %q, got %q", index, expected, gotNames[index])
+		}
+	}
+}
+
+func TestFindLogicsBuilderArrayCanonicalizesNamespaceQualifiedBuilders(t *testing.T) {
+	source := strings.Join([]string{
+		"import * as keaBuilders from 'kea'",
+		"import * as loaderBuilders from 'kea-loaders'",
+		"",
+		"export const builderLogic = keaBuilders.kea([",
+		"    keaBuilders.path(['builderLogic']),",
+		"    keaBuilders.actions({}),",
+		"    loaderBuilders.loaders(({}) => ({",
+		"        name: ['', { loadName: async () => 'test' }],",
+		"    })),",
+		"])",
+		"",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+	if logics[0].InputKind != "builders" {
+		t.Fatalf("expected input kind %q, got %q", "builders", logics[0].InputKind)
+	}
+
+	gotNames := []string{}
+	for _, property := range logics[0].Properties {
+		gotNames = append(gotNames, property.Name)
+	}
+	expectedNames := []string{"path", "actions", "loaders"}
+	if len(gotNames) != len(expectedNames) {
+		t.Fatalf("expected %d builders, got %d (%v)", len(expectedNames), len(gotNames), gotNames)
+	}
+	for index, expected := range expectedNames {
+		if gotNames[index] != expected {
+			t.Fatalf("expected builder %d to be %q, got %q", index, expected, gotNames[index])
+		}
+	}
+}
+
+func TestFindLogicsObjectLiteralSupportsQuotedAndComputedKeys(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"export const quotedLogic = kea({",
+		"    'path': ['quotedLogic'],",
+		"    [\"actions\"]: {},",
+		"    [`reducers`]: {",
+		"        count: [0, {}],",
+		"    },",
+		"})",
+		"",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+	if logics[0].InputKind != "object" {
+		t.Fatalf("expected input kind %q, got %q", "object", logics[0].InputKind)
+	}
+
+	gotNames := []string{}
+	for _, property := range logics[0].Properties {
+		gotNames = append(gotNames, property.Name)
+	}
+	expectedNames := []string{"path", "actions", "reducers"}
+	if len(gotNames) != len(expectedNames) {
+		t.Fatalf("expected %d properties, got %d (%v)", len(expectedNames), len(gotNames), gotNames)
+	}
+	for index, expected := range expectedNames {
+		if gotNames[index] != expected {
+			t.Fatalf("expected property %d to be %q, got %q", index, expected, gotNames[index])
+		}
+	}
+}
+
 func TestFindInspectableObjectLiteral(t *testing.T) {
 	source := `
 listeners(({ actions }) => ({

@@ -24,6 +24,23 @@ func TestPreferredBinaryPrefersExistingCandidate(t *testing.T) {
 	}
 }
 
+func TestPreferredBinaryPrefersRepoLocalInstall(t *testing.T) {
+	t.Setenv("PATH", "")
+
+	repoRoot := t.TempDir()
+	expected := filepath.Join(repoRoot, ".tsgo", "node_modules", ".bin", "tsgo")
+	if err := os.MkdirAll(filepath.Dir(expected), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(expected, []byte(""), 0o755); err != nil {
+		t.Fatalf("os.WriteFile: %v", err)
+	}
+
+	if got := PreferredBinary(repoRoot); got != expected {
+		t.Fatalf("PreferredBinary() = %q, want %q", got, expected)
+	}
+}
+
 func TestPreferredBinaryFallsBackToPath(t *testing.T) {
 	repoRoot := t.TempDir()
 	binDir := filepath.Join(t.TempDir(), "bin")

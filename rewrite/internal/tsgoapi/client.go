@@ -116,6 +116,8 @@ func PreferredBinary(repoRoot string) string {
 
 func candidateBinaries(repoRoot string) []string {
 	return []string{
+		filepath.Join(repoRoot, ".tsgo", "node_modules", ".bin", "tsgo"),
+		filepath.Join(repoRoot, "node_modules", ".bin", "tsgo"),
 		filepath.Join(repoRoot, "poc", "tsgo-lsp", "bin", "tsgo-upstream"),
 		filepath.Join(repoRoot, "poc", "tsgo-api", "bin", "tsgo-upstream"),
 		filepath.Join(repoRoot, "poc", "tsgo-lsp", "node_modules", ".bin", "tsgo"),

@@ -107,7 +107,11 @@ func parseTopLevelProperties(source string, objectStart, objectEnd int) ([]Sourc
 			i = end
 			continue
 		}
-		if !isIdentifierStart(source[i]) {
+		name, nameStart, next, ok, err := parseTopLevelPropertyName(source, i, objectEnd)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			end, err := findPropertyEnd(source, i, objectEnd)
 			if err != nil {
 				return nil, err
@@ -116,12 +120,7 @@ func parseTopLevelProperties(source string, objectStart, objectEnd int) ([]Sourc
 			continue
 		}
 
-		nameStart := i
-		for i < objectEnd && isIdentifierPart(source[i]) {
-			i++
-		}
-		name := source[nameStart:i]
-		i = skipTrivia(source, i)
+		i = skipTrivia(source, next)
 		if i >= objectEnd || source[i] != ':' {
 			end, err := findPropertyEnd(source, i, objectEnd)
 			if err != nil {
@@ -149,6 +148,8 @@ func parseTopLevelProperties(source string, objectStart, objectEnd int) ([]Sourc
 
 func parseTopLevelBuilderCalls(source string, arrayStart, arrayEnd int) ([]SourceProperty, error) {
 	var properties []SourceProperty
+	imports := parseNamedValueImports(source)
+	namespaceImports := parseNamespaceValueImports(source)
 	i := arrayStart + 1
 	for i < arrayEnd {
 		i = skipTrivia(source, i)
@@ -159,7 +160,9 @@ func parseTopLevelBuilderCalls(source string, arrayStart, arrayEnd int) ([]Sourc
 			i++
 			continue
 		}
-		if !isIdentifierStart(source[i]) {
+
+		name, nameStart, calleeEnd, ok := parseBuilderCallName(source, i, arrayEnd, imports, namespaceImports)
+		if !ok {
 			end, err := findPropertyEnd(source, i, arrayEnd)
 			if err != nil {
 				return nil, err
@@ -168,12 +171,7 @@ func parseTopLevelBuilderCalls(source string, arrayStart, arrayEnd int) ([]Sourc
 			continue
 		}
 
-		nameStart := i
-		for i < arrayEnd && isIdentifierPart(source[i]) {
-			i++
-		}
-		name := source[nameStart:i]
-		i = skipTrivia(source, i)
+		i = skipTrivia(source, calleeEnd)
 		if i >= arrayEnd || source[i] != '(' {
 			end, err := findPropertyEnd(source, i, arrayEnd)
 			if err != nil {
@@ -197,6 +195,151 @@ func parseTopLevelBuilderCalls(source string, arrayStart, arrayEnd int) ([]Sourc
 		i = valueEnd
 	}
 	return properties, nil
+}
+
+func parseBuilderCallName(
+	source string,
+	start int,
+	limit int,
+	imports map[string]importedValueCandidate,
+	namespaceImports map[string]string,
+) (string, int, int, bool) {
+	segments, starts, end, ok := parseMemberExpressionSegments(source, start, limit)
+	if !ok || len(segments) == 0 || len(starts) != len(segments) {
+		return "", 0, start, false
+	}
+
+	if len(segments) == 1 {
+		return canonicalBuilderCallName(segments[0], imports), starts[0], end, true
+	}
+
+	if len(segments) == 2 {
+		if importPath, ok := namespaceImports[segments[0]]; ok {
+			if canonical, ok := canonicalNamespaceBuilderCallName(importPath, segments[1]); ok {
+				return canonical, starts[1], end, true
+			}
+		}
+	}
+
+	return "", 0, start, false
+}
+
+func parseMemberExpressionSegments(source string, start, limit int) ([]string, []int, int, bool) {
+	if start >= limit || !isIdentifierStart(source[start]) {
+		return nil, nil, start, false
+	}
+
+	segments := []string{}
+	starts := []int{}
+	i := start
+	for {
+		segmentStart := i
+		i++
+		for i < limit && isIdentifierPart(source[i]) {
+			i++
+		}
+		segments = append(segments, source[segmentStart:i])
+		starts = append(starts, segmentStart)
+
+		next := skipTrivia(source, i)
+		if next >= limit || source[next] != '.' {
+			return segments, starts, i, true
+		}
+		next = skipTrivia(source, next+1)
+		if next >= limit || !isIdentifierStart(source[next]) {
+			return nil, nil, start, false
+		}
+		i = next
+	}
+}
+
+func parseTopLevelPropertyName(source string, start, limit int) (string, int, int, bool, error) {
+	if start >= limit {
+		return "", 0, start, false, nil
+	}
+
+	switch {
+	case isIdentifierStart(source[start]):
+		end := start + 1
+		for end < limit && isIdentifierPart(source[end]) {
+			end++
+		}
+		return source[start:end], start, end, true, nil
+	case isQuote(source[start]):
+		return parseQuotedPropertyName(source, start)
+	case source[start] == '[':
+		return parseComputedQuotedPropertyName(source, start, limit)
+	default:
+		return "", 0, start, false, nil
+	}
+}
+
+func parseQuotedPropertyName(source string, start int) (string, int, int, bool, error) {
+	end, err := quotedPropertyEnd(source, start)
+	if err != nil {
+		return "", 0, start, false, err
+	}
+	raw := source[start : end+1]
+	if strings.Contains(raw, "${") {
+		return "", 0, end + 1, false, nil
+	}
+	name := source[start+1 : end]
+	return name, start + 1, end + 1, true, nil
+}
+
+func parseComputedQuotedPropertyName(source string, start, limit int) (string, int, int, bool, error) {
+	nameStart := skipTrivia(source, start+1)
+	name, parsedStart, next, ok, err := parseQuotedPropertyName(source, nameStart)
+	if err != nil || !ok {
+		return "", 0, start, ok, err
+	}
+	afterName := skipTrivia(source, next)
+	if afterName >= limit || source[afterName] != ']' {
+		return "", 0, start, false, nil
+	}
+	return name, parsedStart, afterName + 1, true, nil
+}
+
+func quotedPropertyEnd(source string, start int) (int, error) {
+	switch source[start] {
+	case '\'', '"':
+		return skipQuoted(source, start, source[start])
+	case '`':
+		return skipTemplate(source, start)
+	default:
+		return 0, fmt.Errorf("unsupported property quote %q", source[start])
+	}
+}
+
+var supportedBuilderCallImports = func() map[string]map[string]bool {
+	result := map[string]map[string]bool{}
+	for _, spec := range supportedBuilderProperties {
+		if result[spec.ImportedName] == nil {
+			result[spec.ImportedName] = map[string]bool{}
+		}
+		result[spec.ImportedName][spec.ImportPath] = true
+	}
+	return result
+}()
+
+func canonicalBuilderCallName(localName string, imports map[string]importedValueCandidate) string {
+	candidate, ok := imports[localName]
+	if !ok {
+		return localName
+	}
+	paths, ok := supportedBuilderCallImports[candidate.ImportedName]
+	if !ok || !paths[candidate.Path] {
+		return localName
+	}
+	return candidate.ImportedName
+}
+
+func canonicalNamespaceBuilderCallName(importPath, memberName string) (string, bool) {
+	paths, ok := supportedBuilderCallImports[memberName]
+	if !ok || !paths[importPath] {
+		return "", false
+	}
+	return memberName, true
 }
 
 func FindInspectableObjectLiteral(source string, valueStart, valueEnd int) (int, int, bool, error) {
@@ -773,4 +916,8 @@ func isIdentifierStart(ch byte) bool {
 
 func isIdentifierPart(ch byte) bool {
 	return isIdentifierStart(ch) || (ch >= '0' && ch <= '9')
+}
+
+func isQuote(ch byte) bool {
+	return ch == '\'' || ch == '"' || ch == '`'
 }

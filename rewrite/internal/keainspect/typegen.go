@@ -116,6 +116,8 @@ type namedImportDecl struct {
 	SpecifiersText string
 	Path           string
 	ResolvedPath   string
+	DefaultImport  string
+	IsTypeOnly     bool
 }
 
 type logicImportState struct {
@@ -320,10 +322,6 @@ func ResolveAppOptions(options AppOptions, setFlags map[string]bool, cwd string)
 }
 
 func RunTypegen(ctx context.Context, options AppOptions) error {
-	if options.ConvertToBuilders {
-		return fmt.Errorf("--convert-to-builders is not implemented in kea-typegen-go yet")
-	}
-
 	if options.TsConfigPath == "" && options.SourceFilePath == "" {
 		return fmt.Errorf("no tsconfig.json found and no source file specified")
 	}
@@ -515,11 +513,35 @@ func writeTypegenFiles(files []parsedFile, compilerTypes []string, options AppOp
 				options.Log(fmt.Sprintf("❌ Will not write %d logic path%s", plan.PathCount, pluralSuffix(plan.PathCount)))
 			}
 		}
+		convertCount := 0
+		if options.ConvertToBuilders {
+			convertCount = countConvertibleLogics(file.SourceLogics)
+			if convertCount > 0 {
+				if options.Write && !options.NoImport {
+					summary.FilesToModify += convertCount
+				} else {
+					options.Log(fmt.Sprintf("❌ Will not convert %d logic%s to builders", convertCount, pluralSuffix(convertCount)))
+				}
+			}
+		}
 
-		if (plan.ImportCount > 0 || plan.PathCount > 0) && options.Write && !options.NoImport {
-			updatedSource, err := applySourceEditPlan(plan)
-			if err != nil {
-				return summary, err
+		if (plan.ImportCount > 0 || plan.PathCount > 0 || convertCount > 0) && options.Write && !options.NoImport {
+			updatedSource := file.Source
+			if plan.ImportCount > 0 || plan.PathCount > 0 {
+				updatedSource, err = applySourceEditPlan(plan)
+				if err != nil {
+					return summary, err
+				}
+			}
+			if convertCount > 0 {
+				var warnings []string
+				updatedSource, _, warnings, err = convertFileToBuilders(updatedSource, file, options)
+				if err != nil {
+					return summary, err
+				}
+				for _, warning := range warnings {
+					options.Log(warning)
+				}
 			}
 			if err := os.WriteFile(file.File, []byte(updatedSource), 0o644); err != nil {
 				return summary, err
@@ -529,6 +551,9 @@ func writeTypegenFiles(files []parsedFile, compilerTypes []string, options AppOp
 			}
 			if plan.PathCount > 0 {
 				options.Log(fmt.Sprintf("🔥 Path added: %s", relativeToWorkingDir(options, file.File)))
+			}
+			if convertCount > 0 {
+				options.Log(fmt.Sprintf("🔥 Converted to builders: %s", relativeToWorkingDir(options, file.File)))
 			}
 		}
 	}
@@ -682,7 +707,7 @@ func analyzeTypeImportNeeds(file parsedFile) ([]logicImportState, []namedImportD
 		}
 		if typeName == logic.TypeName {
 			for _, decl := range decls {
-				if decl.ResolvedPath != typeImportAbs {
+				if !typeImportDeclMatches(decl, typeImportAbs, typeImportPath) {
 					continue
 				}
 				specifiers := parseImportSpecifiers(decl.SpecifiersText, decl.Path)
@@ -710,7 +735,7 @@ func buildTypeImportEdits(file parsedFile, decls []namedImportDecl, states []log
 	var importEdits []textEdit
 	replacedImport := false
 	for _, decl := range decls {
-		if decl.ResolvedPath == typeImportAbs {
+		if typeImportDeclMatches(decl, typeImportAbs, typeImportPath) {
 			importEdits = append(importEdits, textEdit{Start: decl.Start, End: decl.End, Replacement: importLine})
 			replacedImport = true
 			break
@@ -784,6 +809,9 @@ func buildPathEdits(file parsedFile) ([]textEdit, int, error) {
 				pathEdits[index].Replacement = strings.ReplaceAll(edit.Replacement, "path(", alias+"(")
 			}
 		}
+		if strings.Contains(alias, ".") {
+			return pathEdits, pathCount, nil
+		}
 		if importDecl.Start != 0 || importDecl.End != 0 {
 			return pathEdits, pathCount, nil
 		}
@@ -815,7 +843,7 @@ func buildPathEdits(file parsedFile) ([]textEdit, int, error) {
 		pathEdits = append(pathEdits, textEdit{
 			Start:       decl.Start,
 			End:         decl.End,
-			Replacement: fmt.Sprintf("import { %s } from 'kea'", strings.Join(specifierList, ", ")),
+			Replacement: replacementForImportDecl(file.Source, decl, specifierList),
 		})
 		return pathEdits, pathCount, nil
 	}
@@ -1290,6 +1318,16 @@ func pathImportAliasAndDecl(source, file string) (string, namedImportDecl, bool)
 		}
 		return "logicPath", namedImportDecl{}, true
 	}
+	namespaceAliases := make([]string, 0)
+	for alias, importPath := range parseNamespaceValueImports(source) {
+		if importPath == "kea" {
+			namespaceAliases = append(namespaceAliases, alias)
+		}
+	}
+	sort.Strings(namespaceAliases)
+	if len(namespaceAliases) > 0 {
+		return namespaceAliases[0] + ".path", namedImportDecl{}, true
+	}
 	return "", namedImportDecl{}, false
 }
 
@@ -1323,29 +1361,54 @@ func splitImportSpecifierList(text string) []string {
 }
 
 func findNamedImportDecls(source, file string) []namedImportDecl {
-	matches := importClausePattern.FindAllStringSubmatchIndex(source, -1)
-	decls := make([]namedImportDecl, 0, len(matches))
-	for _, match := range matches {
+	decls := make([]namedImportDecl, 0)
+	for _, match := range importClausePattern.FindAllStringSubmatchIndex(source, -1) {
 		if len(match) < 6 {
 			continue
 		}
-		pathText := source[match[4]:match[5]]
-		resolved := pathText
-		if strings.HasPrefix(pathText, ".") {
-			resolvedFile, ok := resolveLocalImportFile(file, pathText)
-			if ok {
-				resolved = resolvedFile
-			}
-		}
-		decls = append(decls, namedImportDecl{
-			Start:          match[0],
-			End:            extendImportMatchEnd(source, match[1]),
-			SpecifiersText: source[match[2]:match[3]],
-			Path:           pathText,
-			ResolvedPath:   filepath.Clean(resolved),
-		})
+		decls = append(decls, buildNamedImportDecl(source, file, match[0], match[1], match[2], match[3], match[4], match[5], ""))
 	}
+	for _, match := range importDefaultNamedPattern.FindAllStringSubmatchIndex(source, -1) {
+		if len(match) < 8 {
+			continue
+		}
+		decls = append(decls, buildNamedImportDecl(source, file, match[0], match[1], match[4], match[5], match[6], match[7], source[match[2]:match[3]]))
+	}
+	for _, match := range importDefaultPattern.FindAllStringSubmatchIndex(source, -1) {
+		if len(match) < 6 {
+			continue
+		}
+		decls = append(decls, buildNamedImportDecl(source, file, match[0], match[1], -1, -1, match[4], match[5], source[match[2]:match[3]]))
+	}
+	sort.Slice(decls, func(i, j int) bool {
+		return decls[i].Start < decls[j].Start
+	})
 	return decls
+}
+
+func buildNamedImportDecl(source, file string, start, end, specStart, specEnd, pathStart, pathEnd int, defaultImport string) namedImportDecl {
+	pathText := source[pathStart:pathEnd]
+	resolved := pathText
+	if strings.HasPrefix(pathText, ".") {
+		resolvedFile, ok := resolveLocalImportFile(file, pathText)
+		if ok {
+			resolved = resolvedFile
+		}
+	}
+	rawDecl := source[start:end]
+	specifiersText := ""
+	if specStart >= 0 && specEnd >= specStart {
+		specifiersText = source[specStart:specEnd]
+	}
+	return namedImportDecl{
+		Start:          start,
+		End:            extendImportMatchEnd(source, end),
+		SpecifiersText: specifiersText,
+		Path:           pathText,
+		ResolvedPath:   filepath.Clean(resolved),
+		DefaultImport:  strings.TrimSpace(defaultImport),
+		IsTypeOnly:     strings.Contains(rawDecl, "import type"),
+	}
 }
 
 func extendImportMatchEnd(source string, end int) int {
@@ -1359,6 +1422,18 @@ func extendImportMatchEnd(source string, end int) int {
 		end++
 	}
 	return end
+}
+
+func typeImportDeclMatches(decl namedImportDecl, typeImportAbs, typeImportPath string) bool {
+	if decl.ResolvedPath == typeImportAbs {
+		return true
+	}
+	declPath := filepath.ToSlash(strings.TrimSpace(decl.Path))
+	expectedPath := filepath.ToSlash(strings.TrimSpace(typeImportPath))
+	if declPath == expectedPath {
+		return true
+	}
+	return strings.TrimSuffix(declPath, ".ts") == expectedPath
 }
 
 func keaTypeArgumentSpan(source string, logic SourceLogic) (int, int, string, bool, error) {

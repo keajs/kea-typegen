@@ -1,6 +1,7 @@
 node_modules
 .idea
 dist/
+.tsgo/
 .yalc
 form-plugin/lib/tsconfig.tsbuildinfo
 form-plugin/lib/**/*.map
