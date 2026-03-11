@@ -3,9 +3,10 @@
 ## Target
 
 - The working goal is now: both the Go rewrite and the existing TypeScript implementation should be able to generate types for every logic-bearing file under `samples/`.
+- The concrete acceptance check is now `./bin/benchmark -c write -n 1 -w 1`, and the target is `16/16` semantic matches in that benchmark.
 - Byte-for-byte output equality is not required. The target is semantic parity, with emitted TypeScript ASTs staying as close as practical between the Go and TS versions.
-- `__keaTypeGenInternal*` helper fields are not a parity requirement going forward. If the Go emitter can avoid them while still matching the user-visible/public type surface, that is acceptable.
-- Plugin parity is explicitly a last-step concern. First get all non-plugin samples generating the right public type shapes; only then spend time on generalized plugin/typegen-hook parity.
+- `__keaTypeGenInternal*` helper fields are part of that parity target again. They matter for selector/reducer helper fidelity and are now counted by the in-repo semantic benchmark.
+- Plugin parity is not deferred when the current TypeScript generator emits plugin-produced public or internal fields in the sample corpus. If a sampled plugin shape affects benchmark parity, it is in scope.
 
 ## Current state
 
@@ -68,6 +69,8 @@
   - `values`
   - `_isKea`
   - `_isKeaWithKey`
+  - `__keaTypeGenInternalSelectorTypes`
+  - `__keaTypeGenInternalReducerActions`
   - `__keaTypeGenInternalExtraInput`
 - Public reducer-state normalization now widens boolean-literal tuple reducers such as `isLoading: [false, { ...true/false handlers... }]` to `boolean` in the emitted public surface.
 - The aggregate `selector` field now mirrors the TS generator's public shape more closely by exposing reducer-backed state only, while derived selectors remain under `selectors` and `values`.
@@ -83,6 +86,9 @@
 - `samples/githubNamespaceConnectLogic.ts` now uses a checked-in local `githubNamespaceConnectLogicType.ts` like the rest of the sample corpus; stale external import-path rewrite coverage now lives in focused native write tests instead of relying on the shared sample fixture.
 - Source-backed selector recovery now distrusts loose selector `returnTypeString` data when the final tuple function disagrees, and native write rounds now keep `samples/logic.ts` derived selectors such as `capitalizedName` / `upperCaseName` as `string` even after reduced generated `*LogicType` feedback.
 - Reducer/action source recovery now also avoids widening mixed literal unions such as `number | 'new' | null` down to `string`, and native write rounds keep `samples/complexLogic.ts` shorthand `true` actions as `{ value: true }` instead of degrading them to `payload: any`.
+- Internal selector helper recovery now uses selector dependency lists rather than only the final callback arity, strips top-level `null` / `undefined` from helper arg types to match the TS generator, gives unnamed args stable placeholders such as `arg`, deduplicates repeated dependency names as `foo2`, and keeps listener-only internal reducer actions such as `githubNamespaceConnectLogic`'s connected `setRepositories`.
+- Block-bodied selector return recovery now resolves simple `const result = ...; return result` shapes, which keeps `samples/complexLogic.ts` `miscSelector` fully expanded instead of emitting invalid summarized placeholders like `... 24 more ...`.
+- Plugin internal extra-input rendering now matches the TS generator more closely for object `form` plugins, including `default?: Record<string, any>` plus a typed `submit?: (form: ...) => void`.
 - Reusable `typescript-go` API transport code now lives in [`rewrite/internal/tsgoapi/client.go`](/Users/marius/Projects/Kea/kea-typegen/rewrite/internal/tsgoapi/client.go).
 - Preferred `tsgo` binary discovery now prefers an actually present repo binary, falls back to `tsgo`/`tsgo-upstream` on `PATH`, and reports missing-binary failures explicitly instead of silently defaulting to a dead `poc/.../tsgo-upstream` path.
 
@@ -180,69 +186,49 @@ env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go r
 - There are currently no sample files that fail by crashing the Go generator. The remaining work is parity and fidelity, not basic coverage.
 - A second in-repo TS-vs-Go sweep on March 11, 2026 used sibling temp copies under the repo root plus `write -r <temp>/samples --write-paths --delete --no-import` for both implementations:
   - no `TS_ONLY` or `GO_ONLY` coverage gaps remain in the sample corpus
-  - every generated file still differs textually because formatting, ordering, and omitted `__keaTypeGenInternal*` helpers are still different
-  - the newly fixed `samples/logic.ts` write-round selector drift is no longer a meaningful public-surface gap; its remaining diff is now formatting/internal-helper noise
-  - the highest-signal remaining public gap from the current sweep is `samples/complexLogic.ts`, where reducer/action nullability and `DashboardItemType` payload shaping still diverge semantically
+  - every generated file still differs textually because formatting and ordering still differ
+  - semantic sample parity is now closed for the benchmarked write path, including `__keaTypeGenInternal*` helper fields
+
+### Current benchmark status
+
+- On March 11, 2026, after rebuilding the Go binary with `./bin/prepare-go`, the repo-local benchmark reached full semantic parity with:
+
+```bash
+./bin/benchmark -c write -n 1 -w 1
+```
+
+- Result:
+  - semantic accuracy `16/16 (100.0%)`
+  - exact accuracy `0/16 (0.0%)`
+  - `TS_ONLY: 0`
+  - `GO_ONLY: 0`
+  - internal helper fields are included in that semantic comparison now
+  - Go remained faster in the same run (`5.26x` on mean runtime in the last recorded local run)
 
 ### Main parity gaps found in the sample sweep
 
-- `connect` and imported-listener fidelity still need work:
-  - broader target-expression support and ownership fidelity still need work beyond the current identifier / call / namespace-property / quoted-bracket / default-import / simple assertion-wrapper coverage
-  - the remaining gap is no longer basic payload recovery for `routerConnectLogic.ts` or the import-listener samples; it is richer ownership and declaration-source fidelity in more complex connected cases
-- Reducer/default/value normalization is much better across the covered samples, but broader sample-sweep verification is still needed for the remaining object-style and connected edge cases.
-- `samples/complexLogic.ts` still has real public-surface drift in the current sweep:
-  - `inspectForElementWithIndex`, `newAction`, and related action payload nullability still differ from the TS generator
-  - `updateDashboardInsight` still expands away the intended `DashboardItemType` payload owner in the emitted action surface
-- Loader parity is still incomplete:
-  - Some loader action signatures still prefer destructured object payloads where the TS generator currently emits a flatter public surface.
-- Import ownership and selector return fidelity are still heuristic in richer files:
-  - `samples/autoImportLogic.ts` is much closer now in native write rounds, but broader ownership/import fidelity still depends on source spelling and heuristics in richer files.
-  - Union ordering / explicit-vs-inferred naming still differs in a few places, which is acceptable only if the emitted AST remains semantically close.
-- The emitter is still reduced versus the current TS output:
-  - missing `__keaTypeGenInternal*` fields are acceptable by the new goal
-  - missing or widened public fields are not acceptable
-  - the remaining work should focus on public interface parity, not reproducing every TS-only internal helper node
-- Plugin outputs still differ, but they should stay lower priority until the non-plugin sample set is in good shape:
-  - `samples/builderLogic.ts` currently omits `forms(...)` plugin-produced public fields on purpose, matching the current TypeScript generator instead of overproducing speculative `kea-forms` API
-  - `samples/pluginLogic.ts`
-  - `samples/typed-builder/typedFormDemoLogic.ts`
+- The sample benchmark no longer has any semantic parity gaps on the covered write path.
+- Remaining rewrite work is now outside the `16/16` sample benchmark bar:
+  - broader syntax/ownership coverage beyond the currently covered sample shapes
+  - tighter exact-source parity if it ever becomes desirable, even though the current target is semantic rather than byte-level equality
+  - broader plugin and builder generalization beyond the specific sample-backed cases the benchmark exercises
 
 ## Immediate next steps
 
-1. Get non-plugin sample parity to the point where both generators can emit public types for every sample file with ASTs that are semantically very close:
-   - do not chase byte-level formatting equality
-   - do not treat `__keaTypeGenInternal*` fields as required output
-   - use `samples/` as the acceptance suite
-2. Fix reducer/default/value normalization regressions that still leak reducer-spec internals or widened `any`/`never[]` into emitted public types:
-   - keep checking the remaining non-plugin sample corpus for object-style and connected edge cases that still leak reducer-spec artifacts
-   - prioritize cases where the public surface still widens to `any`, keeps literal defaults where TS emits a broader state type, or lets derived selectors leak into aggregate reducer-backed fields
-3. Tighten `connect` and imported listener parity:
-   - broader target-expression support beyond the current identifier / call / namespace-property / quoted-bracket / default-import / simple assertion-wrapper cases
-   - connected values/actions should preserve declaration-source ownership/import fidelity rather than reducer-spec artifacts
-   - keep checking the remaining connected cases for ownership-preserving listener/value surfaces, especially when the right public owner is only available semantically
-   - keep broadening target-expression support without regressing the now-covered router and import-listener sample cases
-4. Replace the remaining source-scanned import gathering with symbol-backed ownership data from `typescript-go`, especially when the right owner is only available semantically rather than from explicit source text:
-   - inferred aliases that are not spelled in the source
-   - package/global helper types beyond installed-package export scanning
-   - ownership-preserving reuse inside connected external logics beyond the current authoritative-import reuse and the new explicit default/namespace-owner reuse
-5. Finish loader and selector parity for the remaining richer non-plugin samples:
-   - keep tightening loader request-action signatures where the Go path still destructures or widens more than the TS path
-   - keep improving the remaining selector return recovery and ownership/import fidelity in richer files after the new `samples/autoImportLogic.ts` write-round fixes
-   - tighten the remaining non-loader public action signatures where the Go path still destructures or widens more than the TS path
-6. Tighten the new native CLI parity layer:
-   - replace string-based source edits with AST-backed rewrites so import/path repairs match JS formatting and broader syntax shapes
-   - support the remaining JS write-mode gaps beyond the new native `--convert-to-builders` path, especially richer `--show-ts-errors` reporting
-   - broaden watch invalidation beyond the current polling loop and root-tree scanning
-7. Leave plugin and typed-builder generalization for last:
-   - richer `kea-forms` selectors/action payload details and literal-preserving defaults
-   - builder plugins whose semantics are not directly inspectable from the callsite
-   - any generalized plugin execution or typegen-hook model
+1. Keep `./bin/benchmark -c write -n 1 -w 1` at `16/16` semantic matches as a regression gate for the rewrite.
+2. Expand coverage beyond the current sample benchmark:
+   - richer connected target expressions and ownership fidelity
+   - broader selector/block-body recovery outside the currently covered patterns
+   - additional plugin/builder cases not represented in `samples/`
+3. Decide whether exact-source parity is worth pursuing:
+   - formatting/order still differ even though AST semantics now match on the benchmarked path
+   - if exact parity matters later, move native source edits and emission closer to AST-backed JS behavior
 
 ## Known gaps
 
 - Code generation still exists only for a reduced subset of the final public interface, although the emitter now also covers `actionKeys` plus aggregate `reducer`/`selector` fields.
 - The current target is public AST parity, not byte-for-byte source parity.
-- `__keaTypeGenInternal*` fields are no longer considered required parity output.
+- `__keaTypeGenInternal*` fields are part of the current sample-benchmark parity target and are now included in the semantic comparison.
 - Builder syntax is detected and partially introspected, and `typedForm(...)` now has a reduced heuristic path, but custom builders are still mostly opaque without plugin-specific handling.
 - Import gathering is still not fully symbol-backed. Local relative module export scanning, installed-package `.d.ts` export scanning, and source-guided named/default/namespace alias recovery now cover much more of the local case, but inferred ownership and some package/global/plugin helper types are still missing.
 - Existing normalized imports now prevent some bad fallback resolutions, but ownership still depends on heuristics once a type has not already been attached by an earlier pass.
@@ -251,7 +237,7 @@ env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go r
 - Loader parity is still incomplete in some richer cases, especially around keeping request-action signatures as flat as the TS generator when loaders overlap explicit `actions`.
 - Source-backed recovery now keeps several native write rounds semantically stable even after reduced generated `*LogicType` files feed back into `typescript-go`, including the previously-regressed `samples/loadersLogic.ts` `loadItSuccess` payload and `samples/autoImportLogic.ts` selector surfaces.
 - Reducer/default/value normalization still leaks reducer-spec internals into emitted public types in some samples.
-- Plugin-produced fields now have reduced heuristics for a few known samples, including object `inline`/`form` plus typed-form `custom`/`__keaTypeGenInternalExtraInput`, but there is still no general plugin execution or typegen hook model. This is intentionally lower priority than non-plugin sample parity.
+- Plugin-produced fields now have reduced heuristics for a few known samples, including object `inline`/`form` plus typed-form `custom`/`__keaTypeGenInternalExtraInput`, but there is still no general plugin execution or typegen hook model.
 - Builder `forms(...)` output is intentionally deferred again because the current TypeScript generator does not expose those public fields in `samples/builderLogic.ts`; broader `kea-forms` parity remains future work once plugin behavior is handled intentionally.
 - Explicit selector normalization is better for expression-bodied tuples, explicit return annotations, and simple block-bodied returns, but deeper alias-sensitive cases still need more work.
 - `check` / `write` / polling `watch` now run natively, and object-style `--convert-to-builders` now has a source-text rewrite path, but source edits are still string-based rather than AST-backed, so formatting and edge-case syntax coverage are not yet fully JS-identical.

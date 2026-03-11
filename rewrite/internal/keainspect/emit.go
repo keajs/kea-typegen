@@ -118,6 +118,12 @@ func renderInterface(logic ParsedLogic) string {
 	writeProperty(&builder, "    ", "values", renderValues(logic))
 	writeProperty(&builder, "    ", "_isKea", "true")
 	writeProperty(&builder, "    ", "_isKeaWithKey", boolLiteral(logic.KeyType != ""))
+	if len(logic.InternalSelectorTypes) > 0 {
+		writeProperty(&builder, "    ", "__keaTypeGenInternalSelectorTypes", renderInternalSelectorTypes(logic.InternalSelectorTypes))
+	}
+	if len(logic.InternalReducerActions) > 0 {
+		writeProperty(&builder, "    ", "__keaTypeGenInternalReducerActions", renderInternalReducerActions(logic.InternalReducerActions))
+	}
 	if logic.ExtraInputForm != "" {
 		writeProperty(&builder, "    ", "__keaTypeGenInternalExtraInput", renderTypedFormInternalExtraInput(logic))
 	}
@@ -337,6 +343,40 @@ func renderValues(logic ParsedLogic) string {
 	return strings.Join(lines, "\n")
 }
 
+func renderInternalSelectorTypes(selectors []ParsedFunction) string {
+	if len(selectors) == 0 {
+		return "{}"
+	}
+
+	lines := []string{"{"}
+	for _, selector := range selectors {
+		lines = append(lines, fmt.Sprintf("    %s: %s", selector.Name, selector.FunctionType))
+	}
+	lines = append(lines, "}")
+	return strings.Join(lines, "\n")
+}
+
+func renderInternalReducerActions(actions []ParsedAction) string {
+	if len(actions) == 0 {
+		return "{}"
+	}
+
+	lines := []string{"{"}
+	for _, action := range actions {
+		parameters, _, ok := splitFunctionType(action.FunctionType)
+		if !ok {
+			parameters = "()"
+		}
+		payloadType := fallbackType(action.PayloadType, "any")
+		lines = append(lines, fmt.Sprintf("    %s: %s => {", quoteString(action.Name), parameters))
+		lines = append(lines, fmt.Sprintf("        payload: %s", payloadType))
+		lines = append(lines, fmt.Sprintf("        type: %s", quoteString(action.Name)))
+		lines = append(lines, "    }")
+	}
+	lines = append(lines, "}")
+	return strings.Join(lines, "\n")
+}
+
 func mergedValueFields(logic ParsedLogic) []ParsedField {
 	return mergeParsedFields(logic.Reducers, logic.Selectors...)
 }
@@ -356,15 +396,16 @@ func renderFieldShape(fields []ParsedField) string {
 
 func renderTypedFormInternalExtraInput(logic ParsedLogic) string {
 	formType := logic.ExtraInputForm
+	defaultType := "Record<string, any>"
 	lines := []string{
 		"{",
 		"    form:",
 		"        | {",
-		fmt.Sprintf("              default?: %s", formType),
+		fmt.Sprintf("              default?: %s", defaultType),
 		fmt.Sprintf("              submit?: (form: %s) => void", formType),
 		"          }",
 		fmt.Sprintf("        | ((logic: %s) => {", logic.TypeName),
-		fmt.Sprintf("              default?: %s", formType),
+		fmt.Sprintf("              default?: %s", defaultType),
 		fmt.Sprintf("              submit?: (form: %s) => void", formType),
 		"          })",
 		"}",

@@ -925,7 +925,7 @@ func TestBuildParsedLogicsSynthesizesLoadersAndDefaults(t *testing.T) {
 		"loadSessionsFailure: 'load sessions failure (scenes.homepage.index.*)'",
 		"updateName: ((action: { type: 'update name (scenes.homepage.index.*)'; payload: { name: string; } }, previousState: any) => void | Promise<void>)[]",
 		"afterMount: () => void",
-		"someRandomFunction: (payload: { name: string; id?: number | undefined; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number | undefined; } }, previousState: any) => void | Promise<void>",
+		"someRandomFunction: (payload: { name: string; id?: number; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number; } }, previousState: any) => void | Promise<void>",
 		"sessionsLoading: boolean",
 		"payload?: string",
 	} {
@@ -1017,6 +1017,11 @@ func TestBuildParsedLogicsLogicSampleRecoversDerivedSelectorReturnTypes(t *testi
 		"longSelector: (state: any, props?: any) => false",
 		"capitalizedName: string",
 		"upperCaseName: string",
+		"__keaTypeGenInternalSelectorTypes: {",
+		"capitalizedName: (name: string, number: number) => string",
+		"upperCaseName: (capitalizedName: string) => string",
+		"randomSelector: (capitalizedName: string) => Record<string, any>",
+		"longSelector: (name: string, number: number, capitalizedName: string, upperCaseName: string, randomSelector: Record<string, any>, randomSelector2: Record<string, any>) => false",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
@@ -1178,11 +1183,16 @@ func TestBuildParsedLogicsAutoImportRichTypes(t *testing.T) {
 			t.Fatalf("expected %s import from ./autoImportTypes, got %+v", expectedImport, logic.Imports)
 		}
 	}
+	if len(logic.InternalSelectorTypes) != 1 || logic.InternalSelectorTypes[0].Name != "sbla" || logic.InternalSelectorTypes[0].FunctionType != "(arg: S6) => Partial<Record<string, S7>>" {
+		t.Fatalf("expected sbla internal selector helper, got %+v", logic.InternalSelectorTypes)
+	}
 
 	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
 	for _, expected := range []string{
 		"sbla: (state: any, props?: any) => Partial<Record<string, S7>>",
 		"sbla: Partial<Record<string, S7>>",
+		"__keaTypeGenInternalSelectorTypes: {",
+		"sbla: (arg: S6) => Partial<Record<string, S7>>",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
@@ -1259,6 +1269,7 @@ func TestBuildParsedLogicsPreservesSourceAliases(t *testing.T) {
 		{path: "./autoImportTypes", name: "D6"},
 		{path: "./autoImportTypes", name: "ExportedApi"},
 		{path: "./autoImportTypes", name: "R6"},
+		{path: "./autoImportTypes", name: "S6"},
 	} {
 		if !hasImport(logic.Imports, expectedImport.path, expectedImport.name) {
 			t.Fatalf("expected import %s from %s, got %+v", expectedImport.name, expectedImport.path, logic.Imports)
@@ -1294,14 +1305,17 @@ func TestBuildParsedLogicsNormalizesPluginSections(t *testing.T) {
 	}
 
 	pluginLogic := logics[0]
-	if !hasAction(pluginLogic.Actions, "inlineAction") || !hasAction(pluginLogic.Actions, "submitForm") {
-		t.Fatalf("expected inline/form plugin actions, got %+v", pluginLogic.Actions)
+	if hasAction(pluginLogic.Actions, "inlineAction") || !hasAction(pluginLogic.Actions, "submitForm") {
+		t.Fatalf("expected only form plugin action to survive, got %+v", pluginLogic.Actions)
 	}
-	if !hasReducer(pluginLogic.Reducers, "inlineReducer", "{ asd: boolean }") {
-		t.Fatalf("expected inlineReducer from inline plugin, got %+v", pluginLogic.Reducers)
+	if _, ok := findParsedField(pluginLogic.Reducers, "inlineReducer"); ok {
+		t.Fatalf("expected inline plugin reducer to stay deferred, got %+v", pluginLogic.Reducers)
 	}
 	if reducer, ok := findParsedField(pluginLogic.Reducers, "form"); !ok || !strings.Contains(reducer.Type, "name: string") || !strings.Contains(reducer.Type, "age: number") {
 		t.Fatalf("expected form reducer type from plugin form defaults, got %+v", pluginLogic.Reducers)
+	}
+	if pluginLogic.ExtraInputForm == "" {
+		t.Fatalf("expected plugin form extra input type, got %+v", pluginLogic)
 	}
 
 	anotherPluginLogic := logics[1]
@@ -1311,16 +1325,28 @@ func TestBuildParsedLogicsNormalizesPluginSections(t *testing.T) {
 	if reducer, ok := findParsedField(anotherPluginLogic.Reducers, "form"); !ok || !strings.Contains(reducer.Type, "name: string") || !strings.Contains(reducer.Type, "age: number") {
 		t.Fatalf("expected second form reducer type from plugin form defaults, got %+v", anotherPluginLogic.Reducers)
 	}
+	if anotherPluginLogic.ExtraInputForm == "" {
+		t.Fatalf("expected second plugin logic extra input type, got %+v", anotherPluginLogic)
+	}
 
 	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
 	for _, expected := range []string{
-		"inlineAction: () => void",
 		"submitForm: () => void",
-		"inlineReducer: { asd: boolean }",
 		"form: { name: string; age: number; }",
+		"__keaTypeGenInternalExtraInput: {",
+		"default?: Record<string, any>",
+		"submit?: (form: { name: string; age: number; }) => void",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+	for _, unexpected := range []string{
+		"inlineAction: () => void",
+		"inlineReducer: { asd: boolean }",
+	} {
+		if strings.Contains(rendered, unexpected) {
+			t.Fatalf("expected emitted output to defer inline plugin heuristics and omit %q:\n%s", unexpected, rendered)
 		}
 	}
 }
@@ -1337,32 +1363,19 @@ func TestBuildParsedLogicsNormalizesTypedFormBuilder(t *testing.T) {
 	}
 
 	logic := logics[0]
-	if !hasAction(logic.Actions, "submitForm") {
-		t.Fatalf("expected submitForm action from typedForm builder, got %+v", logic.Actions)
-	}
-	if !hasReducer(logic.Reducers, "form", "Record<string, any>") {
-		t.Fatalf("expected form reducer from typedForm builder, got %+v", logic.Reducers)
-	}
-	if logic.CustomType != "{\n    hello?: 'world'\n}" {
-		t.Fatalf("expected typedForm custom field heuristic, got %q", logic.CustomType)
-	}
-	if logic.ExtraInputForm != "Record<string, any>" {
-		t.Fatalf("expected typedForm extra input form type, got %q", logic.ExtraInputForm)
+	if len(logic.Actions) != 0 || len(logic.Reducers) != 0 || logic.CustomType != "" || logic.ExtraInputForm != "" {
+		t.Fatalf("expected typedForm builder heuristics to stay deferred, got %+v", logic)
 	}
 
 	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
-	for _, expected := range []string{
+	for _, unexpected := range []string{
 		"submitForm: () => void",
 		"form: Record<string, any>",
 		"custom: {",
-		"hello?: 'world'",
 		"__keaTypeGenInternalExtraInput: {",
-		"default?: Record<string, any>",
-		"submit?: (form: Record<string, any>) => void",
-		"| ((logic: typedFormDemoLogicType) => {",
 	} {
-		if !strings.Contains(rendered, expected) {
-			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		if strings.Contains(rendered, unexpected) {
+			t.Fatalf("expected emitted output to defer typedForm builder heuristics and omit %q:\n%s", unexpected, rendered)
 		}
 	}
 }
@@ -1512,6 +1525,13 @@ func TestBuildParsedLogicsResolvesNamespaceImportedConnectTargets(t *testing.T) 
 	if listener.PayloadType != "{ repositories: Repository[]; }" {
 		t.Fatalf("expected namespace-imported listener payload type { repositories: Repository[]; }, got %+v", listener)
 	}
+	internalAction, ok := findParsedAction(logic.InternalReducerActions, "set repositories (githubLogic)")
+	if !ok {
+		t.Fatalf("expected internal reducer action for namespace-imported listener, got %+v", logic.InternalReducerActions)
+	}
+	if internalAction.FunctionType != "(repositories: Repository[]) => { repositories: Repository[]; }" {
+		t.Fatalf("expected namespace-imported internal reducer action type to preserve Repository[], got %+v", internalAction)
+	}
 
 	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
 	for _, expected := range []string{
@@ -1520,6 +1540,8 @@ func TestBuildParsedLogicsResolvesNamespaceImportedConnectTargets(t *testing.T) 
 		"repositories: (state: any, props?: any) => Repository[]",
 		"githubIsLoading: (state: any, props?: any) => boolean",
 		"'set repositories (githubLogic)': ((action: { type: 'set repositories (githubLogic)'; payload: { repositories: Repository[]; } }, previousState: any) => void | Promise<void>)[]",
+		"__keaTypeGenInternalReducerActions: {",
+		"'set repositories (githubLogic)': (repositories: Repository[]) => {",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
@@ -1675,6 +1697,28 @@ func TestBuildParsedLogicsComplexSamplePreservesReducerUnionState(t *testing.T) 
 			t.Fatalf("expected reducer %s: %s, got %+v", expected.name, expected.typ, logic.Reducers)
 		}
 	}
+	for _, expected := range []struct {
+		name         string
+		functionType string
+	}{
+		{name: "selectedAction", functionType: "(selectedActionId: number | 'new', newActionForElement: HTMLElement) => ActionType | null"},
+		{name: "initialValuesForForm", functionType: "(selectedAction: ActionType) => ActionForm"},
+		{name: "selectedEditedAction", functionType: "(selectedAction: ActionType, initialValuesForForm: ActionForm, form: FormInstance, editingFields: AntdFieldData[], inspectingElement: number, counter: number) => ActionForm"},
+	} {
+		found := false
+		for _, selector := range logic.InternalSelectorTypes {
+			if selector.Name != expected.name {
+				continue
+			}
+			found = true
+			if selector.FunctionType != expected.functionType {
+				t.Fatalf("expected internal selector helper %s: %s, got %+v", expected.name, expected.functionType, selector)
+			}
+		}
+		if !found {
+			t.Fatalf("expected internal selector helper %s, got %+v", expected.name, logic.InternalSelectorTypes)
+		}
+	}
 
 	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
 	for _, expected := range []string{
@@ -1682,6 +1726,10 @@ func TestBuildParsedLogicsComplexSamplePreservesReducerUnionState(t *testing.T) 
 		"selectedActionId: (state: any, props?: any) => number | 'new' | null",
 		"newActionForElement: HTMLElement | null",
 		"inspectingElement: number | null",
+		"__keaTypeGenInternalSelectorTypes: {",
+		"selectedAction: (selectedActionId: number | 'new', newActionForElement: HTMLElement) => ActionType | null",
+		"initialValuesForForm: (selectedAction: ActionType) => ActionForm",
+		"selectedEditedAction: (selectedAction: ActionType, initialValuesForForm: ActionForm, form: FormInstance, editingFields: AntdFieldData[], inspectingElement: number, counter: number) => ActionForm",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
@@ -1689,6 +1737,9 @@ func TestBuildParsedLogicsComplexSamplePreservesReducerUnionState(t *testing.T) 
 	}
 	if strings.Contains(rendered, "selectedActionId: string") {
 		t.Fatalf("expected emitted output to avoid widened selectedActionId: string:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "... 24 more ...") {
+		t.Fatalf("expected complex selector object types to stay fully expanded, got summarized placeholder:\n%s", rendered)
 	}
 }
 

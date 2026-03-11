@@ -429,18 +429,12 @@ function canonicalTypeArguments(typeArguments, sourceFile) {
 function normalizeTypeElement(member, sourceFile) {
     if (ts.isPropertySignature(member)) {
         const name = canonicalPropertyName(member.name, sourceFile)
-        if (name.startsWith('__keaTypeGenInternal')) {
-            return null
-        }
         const prefix = member.readonlyToken ? 'readonly ' : ''
         const optional = member.questionToken ? '?' : ''
         return `${prefix}${name}${optional}: ${canonicalType(member.type, sourceFile)}`
     }
     if (ts.isMethodSignature(member)) {
         const name = canonicalPropertyName(member.name, sourceFile)
-        if (name.startsWith('__keaTypeGenInternal')) {
-            return null
-        }
         const optional = member.questionToken ? '?' : ''
         return `${name}${optional}${canonicalTypeParameters(member.typeParameters, sourceFile)}(${member.parameters
             .map((parameter) => canonicalParameter(parameter, sourceFile))

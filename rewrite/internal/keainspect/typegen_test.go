@@ -164,12 +164,15 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 
 	autoImportTypegen := mustReadFile(t, filepath.Join(tempDir, "autoImportLogicType.ts"))
 	for _, expected := range []string{
+		"import type { A1, A2, A3, A4, A5, A7, D1, D3, D6, EventIndex, ExportedApi, R1, R6, RandomThing, S6, S7 } from './autoImportTypes'",
 		"eventIndex: (state: any, props?: any) => EventIndex",
 		"randomDetectedReturn: (state: any, props?: any) => RandomThing",
 		"randomInterfacedReturn: (state: any, props?: any) => RandomAPI",
 		"randomSpecifiedReturn: (state: any, props?: any) => ExportedApi.RandomThing",
 		"sbla: (state: any, props?: any) => Partial<Record<string, S7>>",
 		"sbla: Partial<Record<string, S7>>",
+		"__keaTypeGenInternalSelectorTypes: {",
+		"sbla: (arg: S6) => Partial<Record<string, S7>>",
 	} {
 		if !strings.Contains(autoImportTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, autoImportTypegen)
@@ -182,6 +185,14 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"upperCaseName: (state: any, props?: any) => string",
 		"capitalizedName: string",
 		"upperCaseName: string",
+		"someRandomFunction: (payload: { name: string; id?: number; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number; } }, previousState: any) => void | Promise<void>",
+		"__keaTypeGenInternalSelectorTypes: {",
+		"capitalizedName: (name: string, number: number) => string",
+		"upperCaseName: (capitalizedName: string) => string",
+		"randomSelector: (capitalizedName: string) => Record<string, any>",
+		"longSelector: (name: string, number: number, capitalizedName: string, upperCaseName: string, randomSelector: Record<string, any>, randomSelector2: Record<string, any>) => false",
+		"__keaTypeGenInternalReducerActions: {",
+		"'set username (githubLogic)': (username: string) => {",
 	} {
 		if !strings.Contains(logicTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, logicTypegen)
@@ -193,6 +204,18 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"selectedActionId: number | 'new' | null",
 		"selectedActionId: (state: any, props?: any) => number | 'new' | null",
 		"hideButtonActions: ((action: { type: 'hide button actions (complexLogic)'; payload: { value: true } }, previousState: any) => void | Promise<void>)[]",
+		"selectAction: (id: string | null) => {",
+		"payload: { id: string; }",
+		"inspectForElementWithIndex: (index: number | null) => {",
+		"payload: { index: number; }",
+		"newAction: (element?: HTMLElement) => {",
+		"payload: { element: HTMLElement; }",
+		"updateDashboardInsight: (id: number, payload: DashboardItemType) => {",
+		"key39: string",
+		"__keaTypeGenInternalSelectorTypes: {",
+		"selectedAction: (selectedActionId: number | 'new', newActionForElement: HTMLElement) => ActionType | null",
+		"initialValuesForForm: (selectedAction: ActionType) => ActionForm",
+		"selectedEditedAction: (selectedAction: ActionType, initialValuesForForm: ActionForm, form: FormInstance, editingFields: AntdFieldData[], inspectingElement: number, counter: number) => ActionForm",
 	} {
 		if !strings.Contains(complexTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, complexTypegen)
@@ -200,6 +223,9 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 	}
 	if strings.Contains(complexTypegen, "selectedActionId: string") {
 		t.Fatalf("expected reduced write round output to avoid widened selectedActionId: string:\n%s", complexTypegen)
+	}
+	if strings.Contains(complexTypegen, "... 24 more ...") {
+		t.Fatalf("expected reduced write round output to keep complex selector object types fully expanded:\n%s", complexTypegen)
 	}
 
 	loadersTypegen := mustReadFile(t, filepath.Join(tempDir, "loadersLogicType.ts"))
@@ -209,6 +235,64 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 	} {
 		if !strings.Contains(loadersTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, loadersTypegen)
+		}
+	}
+
+	routerConnectTypegen := mustReadFile(t, filepath.Join(tempDir, "routerConnectLogicType.ts"))
+	for _, expected := range []string{
+		"import type { LocationChangedPayload } from 'kea-router/lib/types'",
+		"locationChanged: ({ method, pathname, search, searchParams, hash, hashParams, initial, }: LocationChangedPayload) => void",
+		"hashParams: Record<string, any>",
+		"searchParams: Record<string, any>",
+	} {
+		if !strings.Contains(routerConnectTypegen, expected) {
+			t.Fatalf("expected clean write output to contain %q:\n%s", expected, routerConnectTypegen)
+		}
+	}
+	if strings.Contains(routerConnectTypegen, "[x: string]: any") {
+		t.Fatalf("expected clean write output to avoid generic router payload fallback:\n%s", routerConnectTypegen)
+	}
+
+	githubNamespaceConnectTypegen := mustReadFile(t, filepath.Join(tempDir, "githubNamespaceConnectLogicType.ts"))
+	for _, expected := range []string{
+		"__keaTypeGenInternalReducerActions: {",
+		"'set repositories (githubLogic)': (repositories: Repository[]) => {",
+		"repositories: Repository[]",
+	} {
+		if !strings.Contains(githubNamespaceConnectTypegen, expected) {
+			t.Fatalf("expected clean write output to contain %q:\n%s", expected, githubNamespaceConnectTypegen)
+		}
+	}
+
+	pluginTypegen := mustReadFile(t, filepath.Join(tempDir, "pluginLogicType.ts"))
+	for _, expected := range []string{
+		"submitForm: () => void",
+		"form: { name: string; age: number; }",
+		"__keaTypeGenInternalExtraInput: {",
+		"default?: Record<string, any>",
+		"submit?: (form: { name: string; age: number; }) => void",
+	} {
+		if !strings.Contains(pluginTypegen, expected) {
+			t.Fatalf("expected clean write output to contain %q:\n%s", expected, pluginTypegen)
+		}
+	}
+	for _, unexpected := range []string{
+		"inlineAction: () => void",
+		"inlineReducer: { asd: boolean }",
+	} {
+		if strings.Contains(pluginTypegen, unexpected) {
+			t.Fatalf("expected clean write output to omit %q:\n%s", unexpected, pluginTypegen)
+		}
+	}
+
+	typedFormTypegen := mustReadFile(t, filepath.Join(tempDir, "typed-builder", "typedFormDemoLogicType.ts"))
+	for _, unexpected := range []string{
+		"submitForm: () => void",
+		"form: Record<string, any>",
+		"__keaTypeGenInternalExtraInput: {",
+	} {
+		if strings.Contains(typedFormTypegen, unexpected) {
+			t.Fatalf("expected clean write output to defer typedForm builder heuristics and omit %q:\n%s", unexpected, typedFormTypegen)
 		}
 	}
 }
