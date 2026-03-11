@@ -48,6 +48,11 @@ type TypeImport struct {
 	Names []string `json:"names"`
 }
 
+type usedTypeReferences struct {
+	BareIdentifiers map[string]bool
+	QualifiedOwners map[string]bool
+}
+
 type ParsedLogic struct {
 	Name            string                 `json:"name"`
 	TypeName        string                 `json:"typeName"`
@@ -1866,6 +1871,19 @@ func resolveConnectedLogic(source, file, expression string, state *buildState) (
 		return findConnectedLogic(logics, target.LogicName, candidate.ImportedName, target.BaseAlias)
 	}
 
+	if candidate, ok := parseDefaultValueImports(source)[target.BaseAlias]; ok {
+		resolvedFile, ok := resolveLocalImportFile(file, candidate.Path)
+		if !ok {
+			return ParsedLogic{}, false
+		}
+
+		logics, err := state.loadLogics(resolvedFile)
+		if err != nil {
+			return ParsedLogic{}, false
+		}
+		return findConnectedLogic(logics, target.LogicName, target.BaseAlias)
+	}
+
 	if importPath, ok := parseNamespaceValueImports(source)[target.BaseAlias]; ok {
 		resolvedFile, ok := resolveLocalImportFile(file, importPath)
 		if !ok {
@@ -2971,6 +2989,12 @@ func collectTypeImports(source, file string, logic ParsedLogic) []TypeImport {
 	for alias, candidate := range parseNamedImports(source) {
 		importsByAlias[alias] = candidate
 	}
+	for alias, candidate := range parseDefaultImports(source) {
+		importsByAlias[alias] = candidate
+	}
+	for alias, candidate := range parseNamespaceImports(source) {
+		importsByAlias[alias] = candidate
+	}
 	for name, candidate := range parseLocalExportedTypes(file, source) {
 		importsByAlias[name] = candidate
 	}
@@ -2979,16 +3003,23 @@ func collectTypeImports(source, file string, logic ParsedLogic) []TypeImport {
 	exportCache := map[string]map[string]bool{}
 	packageExportCache := map[string]map[string]importCandidate{}
 	coveredIdentifiers := existingImportReferenceNames(logic.Imports)
-
-	used := map[string]bool{}
-	for _, typeText := range collectUsedTypeTexts(logic) {
-		for _, identifier := range extractTypeIdentifiers(typeText) {
-			used[identifier] = true
-		}
-	}
+	usedReferences := collectUsedTypeReferences(collectUsedTypeTexts(logic))
 
 	grouped := map[string]map[string]bool{}
-	for identifier := range used {
+	for identifier := range usedReferences.QualifiedOwners {
+		if coveredIdentifiers[identifier] {
+			continue
+		}
+		candidate, ok := importsByAlias[identifier]
+		if !ok || candidate.Path == "" || candidate.Name == "" {
+			continue
+		}
+		if grouped[candidate.Path] == nil {
+			grouped[candidate.Path] = map[string]bool{}
+		}
+		grouped[candidate.Path][candidate.Name] = true
+	}
+	for identifier := range usedReferences.BareIdentifiers {
 		if coveredIdentifiers[identifier] {
 			continue
 		}
@@ -3083,6 +3114,16 @@ func parseNamedImports(source string) map[string]importCandidate {
 			result[localName] = importCandidate{Path: candidate.Path, Name: importName}
 		}
 	}
+	mixedMatches := importDefaultNamedPattern.FindAllStringSubmatch(source, -1)
+	for _, match := range mixedMatches {
+		for localName, candidate := range parseImportSpecifiers(match[2], match[3]) {
+			importName := candidate.ImportedName
+			if localName != candidate.ImportedName {
+				importName = candidate.ImportedName + " as " + localName
+			}
+			result[localName] = importCandidate{Path: candidate.Path, Name: importName}
+		}
+	}
 	return result
 }
 
@@ -3093,6 +3134,68 @@ func parseNamedValueImports(source string) map[string]importedValueCandidate {
 		for localName, candidate := range parseImportSpecifiers(match[1], match[2]) {
 			result[localName] = candidate
 		}
+	}
+	mixedMatches := importDefaultNamedPattern.FindAllStringSubmatch(source, -1)
+	for _, match := range mixedMatches {
+		for localName, candidate := range parseImportSpecifiers(match[2], match[3]) {
+			result[localName] = candidate
+		}
+	}
+	return result
+}
+
+func parseDefaultImports(source string) map[string]importCandidate {
+	result := map[string]importCandidate{}
+	for _, match := range importDefaultPattern.FindAllStringSubmatch(source, -1) {
+		alias := strings.TrimSpace(match[1])
+		importPath := strings.TrimSpace(match[2])
+		if alias == "" || importPath == "" {
+			continue
+		}
+		result[alias] = importCandidate{Path: importPath, Name: "default as " + alias}
+	}
+	for _, match := range importDefaultNamedPattern.FindAllStringSubmatch(source, -1) {
+		alias := strings.TrimSpace(match[1])
+		importPath := strings.TrimSpace(match[3])
+		if alias == "" || importPath == "" {
+			continue
+		}
+		result[alias] = importCandidate{Path: importPath, Name: "default as " + alias}
+	}
+	return result
+}
+
+func parseDefaultValueImports(source string) map[string]importedValueCandidate {
+	result := map[string]importedValueCandidate{}
+	for _, match := range importDefaultPattern.FindAllStringSubmatch(source, -1) {
+		alias := strings.TrimSpace(match[1])
+		importPath := strings.TrimSpace(match[2])
+		if alias == "" || importPath == "" {
+			continue
+		}
+		result[alias] = importedValueCandidate{Path: importPath, ImportedName: "default"}
+	}
+	for _, match := range importDefaultNamedPattern.FindAllStringSubmatch(source, -1) {
+		alias := strings.TrimSpace(match[1])
+		importPath := strings.TrimSpace(match[3])
+		if alias == "" || importPath == "" {
+			continue
+		}
+		result[alias] = importedValueCandidate{Path: importPath, ImportedName: "default"}
+	}
+	return result
+}
+
+func parseNamespaceImports(source string) map[string]importCandidate {
+	result := map[string]importCandidate{}
+	matches := importNamespacePattern.FindAllStringSubmatch(source, -1)
+	for _, match := range matches {
+		alias := strings.TrimSpace(match[1])
+		importPath := strings.TrimSpace(match[2])
+		if alias == "" || importPath == "" {
+			continue
+		}
+		result[alias] = importCandidate{Path: importPath, Name: "* as " + alias}
 	}
 	return result
 }
@@ -3148,11 +3251,22 @@ func parseRelativeImportPaths(source string) []string {
 	matches := importClausePattern.FindAllStringSubmatch(source, -1)
 	for _, match := range matches {
 		importPath := strings.TrimSpace(match[2])
-		if importPath == "" || !strings.HasPrefix(importPath, ".") || seen[importPath] {
-			continue
-		}
-		seen[importPath] = true
-		paths = append(paths, importPath)
+		appendImportPath(&paths, seen, importPath, true)
+	}
+	mixedMatches := importDefaultNamedPattern.FindAllStringSubmatch(source, -1)
+	for _, match := range mixedMatches {
+		importPath := strings.TrimSpace(match[3])
+		appendImportPath(&paths, seen, importPath, true)
+	}
+	defaultMatches := importDefaultPattern.FindAllStringSubmatch(source, -1)
+	for _, match := range defaultMatches {
+		importPath := strings.TrimSpace(match[2])
+		appendImportPath(&paths, seen, importPath, true)
+	}
+	namespaceMatches := importNamespacePattern.FindAllStringSubmatch(source, -1)
+	for _, match := range namespaceMatches {
+		importPath := strings.TrimSpace(match[2])
+		appendImportPath(&paths, seen, importPath, true)
 	}
 	return paths
 }
@@ -3163,13 +3277,42 @@ func parsePackageImportPaths(source string) []string {
 	matches := importClausePattern.FindAllStringSubmatch(source, -1)
 	for _, match := range matches {
 		importPath := strings.TrimSpace(match[2])
-		if importPath == "" || strings.HasPrefix(importPath, ".") || seen[importPath] {
-			continue
-		}
-		seen[importPath] = true
-		paths = append(paths, importPath)
+		appendImportPath(&paths, seen, importPath, false)
+	}
+	mixedMatches := importDefaultNamedPattern.FindAllStringSubmatch(source, -1)
+	for _, match := range mixedMatches {
+		importPath := strings.TrimSpace(match[3])
+		appendImportPath(&paths, seen, importPath, false)
+	}
+	defaultMatches := importDefaultPattern.FindAllStringSubmatch(source, -1)
+	for _, match := range defaultMatches {
+		importPath := strings.TrimSpace(match[2])
+		appendImportPath(&paths, seen, importPath, false)
+	}
+	namespaceMatches := importNamespacePattern.FindAllStringSubmatch(source, -1)
+	for _, match := range namespaceMatches {
+		importPath := strings.TrimSpace(match[2])
+		appendImportPath(&paths, seen, importPath, false)
 	}
 	return paths
+}
+
+func appendImportPath(target *[]string, seen map[string]bool, importPath string, relative bool) {
+	if importPath == "" {
+		return
+	}
+	if relative {
+		if !strings.HasPrefix(importPath, ".") {
+			return
+		}
+	} else if strings.HasPrefix(importPath, ".") {
+		return
+	}
+	if seen[importPath] {
+		return
+	}
+	seen[importPath] = true
+	*target = append(*target, importPath)
 }
 
 func resolveRelativeExportCandidate(file string, importPaths []string, identifier string, cache map[string]map[string]bool) (importCandidate, bool) {
@@ -3510,12 +3653,7 @@ func resolveLocalImportFile(file, importPath string) (string, bool) {
 }
 
 func filterImportsByTypeTexts(imports []TypeImport, typeTexts []string) []TypeImport {
-	used := map[string]bool{}
-	for _, typeText := range typeTexts {
-		for _, identifier := range extractTypeIdentifiers(typeText) {
-			used[identifier] = true
-		}
-	}
+	used := usedImportReferenceNames(typeTexts)
 	if len(used) == 0 {
 		return nil
 	}
@@ -3536,6 +3674,9 @@ func filterImportsByTypeTexts(imports []TypeImport, typeTexts []string) []TypeIm
 }
 
 func importReferenceName(name string) string {
+	if strings.HasPrefix(name, "* as ") {
+		return strings.TrimSpace(strings.TrimPrefix(name, "* as "))
+	}
 	if strings.Contains(name, " as ") {
 		parts := strings.SplitN(name, " as ", 2)
 		return strings.TrimSpace(parts[1])
@@ -3543,27 +3684,15 @@ func importReferenceName(name string) string {
 	return strings.TrimSpace(name)
 }
 
-func extractTypeIdentifiers(typeText string) []string {
-	seen := map[string]bool{}
-	var identifiers []string
-	for i := 0; i < len(typeText); {
-		if !isIdentifierStart(typeText[i]) {
-			i++
-			continue
-		}
-		start := i
-		i++
-		for i < len(typeText) && isIdentifierPart(typeText[i]) {
-			i++
-		}
-		identifier := typeText[start:i]
-		if shouldImportIdentifier(identifier) && !seen[identifier] {
-			seen[identifier] = true
-			identifiers = append(identifiers, identifier)
-		}
+func collectUsedTypeReferences(typeTexts []string) usedTypeReferences {
+	references := usedTypeReferences{
+		BareIdentifiers: map[string]bool{},
+		QualifiedOwners: map[string]bool{},
 	}
-	sort.Strings(identifiers)
-	return identifiers
+	for _, typeText := range typeTexts {
+		collectUsedTypeReferencesInto(typeText, references)
+	}
+	return references
 }
 
 func shouldImportIdentifier(identifier string) bool {
@@ -3577,9 +3706,74 @@ func shouldImportIdentifier(identifier string) bool {
 	return !blocked
 }
 
+func collectUsedTypeReferencesInto(typeText string, references usedTypeReferences) {
+	for i := 0; i < len(typeText); {
+		if !isIdentifierStart(typeText[i]) {
+			i++
+			continue
+		}
+		start := i
+		i++
+		for i < len(typeText) && isIdentifierPart(typeText[i]) {
+			i++
+		}
+		identifier := typeText[start:i]
+		previous := previousNonWhitespaceByte(typeText, start)
+		next := nextNonWhitespaceByte(typeText, i)
+		if previous == '.' {
+			continue
+		}
+		if next == '.' {
+			references.QualifiedOwners[identifier] = true
+			continue
+		}
+		if shouldImportIdentifier(identifier) {
+			references.BareIdentifiers[identifier] = true
+		}
+	}
+}
+
+func usedImportReferenceNames(typeTexts []string) map[string]bool {
+	references := collectUsedTypeReferences(typeTexts)
+	used := map[string]bool{}
+	for identifier := range references.BareIdentifiers {
+		used[identifier] = true
+	}
+	for identifier := range references.QualifiedOwners {
+		used[identifier] = true
+	}
+	return used
+}
+
+func previousNonWhitespaceByte(text string, index int) byte {
+	for index > 0 {
+		index--
+		if text[index] == ' ' || text[index] == '\t' || text[index] == '\n' || text[index] == '\r' {
+			continue
+		}
+		return text[index]
+	}
+	return 0
+}
+
+func nextNonWhitespaceByte(text string, index int) byte {
+	for index < len(text) {
+		if text[index] == ' ' || text[index] == '\t' || text[index] == '\n' || text[index] == '\r' {
+			index++
+			continue
+		}
+		return text[index]
+	}
+	return 0
+}
+
 var importClausePattern = regexp.MustCompile(`(?m)^\s*import(?:\s+type)?\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]`)
 
-var importNamespacePattern = regexp.MustCompile(`(?m)^\s*import\s+\*\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*from\s*['"]([^'"]+)['"]`)
+var importDefaultNamedPattern = regexp.MustCompile(`(?ms)^\s*import(?:\s+type)?\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*,\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]`)
+
+var importDefaultPattern = regexp.MustCompile(`(?m)^\s*import(?:\s+type)?\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*from\s*['"]([^'"]+)['"]`)
+
+var importNamespacePattern = regexp.MustCompile(`(?m)^\s*import(?:\s+type)?\s+\*\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*from\s*['"]([^'"]+)['"]`)
 
 var exportedTypePattern = regexp.MustCompile(`(?m)^\s*export\s+(?:declare\s+)?(?:interface|type|class|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)`)
 

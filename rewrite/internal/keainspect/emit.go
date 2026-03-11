@@ -21,7 +21,10 @@ func EmitTypegenAt(logics []ParsedLogic, generatedAt time.Time) string {
 	if len(imports) > 0 {
 		builder.WriteByte('\n')
 		for _, item := range imports {
-			builder.WriteString(fmt.Sprintf("import type { %s } from '%s'\n", strings.Join(item.Names, ", "), item.Path))
+			for _, line := range renderImportLines(item) {
+				builder.WriteString(line)
+				builder.WriteByte('\n')
+			}
 		}
 	}
 
@@ -65,6 +68,27 @@ func mergeImports(logics []ParsedLogic) []TypeImport {
 		imports = append(imports, TypeImport{Path: path, Names: names})
 	}
 	return imports
+}
+
+func renderImportLines(item TypeImport) []string {
+	var namespaceSpecifiers []string
+	var namedSpecifiers []string
+	for _, name := range item.Names {
+		if strings.HasPrefix(name, "* as ") {
+			namespaceSpecifiers = append(namespaceSpecifiers, strings.TrimSpace(strings.TrimPrefix(name, "* as ")))
+			continue
+		}
+		namedSpecifiers = append(namedSpecifiers, name)
+	}
+
+	lines := make([]string, 0, len(namespaceSpecifiers)+1)
+	for _, alias := range namespaceSpecifiers {
+		lines = append(lines, fmt.Sprintf("import type * as %s from '%s'", alias, item.Path))
+	}
+	if len(namedSpecifiers) > 0 {
+		lines = append(lines, fmt.Sprintf("import type { %s } from '%s'", strings.Join(namedSpecifiers, ", "), item.Path))
+	}
+	return lines
 }
 
 func renderInterface(logic ParsedLogic) string {

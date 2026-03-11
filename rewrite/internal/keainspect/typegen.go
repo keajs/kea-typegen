@@ -566,7 +566,10 @@ func emitTypegenFile(logics []ParsedLogic, options fileEmitOptions) string {
 	if len(imports) > 0 {
 		builder.WriteByte('\n')
 		for _, item := range imports {
-			builder.WriteString(fmt.Sprintf("import type { %s } from '%s'\n", strings.Join(item.Names, ", "), item.Path))
+			for _, line := range renderImportLines(item) {
+				builder.WriteString(line)
+				builder.WriteByte('\n')
+			}
 		}
 	}
 

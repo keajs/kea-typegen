@@ -206,6 +206,159 @@ func TestBuildParsedLogicsCollectsImports(t *testing.T) {
 	}
 }
 
+func TestBuildParsedLogicsCollectsNamespaceAndDefaultImports(t *testing.T) {
+	source := strings.Join([]string{
+		"import Foo from './foo'",
+		"import type * as ts from 'typescript'",
+		"import { kea } from 'kea'",
+		"",
+		"export const importLogic = kea({",
+		"    path: ['importLogic'],",
+		"    props: {} as {",
+		"        node: ts.Node",
+		"        child: Foo.Bar",
+		"        owner: Foo",
+		"    },",
+		"})",
+		"",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/importLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "importLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "{ node: ts.Node; child: Foo.Bar; owner: Foo; }",
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	imports := logics[0].Imports
+	if !hasImport(imports, "./foo", "default as Foo") {
+		t.Fatalf("expected default import ownership for Foo, got %+v", imports)
+	}
+	if !hasImport(imports, "typescript", "* as ts") {
+		t.Fatalf("expected namespace import ownership for ts, got %+v", imports)
+	}
+}
+
+func TestBuildParsedLogicsResolvesDefaultImportedConnectTargets(t *testing.T) {
+	tempDir := t.TempDir()
+	targetFile := filepath.Join(tempDir, "githubLogic.ts")
+	if err := os.WriteFile(targetFile, []byte("export default null\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile targetFile: %v", err)
+	}
+
+	sourceFile := filepath.Join(tempDir, "defaultConnectLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import github from './githubLogic'",
+		"",
+		"export const defaultConnectLogic = kea({",
+		"    connect: {",
+		"        actions: [github, ['setRepositories']],",
+		"        values: [github(), ['repositories']],",
+		"    },",
+		"})",
+		"",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       sourceFile,
+		Logics: []LogicReport{
+			{
+				Name:      "defaultConnectLogic",
+				InputKind: "object",
+			},
+		},
+	}
+
+	state := &buildState{
+		binaryPath: "tsgo",
+		projectDir: tempDir,
+		configFile: filepath.Join(tempDir, "tsconfig.json"),
+		parsedByFile: map[string][]ParsedLogic{
+			filepath.Clean(targetFile): {
+				{
+					Name: "githubLogic",
+					Actions: []ParsedAction{
+						{
+							Name:         "setRepositories",
+							FunctionType: "(repositories: Repository[]) => { repositories: Repository[]; }",
+							PayloadType:  "{ repositories: Repository[]; }",
+						},
+					},
+					Selectors: []ParsedField{
+						{Name: "repositories", Type: "Repository[]"},
+					},
+					Imports: []TypeImport{
+						{Path: "./types", Names: []string{"Repository"}},
+					},
+				},
+			},
+		},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+
+	logics, err := buildParsedLogicsFromSource(report, source, state)
+	if err != nil {
+		t.Fatalf("buildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasAction(logic.Actions, "setRepositories") {
+		t.Fatalf("expected connected action for setRepositories, got %+v", logic.Actions)
+	}
+	if !hasImport(logic.Imports, "./types", "Repository") {
+		t.Fatalf("expected connected Repository import, got %+v", logic.Imports)
+	}
+	if !hasReducer(logic.Selectors, "repositories", "Repository[]") {
+		t.Fatalf("expected connected repositories selector type Repository[], got %+v", logic.Selectors)
+	}
+}
+
+func TestEmitTypegenRendersNamespaceAndDefaultImports(t *testing.T) {
+	rendered := EmitTypegenAt([]ParsedLogic{
+		{
+			Name:     "importLogic",
+			TypeName: "importLogicType",
+			Path:     []string{"importLogic"},
+			Imports: []TypeImport{
+				{Path: "./foo", Names: []string{"default as Foo"}},
+				{Path: "typescript", Names: []string{"* as ts"}},
+			},
+			PropsType: "{ node: ts.Node; child: Foo.Bar; }",
+		},
+	}, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+
+	if !strings.Contains(rendered, "import type { default as Foo } from './foo'\n") {
+		t.Fatalf("expected default type import in output:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "import type * as ts from 'typescript'\n") {
+		t.Fatalf("expected namespace type import in output:\n%s", rendered)
+	}
+}
+
 func TestParseSelectorsPrefersReportedReturnType(t *testing.T) {
 	section := SectionReport{
 		Name: "selectors",

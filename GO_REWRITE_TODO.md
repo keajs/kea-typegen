@@ -23,6 +23,7 @@
   - `loaders` into reducer state plus synthetic request/success/failure actions
   - `lazyLoaders` into reducer state plus synthetic request/success/failure actions
   - `connect` for local imported logics by recursively inspecting the referenced source file and reusing the normalized actions/values
+  - local `connect` targets reached through default imports such as `import github from './githubLogic'`
   - local `connect` / imported `logic.actionTypes.*` target expressions reached through namespace imports such as `github.githubLogic` and `github.githubLogic()`, while still reusing the connected logic's normalized imports
   - symbol-backed `connect.actions`/`connect.values` recovery from connected wrapper members, including widened connected values such as `isLoading: boolean`
   - external `connect.actions` with a listener-signature fallback when the target logic is not locally inspectable
@@ -61,10 +62,12 @@
   - `__keaTypeGenInternalExtraInput`
 - Import/reference gathering now combines normalized type-string scanning with local-module export discovery:
   - direct named imports and exported local types from the source file
+  - direct default-import and namespace-import ownership reuse for qualified type references such as `Foo.Bar` and `ts.Node`
+  - mixed default-plus-named import clauses now contribute both ownership reuse and fallback export discovery
   - transitive exported type names from already-imported relative modules, including namespace members and simple re-exports
   - exported type names from already-imported packages by scanning installed `.d.ts` files under `node_modules` when the current source does not spell the type import directly
   - existing imports attached by earlier normalization passes are now treated as authoritative so connected/local ownership is not re-resolved onto unrelated package exports
-  - source-guided alias preservation now lets the reduced emitter keep richer ownership such as `L1`, `A2`, `D6`, `R6`, `Bla`, `ExportedApi.RandomThing`, `NodeJS.Timeout`, `S7`, and `RandomThing` in `samples/autoImportLogic.ts`
+  - source-guided alias preservation now lets the reduced emitter keep richer ownership such as `L1`, `A2`, `D6`, `R6`, `Bla`, `ExportedApi.RandomThing`, `NodeJS.Timeout`, `S7`, and `RandomThing` in `samples/autoImportLogic.ts`, and the emitter now prints namespace/default type imports when ownership depends on them
 - Reusable `typescript-go` API transport code now lives in [`rewrite/internal/tsgoapi/client.go`](/Users/marius/Projects/Kea/kea-typegen/rewrite/internal/tsgoapi/client.go).
 - Preferred `tsgo` binary discovery now prefers an actually present repo binary, falls back to `tsgo`/`tsgo-upstream` on `PATH`, and reports missing-binary failures explicitly instead of silently defaulting to a dead `poc/.../tsgo-upstream` path.
 
@@ -90,6 +93,7 @@
 - `samples/typed-builder/typedFormDemoLogic.ts`: reduced typed-form plugin `custom` and `__keaTypeGenInternalExtraInput` fields
 - Reduced `.typegen` emission is now verified end-to-end for `samples/propsLogic.ts`.
 - Basic type import collection is verified on `samples/builderLogic.ts` (`Repository` from `./types`).
+- Unit coverage now also verifies default/namespace import ownership (`default as Foo`, `import type * as ts`) plus default-imported local `connect` targets.
 - Reduced `.typegen` emission now also synthesizes loader actions/defaults for `samples/logic.ts`, including `Session` import collection from the source file.
 - Reduced `.typegen` emission for `samples/logic.ts` now also includes `listeners`, `sharedListeners`, `events`, and the `BreakPointFunction` import from `kea`.
 - Reduced `.typegen` emission now also covers:
@@ -117,9 +121,9 @@
 1. Replace the remaining source-scanned import gathering with symbol-backed ownership data from `typescript-go`, especially when the right owner is only available semantically rather than from explicit source text:
    - inferred aliases that are not spelled in the source
    - package/global/plugin helper types beyond installed-package export scanning
-   - ownership-preserving reuse inside connected external logics beyond the current authoritative-import reuse
+   - ownership-preserving reuse inside connected external logics beyond the current authoritative-import reuse and the new explicit default/namespace-owner reuse
 2. Tighten `connect` beyond the current recursive local-file path:
-   - broader target-expression support beyond the current identifier / call / namespace-property cases
+   - broader target-expression support beyond the current identifier / call / namespace-property / default-import cases
    - connected values/actions should preserve ownership/import fidelity from declaration sources rather than combining symbol-backed member types with import scanning heuristics
    - external connected payload fidelity should stop depending on local listener signatures when the symbol-return payload itself is truncated
 3. Deepen plugin and typed-builder parity beyond the current reduced heuristics:
@@ -138,9 +142,9 @@
 - Code generation still exists only for a reduced subset of the final interface, although the emitter now also covers `actionKeys` plus aggregate `reducer`/`selector` fields.
 - No plugin execution model yet.
 - Builder syntax is detected and partially introspected, and `typedForm(...)` now has a reduced heuristic path, but custom builders are still mostly opaque without plugin-specific handling.
-- Import gathering is still not fully symbol-backed. Local relative module export scanning, installed-package `.d.ts` export scanning, and source-guided alias recovery now cover much more of the local case, but inferred ownership and some package/global/plugin helper types are still missing.
+- Import gathering is still not fully symbol-backed. Local relative module export scanning, installed-package `.d.ts` export scanning, and source-guided named/default/namespace alias recovery now cover much more of the local case, but inferred ownership and some package/global/plugin helper types are still missing.
 - Existing normalized imports now prevent some bad fallback resolutions, but ownership still depends on heuristics once a type has not already been attached by an earlier pass.
-- Connect normalization now uses symbol-backed wrapper members for local imports, namespace-imported local targets, and simple package-provided logics, but more complex target expressions and fuller ownership/import fidelity still need work.
+- Connect normalization now uses symbol-backed wrapper members for local imports, default-imported local targets, namespace-imported local targets, and simple package-provided logics, but more complex target expressions and fuller ownership/import fidelity still need work.
 - Alias-preserving ownership is much better in richer files such as `samples/autoImportLogic.ts`, but still depends on source spelling; inferred-only aliases can still collapse to expanded forms.
 - Plugin-produced fields now have reduced heuristics for a few known samples, including typed-form `custom`/`__keaTypeGenInternalExtraInput`, but there is still no general plugin execution or typegen hook model.
 - Builder `forms` defaults are now much closer for local spread-heavy defaults, but imported spreads and broader expression shapes still fall back to heuristic type text.
