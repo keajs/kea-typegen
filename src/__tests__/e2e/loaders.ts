@@ -1,4 +1,5 @@
 import { logicSourceToLogicType } from '../../utils'
+import type { logicType, logicType, logicType } from './loadersType'
 
 test('loaders - with a function', () => {
     const logicSource = `
@@ -7,7 +8,7 @@ test('loaders - with a function', () => {
             user: number,
             type: string
         }
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
             }),
@@ -32,7 +33,7 @@ test('loaders - with an array and default', () => {
             user: number,
             type: string
         }
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
             }),
@@ -55,7 +56,7 @@ test('loaders - with an array and default', () => {
 test('loaders - with no param', () => {
     const logicSource = `
         import { kea } from 'kea'
-        const logic = kea({
+        const logic = kea<logicType>({
             loaders: ({ actions }) => ({
                 sessions: [
                     [] as string[],

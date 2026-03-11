@@ -337,6 +337,51 @@ func TestBuildParsedLogicsResolvesDefaultImportedConnectTargets(t *testing.T) {
 	}
 }
 
+func TestBuildStateInspectFileSkipsAPIForFilesWithoutLogics(t *testing.T) {
+	tempDir := t.TempDir()
+	sourceFile := filepath.Join(tempDir, "plain.ts")
+	source := "export const meaning = 42\n"
+	if err := os.WriteFile(sourceFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("os.WriteFile sourceFile: %v", err)
+	}
+
+	state := &buildState{
+		binaryPath:    filepath.Join(tempDir, "missing-tsgo"),
+		projectDir:    tempDir,
+		configFile:    filepath.Join(tempDir, "tsconfig.json"),
+		timeout:       time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+
+	report, gotSource, err := state.inspectFile(sourceFile)
+	if err != nil {
+		t.Fatalf("inspectFile returned error: %v", err)
+	}
+	if gotSource != source {
+		t.Fatalf("expected source %q, got %q", source, gotSource)
+	}
+	if len(report.Logics) != 0 {
+		t.Fatalf("expected no logics, got %+v", report.Logics)
+	}
+	if report.Snapshot != "" || report.Config != nil {
+		t.Fatalf("expected no tsgo-backed metadata for no-logic file, got %+v", report)
+	}
+}
+
+func TestBuildStateProjectIDForFileUsesPrimaryProjectShortcut(t *testing.T) {
+	state := &buildState{primaryProjectID: "project-1"}
+
+	projectID, err := state.projectIDForFile("/tmp/logic.ts")
+	if err != nil {
+		t.Fatalf("projectIDForFile returned error: %v", err)
+	}
+	if projectID != "project-1" {
+		t.Fatalf("expected project-1, got %q", projectID)
+	}
+}
+
 func TestParseConnectedTargetReferenceSupportsWrappedNamespaceTargets(t *testing.T) {
 	for _, tc := range []struct {
 		expression string
@@ -980,6 +1025,261 @@ func TestBuildParsedLogicsLoadersSample(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversBuilderPropsTypeFromSourceAssertion(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"",
+		"interface DemoLogicProps {",
+		"    id: string",
+		"}",
+		"",
+		"export const demoLogic = kea([",
+		"    path(['demoLogic']),",
+		"    props({} as DemoLogicProps),",
+		"    key((props: DemoLogicProps) => props.id),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/demoLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "demoLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "any",
+						PrintedTypeNode:     "any",
+					},
+					{
+						Name:                "key",
+						EffectiveTypeString: "any",
+						PrintedTypeNode:     "any",
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if logic.PropsType != "DemoLogicProps" {
+		t.Fatalf("expected props type %q, got %q", "DemoLogicProps", logic.PropsType)
+	}
+	if logic.KeyType != "string" {
+		t.Fatalf("expected key type %q, got %q", "string", logic.KeyType)
+	}
+}
+
+func TestSourceMemberPathTypeTextHandlesMultilineInterfaceCallbacks(t *testing.T) {
+	source := strings.Join([]string{
+		"interface CodeEditorLogicProps {",
+		"    key: string",
+		"    query: string",
+		"    onError?: (error: string | null) => void",
+		"    onMetadata?: (metadata: string | null) => void",
+		"}",
+	}, "\n")
+
+	got := sourceMemberPathTypeText(source, "CodeEditorLogicProps", []string{"key"})
+	if got != "string" {
+		t.Fatalf("expected member type %q, got %q", "string", got)
+	}
+}
+
+func TestSourceKeyTypeFromSourceResolvesAliasedImportedHelper(t *testing.T) {
+	tempDir := t.TempDir()
+	sharedUtilsDir := filepath.Join(tempDir, "frontend", "src", "scenes", "insights")
+	if err := os.MkdirAll(sharedUtilsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	sharedUtilsFile := filepath.Join(sharedUtilsDir, "sharedUtils.ts")
+	sharedUtilsSource := strings.Join([]string{
+		"export interface InsightLogicProps {",
+		"    id?: string",
+		"}",
+		"",
+		"export const keyForInsightLogicProps =",
+		"    (defaultKey = 'new') =>",
+		"    (props: InsightLogicProps): string => props.id || defaultKey",
+	}, "\n")
+	if err := os.WriteFile(sharedUtilsFile, []byte(sharedUtilsSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "frontend", "src", "logic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, key, path } from 'kea'",
+		"import { keyForInsightLogicProps } from 'scenes/insights/sharedUtils'",
+		"",
+		"export const demoLogic = kea([",
+		"    path(['demoLogic']),",
+		"    key(keyForInsightLogicProps('new')),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logics, err := FindLogics(logicSource)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+
+	properties := map[string]SourceProperty{}
+	for _, property := range logics[0].Properties {
+		properties[property.Name] = property
+	}
+	keyProperty, ok := properties["key"]
+	if !ok {
+		t.Fatalf("expected key property in %+v", logics[0].Properties)
+	}
+
+	state := &buildState{
+		configFile: filepath.Join(tempDir, "tsconfig.json"),
+		config: &tsgoapi.ConfigResponse{
+			Options: map[string]any{
+				"baseUrl": "frontend",
+				"paths": map[string]any{
+					"scenes/*": []any{"src/scenes/*"},
+				},
+			},
+		},
+	}
+
+	candidate, ok := parseNamedValueImports(logicSource)["keyForInsightLogicProps"]
+	if !ok {
+		t.Fatalf("expected named import for keyForInsightLogicProps")
+	}
+	resolvedFile, ok := resolveImportFile(logicFile, candidate.Path, state)
+	if !ok {
+		t.Fatalf("expected aliased import %q to resolve", candidate.Path)
+	}
+	if resolvedFile != sharedUtilsFile {
+		t.Fatalf("expected resolved import file %q, got %q", sharedUtilsFile, resolvedFile)
+	}
+	importedSource, importedFile, initializer, ok := sourceImportedValueInitializer(
+		logicSource,
+		logicFile,
+		"keyForInsightLogicProps",
+		state,
+	)
+	if !ok {
+		t.Fatalf("expected imported initializer for keyForInsightLogicProps")
+	}
+	if importedFile != sharedUtilsFile {
+		t.Fatalf("expected imported file %q, got %q", sharedUtilsFile, importedFile)
+	}
+	if !strings.Contains(initializer, "(defaultKey = 'new') =>") {
+		t.Fatalf("expected imported initializer, got %q", initializer)
+	}
+	info, ok := parseSourceArrowInfo(initializer)
+	if !ok {
+		t.Fatalf("expected imported initializer to parse as arrow")
+	}
+	innerInfo, ok := parseSourceArrowInfo(strings.TrimSpace(info.Body))
+	if !ok {
+		t.Fatalf("expected inner helper to parse as arrow, got %q", strings.TrimSpace(info.Body))
+	}
+	if innerInfo.ExplicitReturn != "string" {
+		t.Fatalf("expected explicit inner helper return %q, got %q", "string", innerInfo.ExplicitReturn)
+	}
+	innerType := sourceExpressionTypeTextWithContext(importedSource, importedFile, strings.TrimSpace(info.Body), nil, state)
+	if innerType != "(props: InsightLogicProps) => string" {
+		t.Fatalf("expected inner helper type %q, got %q", "(props: InsightLogicProps) => string", innerType)
+	}
+	importedType := sourceExpressionTypeTextWithContext(importedSource, importedFile, initializer, nil, state)
+	if importedType != "(defaultKey = 'new') => (props: InsightLogicProps) => string" {
+		t.Fatalf("expected imported helper type %q, got %q", "(defaultKey = 'new') => (props: InsightLogicProps) => string", importedType)
+	}
+	keyExpressionType := sourceExpressionTypeTextWithContext(logicSource, logicFile, sourcePropertyText(logicSource, keyProperty), nil, state)
+	if keyExpressionType != "(props: InsightLogicProps) => string" {
+		t.Fatalf("expected key expression type %q, got %q", "(props: InsightLogicProps) => string", keyExpressionType)
+	}
+
+	got := sourceKeyTypeFromSource(logicSource, logicFile, keyProperty, "", state)
+	if got != "string" {
+		t.Fatalf("expected imported helper key type %q, got %q", "string", got)
+	}
+}
+
+func TestBuildParsedLogicsRecoversLazyLoadersFromSource(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import { lazyLoaders } from 'kea-loaders'",
+		"",
+		"interface DemoItem {",
+		"    id: string",
+		"}",
+		"",
+		"export const lazyLogic = kea([",
+		"    path(['lazyLogic']),",
+		"    lazyLoaders(() => ({",
+		"        item: [null as DemoItem | null, {",
+		"            loadItem: async (id: string) => ({ id } as DemoItem),",
+		"        }],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/lazyLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "lazyLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "lazyLoaders",
+						Members: []MemberReport{
+							{Name: "item", TypeString: "any[]"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasReducer(logic.Reducers, "item", "DemoItem | null") {
+		t.Fatalf("expected item reducer type to recover from source, got %+v", logic.Reducers)
+	}
+	if !hasReducer(logic.Reducers, "itemLoading", "boolean") {
+		t.Fatalf("expected itemLoading reducer to be synthesized, got %+v", logic.Reducers)
+	}
+	if action, ok := findParsedAction(logic.Actions, "loadItem"); !ok || action.FunctionType != "(id: string) => Promise<DemoItem>" {
+		t.Fatalf("expected loadItem action signature to recover from source, got %+v", logic.Actions)
+	}
+	if action, ok := findParsedAction(logic.Actions, "loadItemSuccess"); !ok || action.FunctionType != "(item: DemoItem, payload?: string) => { item: DemoItem; payload?: string }" {
+		t.Fatalf("expected loadItemSuccess action signature to recover from source, got %+v", logic.Actions)
+	}
+	if !hasAction(logic.Actions, "loadItemFailure") {
+		t.Fatalf("expected loadItemFailure action to be synthesized, got %+v", logic.Actions)
 	}
 }
 

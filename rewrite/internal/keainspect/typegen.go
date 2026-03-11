@@ -442,7 +442,7 @@ func collectParsedFiles(options AppOptions, state *buildState) ([]parsedFile, er
 
 		report, source, err := state.inspectFile(file)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", file, err)
 		}
 		if len(report.Logics) == 0 {
 			continue
@@ -450,11 +450,11 @@ func collectParsedFiles(options AppOptions, state *buildState) ([]parsedFile, er
 
 		sourceLogics, err := FindLogics(source)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", file, err)
 		}
 		logics, err := buildParsedLogicsFromSource(report, source, state)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", file, err)
 		}
 		state.parsedByFile[filepath.Clean(file)] = logics
 		parsedFiles = append(parsedFiles, parsedFile{

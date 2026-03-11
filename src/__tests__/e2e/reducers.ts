@@ -1,10 +1,11 @@
 import { logicSourceToLogicType } from '../../utils'
+import type { logicType, logicType, logicType, logicType } from './reducersType'
 
 test('reducers - with a function', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),
@@ -36,7 +37,7 @@ test('reducers - as an object', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),
@@ -67,7 +68,7 @@ test('reducers - as a function returning a object', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),
@@ -101,7 +102,7 @@ test('reducers - with bool default', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: true
             }),

@@ -3,6 +3,7 @@ package keainspect
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -181,8 +182,12 @@ func parseTopLevelBuilderCalls(source string, arrayStart, arrayEnd int) ([]Sourc
 			continue
 		}
 
+		callEnd, err := findMatching(source, i, '(', ')')
+		if err != nil {
+			return nil, err
+		}
 		valueStart := skipTrivia(source, i+1)
-		valueEnd, err := findPropertyEnd(source, valueStart, arrayEnd)
+		valueEnd, err := findPropertyEnd(source, valueStart, callEnd)
 		if err != nil {
 			return nil, err
 		}
@@ -192,7 +197,7 @@ func parseTopLevelBuilderCalls(source string, arrayStart, arrayEnd int) ([]Sourc
 			ValueStart: valueStart,
 			ValueEnd:   valueEnd,
 		})
-		i = valueEnd
+		i = callEnd + 1
 	}
 	return properties, nil
 }
@@ -497,12 +502,18 @@ func findTopLevelReturnProbe(source string, start, limit int) (int, bool, error)
 	for i := start; i < limit; i++ {
 		switch source[i] {
 		case '\'':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '\'')
 			if err != nil {
 				return 0, false, err
 			}
 			i = end
 		case '"':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '"')
 			if err != nil {
 				return 0, false, err
@@ -528,9 +539,17 @@ func findTopLevelReturnProbe(source string, start, limit int) (int, bool, error)
 					i++
 				}
 				if i+1 >= limit {
-					return 0, false, fmt.Errorf("unterminated block comment")
+					return 0, false, fmt.Errorf("unterminated block comment near %s", previewSourceAt(source, i-1))
 				}
 				i++
+				continue
+			}
+			if isRegexStart(source, i) {
+				end, err := skipRegexLiteral(source, i)
+				if err != nil {
+					return 0, false, err
+				}
+				i = end
 				continue
 			}
 		case '(':
@@ -593,12 +612,18 @@ func findTopLevelArrow(source string, start, limit int) (int, bool, error) {
 	for i := start; i < limit-1; i++ {
 		switch source[i] {
 		case '\'':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '\'')
 			if err != nil {
 				return 0, false, err
 			}
 			i = end
 		case '"':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '"')
 			if err != nil {
 				return 0, false, err
@@ -624,9 +649,17 @@ func findTopLevelArrow(source string, start, limit int) (int, bool, error) {
 					i++
 				}
 				if i+1 >= limit {
-					return 0, false, fmt.Errorf("unterminated block comment")
+					return 0, false, fmt.Errorf("unterminated block comment near %s", previewSourceAt(source, i-1))
 				}
 				i++
+				continue
+			}
+			if isRegexStart(source, i) {
+				end, err := skipRegexLiteral(source, i)
+				if err != nil {
+					return 0, false, err
+				}
+				i = end
 				continue
 			}
 		case '(':
@@ -672,12 +705,18 @@ func findPropertyEnd(source string, start, limit int) (int, error) {
 	for i := start; i < limit; i++ {
 		switch source[i] {
 		case '\'':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '\'')
 			if err != nil {
 				return 0, err
 			}
 			i = end
 		case '"':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '"')
 			if err != nil {
 				return 0, err
@@ -703,9 +742,17 @@ func findPropertyEnd(source string, start, limit int) (int, error) {
 					i++
 				}
 				if i+1 >= limit {
-					return 0, fmt.Errorf("unterminated block comment")
+					return 0, fmt.Errorf("unterminated block comment near %s", previewSourceAt(source, i-1))
 				}
 				i++
+				continue
+			}
+			if isRegexStart(source, i) {
+				end, err := skipRegexLiteral(source, i)
+				if err != nil {
+					return 0, err
+				}
+				i = end
 				continue
 			}
 		case '(':
@@ -748,9 +795,13 @@ func findPropertyEnd(source string, start, limit int) (int, error) {
 
 func findMatching(source string, start int, open, close byte) (int, error) {
 	depth := 0
+	var opens []int
 	for i := start; i < len(source); i++ {
 		switch source[i] {
 		case '\'':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '\'')
 			if err != nil {
 				return 0, err
@@ -758,6 +809,9 @@ func findMatching(source string, start int, open, close byte) (int, error) {
 			i = end
 			continue
 		case '"':
+			if !isQuotedStringStart(source, i) {
+				continue
+			}
 			end, err := skipQuoted(source, i, '"')
 			if err != nil {
 				return 0, err
@@ -785,25 +839,41 @@ func findMatching(source string, start int, open, close byte) (int, error) {
 					i++
 				}
 				if i+1 >= len(source) {
-					return 0, fmt.Errorf("unterminated block comment")
+					return 0, fmt.Errorf("unterminated block comment near %s", previewSourceAt(source, i-1))
 				}
 				i++
+				continue
+			}
+			if isRegexStart(source, i) {
+				end, err := skipRegexLiteral(source, i)
+				if err != nil {
+					return 0, err
+				}
+				i = end
 				continue
 			}
 		}
 
 		if source[i] == open {
 			depth++
+			opens = append(opens, i)
 			continue
 		}
 		if source[i] == close {
 			depth--
+			if len(opens) > 0 {
+				opens = opens[:len(opens)-1]
+			}
 			if depth == 0 {
 				return i, nil
 			}
 		}
 	}
-	return 0, fmt.Errorf("unterminated %q", string(open))
+	unmatchedStart := start
+	if len(opens) > 0 {
+		unmatchedStart = opens[len(opens)-1]
+	}
+	return 0, fmt.Errorf("unterminated %q near %s", string(open), previewSourceAt(source, unmatchedStart))
 }
 
 func skipQuoted(source string, start int, quote byte) (int, error) {
@@ -816,7 +886,7 @@ func skipQuoted(source string, start int, quote byte) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, fmt.Errorf("unterminated quoted string")
+	return 0, fmt.Errorf("unterminated quoted string near %s", previewSourceAt(source, start))
 }
 
 func skipTemplate(source string, start int) (int, error) {
@@ -838,6 +908,141 @@ func skipTemplate(source string, start int) (int, error) {
 		}
 	}
 	return 0, fmt.Errorf("unterminated template string")
+}
+
+func previewSourceAt(source string, start int) string {
+	if start < 0 {
+		start = 0
+	}
+	if start > len(source) {
+		start = len(source)
+	}
+	end := start + 80
+	if end > len(source) {
+		end = len(source)
+	}
+	snippet := strings.ReplaceAll(source[start:end], "\n", "\\n")
+	snippet = strings.ReplaceAll(snippet, "\r", "\\r")
+	snippet = strings.ReplaceAll(snippet, "\t", "\\t")
+	if end < len(source) {
+		snippet += "..."
+	}
+	return strconv.Quote(snippet)
+}
+
+func isRegexStart(source string, start int) bool {
+	if start+1 >= len(source) || source[start] != '/' {
+		return false
+	}
+	if source[start+1] == '/' || source[start+1] == '*' {
+		return false
+	}
+	if source[start+1] == '>' {
+		return false
+	}
+
+	prev := previousSignificantIndex(source, start-1)
+	if prev < 0 {
+		return true
+	}
+
+	if isIdentifierPart(source[prev]) {
+		wordStart := prev
+		for wordStart > 0 && isIdentifierPart(source[wordStart-1]) {
+			wordStart--
+		}
+		switch source[wordStart : prev+1] {
+		case "return", "throw", "case", "typeof", "instanceof", "delete", "void", "new", "in", "of":
+			return true
+		default:
+			return false
+		}
+	}
+
+	switch source[prev] {
+	case ')', ']', '}', '.', '+', '-', '<', '>':
+		return false
+	default:
+		return true
+	}
+}
+
+func isQuotedStringStart(source string, start int) bool {
+	prev := previousSignificantIndex(source, start-1)
+	if prev < 0 {
+		return true
+	}
+
+	if isIdentifierPart(source[prev]) {
+		wordStart := prev
+		for wordStart > 0 && isIdentifierPart(source[wordStart-1]) {
+			wordStart--
+		}
+		switch source[wordStart : prev+1] {
+		case "return", "throw", "case", "typeof", "instanceof", "delete", "void", "new", "in", "of":
+			return true
+		default:
+			return false
+		}
+	}
+
+	if source[prev] >= '0' && source[prev] <= '9' {
+		return false
+	}
+
+	switch source[prev] {
+	case ')', ']', '}', '\'', '"', '`', '.':
+		return false
+	default:
+		return true
+	}
+}
+
+func previousSignificantIndex(source string, start int) int {
+	for i := start; i >= 0; i-- {
+		if unicode.IsSpace(rune(source[i])) {
+			if source[i] == '\n' || source[i] == '\r' {
+				return -1
+			}
+			continue
+		}
+		return i
+	}
+	return -1
+}
+
+func skipRegexLiteral(source string, start int) (int, error) {
+	inCharClass := false
+	for i := start + 1; i < len(source); i++ {
+		switch source[i] {
+		case '\\':
+			i++
+		case '[':
+			if !inCharClass {
+				inCharClass = true
+			}
+		case ']':
+			if inCharClass {
+				inCharClass = false
+			}
+		case '/':
+			if inCharClass {
+				continue
+			}
+			for i+1 < len(source) {
+				next := source[i+1]
+				if (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') {
+					i++
+					continue
+				}
+				break
+			}
+			return i, nil
+		case '\n', '\r':
+			return 0, fmt.Errorf("unterminated regex literal near %s", previewSourceAt(source, start))
+		}
+	}
+	return 0, fmt.Errorf("unterminated regex literal near %s", previewSourceAt(source, start))
 }
 
 func skipTrivia(source string, start int) int {
@@ -877,7 +1082,7 @@ func guessLogicName(source string, keaStart int) string {
 		start = 0
 	}
 	window := source[start:keaStart]
-	re := regexp.MustCompile(`(?m)(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*$`)
+	re := regexp.MustCompile(`(?m)(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)(?:\s*:[^=\n]+)?\s*=\s*$`)
 	matches := re.FindAllStringSubmatch(window, -1)
 	if len(matches) == 0 {
 		return "logic"

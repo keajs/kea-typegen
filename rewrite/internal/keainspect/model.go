@@ -16,7 +16,10 @@ import (
 	"kea-typegen/rewrite/internal/tsgoapi"
 )
 
-var optionalUndefinedUnionPattern = regexp.MustCompile(`(\?\s*:\s*[^;,\n{}]+?)\s*\|\s*undefined\b`)
+var (
+	optionalUndefinedUnionPattern = regexp.MustCompile(`(\?\s*:\s*[^;,\n{}]+?)\s*\|\s*undefined\b`)
+	unbracedMemberTypePattern     = regexp.MustCompile(`\b[$A-Za-z_][\w$]*\??\s*:`)
+)
 
 type ParsedAction struct {
 	Name         string `json:"name"`
@@ -89,16 +92,17 @@ type ParsedLogic struct {
 }
 
 type buildState struct {
-	binaryPath    string
-	projectDir    string
-	configFile    string
-	timeout       time.Duration
-	parsedByFile  map[string][]ParsedLogic
-	building      map[string]bool
-	apiClient     *tsgoapi.Client
-	apiSnapshot   string
-	config        *tsgoapi.ConfigResponse
-	projectByFile map[string]string
+	binaryPath       string
+	projectDir       string
+	configFile       string
+	timeout          time.Duration
+	parsedByFile     map[string][]ParsedLogic
+	building         map[string]bool
+	apiClient        *tsgoapi.Client
+	apiSnapshot      string
+	config           *tsgoapi.ConfigResponse
+	primaryProjectID string
+	projectByFile    map[string]string
 }
 
 func BuildParsedLogics(report *Report) ([]ParsedLogic, error) {
@@ -179,14 +183,24 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 
 	if section, ok := sections["props"]; ok {
 		parsed.PropsType = preferredTypeText(section)
+		if property, hasProperty := properties["props"]; hasProperty && (parsed.PropsType == "" || isAnyLikeType(parsed.PropsType)) {
+			if recovered := normalizeSourceTypeText(sourceExpressionTypeText(source, sourcePropertyText(source, property))); recovered != "" && !isAnyLikeType(recovered) {
+				parsed.PropsType = recovered
+			}
+		}
 	}
 	if section, ok := sections["key"]; ok {
 		parsed.KeyType = preferredTypeText(section)
 		if property, hasProperty := properties["key"]; hasProperty && (parsed.KeyType == "" || isAnyLikeType(parsed.KeyType)) {
-			if probed := normalizeSourceTypeText(sourceArrowReturnTypeFromTypeProbe(source, report.File, property, state)); probed != "" {
+			if probed := normalizeSourceTypeText(sourceCallbackReturnTypeFromTypeProbe(source, report.File, property, state)); probed != "" &&
+				!isAnyLikeType(probed) &&
+				!typeTextContainsStandaloneToken(probed, "any") &&
+				!typeTextContainsStandaloneToken(probed, "unknown") {
 				parsed.KeyType = probed
 			} else if inferred := sourceArrowReturnTypeText(source, sourcePropertyText(source, property)); inferred != "" {
 				parsed.KeyType = inferred
+			} else if recovered := sourceKeyTypeFromSource(source, report.File, property, parsed.PropsType, state); recovered != "" {
+				parsed.KeyType = recovered
 			}
 		}
 	}
@@ -216,7 +230,7 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, loaderReducers...)
 	}
 	if section, ok := sections["lazyLoaders"]; ok {
-		loaderActions, loaderReducers := parseLazyLoaders(section)
+		loaderActions, loaderReducers := parseLazyLoadersWithSource(section, source, properties["lazyLoaders"], report.File, state)
 		parsed.Actions = mergeParsedActionsPreferExisting(parsed.Actions, loaderActions...)
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, loaderReducers...)
 	}
@@ -433,9 +447,6 @@ func sourceExpressionTypeText(source, expression string) string {
 		return ""
 	}
 	if asserted := sourceAssertedType(text); asserted != "" {
-		if expanded := expandLocalSourceTypeText(source, asserted); expanded != "" {
-			return expanded
-		}
 		return normalizeSourceTypeText(asserted)
 	}
 	if objectType := sourceObjectLiteralTypeText(source, text); objectType != "" {
@@ -738,17 +749,20 @@ func normalizeInlineObjectTypeText(typeText string) string {
 	if body == "" {
 		return "{}"
 	}
-	if strings.Contains(body, ";") || strings.Contains(body, ",") {
+	if strings.Contains(body, ";") {
 		return normalizeSourceTypeText(text)
 	}
-	lines := strings.Split(body, "\n")
-	parts := make([]string, 0, len(lines))
-	for _, line := range lines {
-		line = strings.TrimSpace(strings.TrimSuffix(line, ";"))
-		if line == "" {
+	members, err := splitTopLevelTypeMembers(body)
+	if err != nil || len(members) <= 1 {
+		return normalizeSourceTypeText(text)
+	}
+	parts := make([]string, 0, len(members))
+	for _, member := range members {
+		member = strings.TrimSpace(strings.TrimSuffix(member, ";"))
+		if member == "" {
 			continue
 		}
-		parts = append(parts, line)
+		parts = append(parts, member)
 	}
 	if len(parts) == 0 {
 		return "{}"
@@ -757,6 +771,19 @@ func normalizeInlineObjectTypeText(typeText string) string {
 }
 
 func findLocalTypeAliasText(source, name string) string {
+	interfacePattern := regexp.MustCompile(`(?m)^\s*(?:export\s+)?interface\s+` + regexp.QuoteMeta(name) + `\b[^{]*\{`)
+	if match := interfacePattern.FindStringIndex(source); match != nil {
+		header := source[match[0]:match[1]]
+		braceOffset := strings.LastIndex(header, "{")
+		if braceOffset != -1 {
+			start := match[0] + braceOffset
+			end, err := findMatching(source, start, '{', '}')
+			if err == nil {
+				return source[start : end+1]
+			}
+		}
+	}
+
 	typePattern := regexp.MustCompile(`(?m)^\s*(?:export\s+)?type\s+` + regexp.QuoteMeta(name) + `\s*=`)
 	if match := typePattern.FindStringIndex(source); match != nil {
 		start := skipTrivia(source, match[1])
@@ -786,6 +813,32 @@ func findLocalValueInitializer(source, name string) string {
 		return ""
 	}
 	return strings.TrimSpace(source[start:end])
+}
+
+func sourceImportedValueInitializer(source, file, identifier string, state *buildState) (string, string, string, bool) {
+	if state == nil || file == "" || identifier == "" {
+		return "", "", "", false
+	}
+
+	if candidate, ok := parseNamedValueImports(source)[identifier]; ok {
+		if candidate.ImportedName == "" || candidate.ImportedName == "default" {
+			return "", "", "", false
+		}
+		resolvedFile, ok := resolveImportFile(file, candidate.Path, state)
+		if !ok {
+			return "", "", "", false
+		}
+		importedSourceBytes, err := os.ReadFile(resolvedFile)
+		if err != nil {
+			return "", "", "", false
+		}
+		importedSource := string(importedSourceBytes)
+		if initializer := findLocalValueInitializer(importedSource, candidate.ImportedName); initializer != "" {
+			return importedSource, resolvedFile, initializer, true
+		}
+	}
+
+	return "", "", "", false
 }
 
 func findStatementExpressionEnd(source string, start int) (int, error) {
@@ -860,11 +913,34 @@ func findStatementExpressionEnd(source string, start int) (int, error) {
 			}
 		case '\n':
 			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && angleDepth == 0 {
-				return i, nil
+				if shouldTerminateStatementAtNewline(source, i) {
+					return i, nil
+				}
 			}
 		}
 	}
 	return len(source), nil
+}
+
+func shouldTerminateStatementAtNewline(source string, index int) bool {
+	previous := previousNonWhitespaceByte(source, index)
+	switch previous {
+	case 0, '=', '(', '[', '{', ',', ':', '?', '.', '+', '-', '*', '/', '%', '|', '&', '!':
+		return false
+	case '>':
+		previousIndex := previousNonWhitespaceIndex(source, index)
+		if previousIndex > 0 && previousNonWhitespaceByte(source, previousIndex) == '=' {
+			return false
+		}
+	}
+
+	next := nextNonWhitespaceByte(source, index+1)
+	switch next {
+	case 0, ')', ']', '}', ';', ',', '.', '+', '-', '*', '/', '%', '|', '&', ':', '?':
+		return false
+	}
+
+	return true
 }
 
 func booleanValueAction(name string) ParsedAction {
@@ -954,7 +1030,7 @@ func parseLoadersWithSource(section SectionReport, source string, property Sourc
 		if !ok {
 			continue
 		}
-		defaultType = normalizeInferredTypeText(defaultType)
+		defaultType = widenLiteralReducerStateType(normalizeInferredTypeText(defaultType))
 		if defaultType == "" {
 			defaultType = "any"
 		}
@@ -971,25 +1047,88 @@ func parseLoadersWithSource(section SectionReport, source string, property Sourc
 }
 
 func parseLazyLoaders(section SectionReport) ([]ParsedAction, []ParsedField) {
+	return parseLazyLoadersWithSource(section, "", SourceProperty{}, "", nil)
+}
+
+func parseLazyLoadersWithSource(section SectionReport, source string, property SourceProperty, file string, state *buildState) ([]ParsedAction, []ParsedField) {
 	var actions []ParsedAction
 	var reducers []ParsedField
+	sourceMembers := sectionSourceProperties(source, property)
+	sourceEntries := sectionSourceEntries(source, property)
+	entryByName := sourceEntriesByName(sourceEntries)
+	memberByName := map[string]MemberReport{}
+	orderedNames := make([]string, 0, len(section.Members)+len(sourceEntries))
+	seenNames := map[string]bool{}
 
 	for _, member := range section.Members {
-		defaultType, properties, ok := parseLazyLoaderMemberType(member.TypeString)
+		memberByName[member.Name] = member
+		if !seenNames[member.Name] {
+			seenNames[member.Name] = true
+			orderedNames = append(orderedNames, member.Name)
+		}
+	}
+	for _, entry := range sourceEntries {
+		if !seenNames[entry.Name] {
+			seenNames[entry.Name] = true
+			orderedNames = append(orderedNames, entry.Name)
+		}
+	}
+
+	for _, name := range orderedNames {
+		member, hasMember := memberByName[name]
+		defaultType := ""
+		properties := map[string]string{}
+		ok := false
+
+		if hasMember {
+			memberType := strings.TrimSpace(member.TypeString)
+			if memberType == "" {
+				memberType = preferredMemberTypeText(member)
+			}
+			if parsedDefault, parsedProperties, parsed := parseLazyLoaderMemberType(memberType); parsed {
+				defaultType = parsedDefault
+				properties = parsedProperties
+				ok = true
+			}
+		}
+
+		if nested, okNested := sourceMembers[name]; okNested {
+			if sourceDefault, sourceProperties, sourceOK := sourceLoaderMemberTypeFromProperty(source, nested, file, state); sourceOK {
+				if strings.TrimSpace(sourceDefault) != "" {
+					defaultType = sourceDefault
+				}
+				if len(sourceProperties) > 0 && (len(properties) == 0 || !hasLoaderActionProperties(properties)) {
+					properties = sourceProperties
+				}
+				ok = true
+			} else if hinted := sourceLoaderDefaultType(source, nested); hinted != "" {
+				defaultType = hinted
+			}
+		} else if entry, okEntry := entryByName[name]; okEntry {
+			if sourceDefault, sourceProperties, sourceOK := sourceLoaderMemberTypeFromExpression(source, entry.Value); sourceOK {
+				if strings.TrimSpace(sourceDefault) != "" {
+					defaultType = sourceDefault
+				}
+				if len(sourceProperties) > 0 && (len(properties) == 0 || !hasLoaderActionProperties(properties)) {
+					properties = sourceProperties
+				}
+				ok = true
+			}
+		}
 		if !ok {
 			continue
 		}
-		defaultType = normalizeInferredTypeText(defaultType)
+		defaultType = widenLiteralReducerStateType(normalizeInferredTypeText(defaultType))
 		if defaultType == "" {
 			defaultType = "any"
 		}
 
 		reducers = append(reducers,
-			ParsedField{Name: member.Name, Type: defaultType},
-			ParsedField{Name: member.Name + "Loading", Type: "boolean"},
+			ParsedField{Name: name, Type: defaultType},
+			ParsedField{Name: name + "Loading", Type: "boolean"},
 		)
 
-		actions = append(actions, parseLoaderActions(member.Name, properties, "")...)
+		actions = append(actions, parseLoaderActions(name, properties, "__default")...)
 	}
 
 	return actions, reducers
@@ -1532,6 +1671,120 @@ func sourceParameterTypeHints(source, parameters string) map[string]string {
 	return hints
 }
 
+func sourceParameterTypeHintsWithDefault(source, parameters, defaultType string) map[string]string {
+	hints := sourceParameterTypeHints(source, parameters)
+	defaultType = normalizeSourceTypeText(strings.TrimSpace(defaultType))
+	if defaultType == "" || isAnyLikeType(defaultType) {
+		return hints
+	}
+
+	text := strings.TrimSpace(parameters)
+	if len(text) < 2 || text[0] != '(' || text[len(text)-1] != ')' {
+		return hints
+	}
+	parts, err := splitTopLevelList(text[1 : len(text)-1])
+	if err != nil || len(parts) != 1 {
+		return hints
+	}
+	parameterText := strings.TrimSpace(parts[0])
+	if parameterText == "" {
+		return hints
+	}
+	if strings.HasPrefix(parameterText, "...") {
+		parameterText = strings.TrimSpace(parameterText[3:])
+	}
+	if index := strings.Index(parameterText, "="); index != -1 {
+		parameterText = strings.TrimSpace(parameterText[:index])
+	}
+	if index := strings.Index(parameterText, ":"); index != -1 {
+		parameterText = strings.TrimSpace(parameterText[:index])
+	}
+
+	if name, ok := sourceParameterName(parameterText); ok {
+		if hints == nil {
+			hints = map[string]string{}
+		}
+		if _, exists := hints[name]; !exists {
+			hints[name] = defaultType
+		}
+		return hints
+	}
+
+	destructured := sourceDestructuredParameterTypeHints(source, parameterText, defaultType)
+	if len(destructured) == 0 {
+		return hints
+	}
+	if hints == nil {
+		hints = map[string]string{}
+	}
+	for name, typeText := range destructured {
+		if _, exists := hints[name]; !exists {
+			hints[name] = typeText
+		}
+	}
+	return hints
+}
+
+func sourceDestructuredParameterTypeHints(source, parameterText, defaultType string) map[string]string {
+	text := strings.TrimSpace(parameterText)
+	if text == "" || text[0] != '{' {
+		return nil
+	}
+	end, err := findMatching(text, 0, '{', '}')
+	if err != nil || trimExpressionEnd(text, end+1) != len(text) {
+		return nil
+	}
+
+	expandedType := defaultType
+	if expanded := expandLocalSourceTypeText(source, defaultType); expanded != "" {
+		expandedType = normalizeSourceTypeText(expanded)
+	}
+	members, ok := parseObjectTypeMembers(expandedType)
+	if !ok || len(members) == 0 {
+		return nil
+	}
+
+	parts, err := splitTopLevelList(text[1:end])
+	if err != nil {
+		return nil
+	}
+
+	hints := map[string]string{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if index := strings.Index(part, "="); index != -1 {
+			part = strings.TrimSpace(part[:index])
+		}
+
+		sourceName := part
+		localName := part
+		if index := strings.Index(part, ":"); index != -1 {
+			sourceName = strings.TrimSpace(part[:index])
+			localName = strings.TrimSpace(part[index+1:])
+			if defaultIndex := strings.Index(localName, "="); defaultIndex != -1 {
+				localName = strings.TrimSpace(localName[:defaultIndex])
+			}
+		}
+
+		name, ok := sourceParameterName(localName)
+		if !ok {
+			continue
+		}
+		typeText, ok := members[sourceName]
+		if !ok {
+			continue
+		}
+		hints[name] = normalizeSourceTypeText(typeText)
+	}
+	if len(hints) == 0 {
+		return nil
+	}
+	return hints
+}
+
 func sourceObjectLiteralTypeTextWithHints(source, expression string, hints map[string]string) string {
 	objectStart, objectEnd, ok, err := FindInspectableObjectLiteral(expression, 0, len(expression))
 	if err != nil || !ok {
@@ -1605,6 +1858,12 @@ func sourceExpressionTypeTextWithHints(source, expression string, hints map[stri
 	if objectType := sourceObjectLiteralTypeTextWithHints(source, text, hints); objectType != "" {
 		return objectType
 	}
+	if logicalType := sourceLogicalExpressionTypeTextWithHints(source, text, hints); logicalType != "" {
+		return logicalType
+	}
+	if memberType := sourceMemberAccessTypeTextWithHints(source, text, hints); memberType != "" {
+		return memberType
+	}
 	if identifier, ok := sourceIdentifierExpression(text); ok && hints != nil {
 		if hinted := strings.TrimSpace(hints[identifier]); hinted != "" {
 			if expanded := expandLocalSourceTypeText(source, hinted); expanded != "" {
@@ -1614,6 +1873,193 @@ func sourceExpressionTypeTextWithHints(source, expression string, hints map[stri
 		}
 	}
 	return sourceExpressionTypeText(source, expression)
+}
+
+func sourceExpressionTypeTextWithContext(source, file, expression string, hints map[string]string, state *buildState) string {
+	text := strings.TrimSpace(expression)
+	if text == "" {
+		return ""
+	}
+	if functionType := sourceArrowFunctionTypeTextWithContext(source, file, text, state); functionType != "" {
+		return functionType
+	}
+	if callType := sourceCallExpressionTypeTextWithContext(source, file, text, hints, state); callType != "" {
+		return callType
+	}
+	if objectType := sourceObjectLiteralTypeTextWithHints(source, text, hints); objectType != "" {
+		return objectType
+	}
+	if logicalType := sourceLogicalExpressionTypeTextWithHints(source, text, hints); logicalType != "" {
+		return logicalType
+	}
+	if memberType := sourceMemberAccessTypeTextWithHints(source, text, hints); memberType != "" {
+		return memberType
+	}
+	if identifier, ok := sourceIdentifierExpression(text); ok {
+		if hinted := strings.TrimSpace(hints[identifier]); hinted != "" {
+			if expanded := expandLocalSourceTypeText(source, hinted); expanded != "" {
+				return normalizeSourceTypeText(expanded)
+			}
+			return normalizeSourceTypeText(hinted)
+		}
+		if initializer := findLocalValueInitializer(source, identifier); initializer != "" {
+			if inferred := sourceExpressionTypeTextWithContext(source, file, initializer, nil, state); inferred != "" {
+				return inferred
+			}
+		}
+		if importedSource, importedFile, initializer, ok := sourceImportedValueInitializer(source, file, identifier, state); ok {
+			if inferred := sourceExpressionTypeTextWithContext(importedSource, importedFile, initializer, nil, state); inferred != "" {
+				return inferred
+			}
+		}
+		if expanded := expandLocalSourceTypeText(source, identifier); expanded != "" {
+			return expanded
+		}
+		if len(identifier) > 0 && unicode.IsUpper(rune(identifier[0])) {
+			return identifier
+		}
+		return "any"
+	}
+	return sourceExpressionTypeTextWithHints(source, expression, hints)
+}
+
+func sourceArrowFunctionTypeTextWithContext(source, file, expression string, state *buildState) string {
+	info, ok := parseSourceArrowInfo(expression)
+	if !ok {
+		return ""
+	}
+	returnType := info.ExplicitReturn
+	if returnType == "" {
+		body := strings.TrimSpace(info.Body)
+		if info.BlockBody {
+			body = singleReturnExpression(body)
+			if body == "" {
+				body = blockReturnExpression(info.Body)
+			}
+		}
+		if body != "" {
+			if inferred := sourceExpressionTypeTextWithContext(source, file, body, nil, state); inferred != "" {
+				returnType = normalizeInferredTypeText(inferred)
+			}
+		}
+	}
+	if returnType == "" {
+		return ""
+	}
+	if info.Async {
+		returnType = promiseTypeText(returnType)
+	}
+	return info.Parameters + " => " + returnType
+}
+
+func sourceCallExpressionTypeTextWithContext(source, file, expression string, hints map[string]string, state *buildState) string {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	callee, ok := stripTrailingCallExpression(text)
+	if !ok {
+		return ""
+	}
+	calleeType := sourceExpressionTypeTextWithContext(source, file, callee, hints, state)
+	if !isFunctionLikeTypeText(calleeType) {
+		return ""
+	}
+	returnType, ok := parseFunctionReturnType(calleeType)
+	if !ok {
+		return ""
+	}
+	return normalizeInferredTypeText(returnType)
+}
+
+func sourceLogicalExpressionTypeTextWithHints(source, expression string, hints map[string]string) string {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	if text == "" {
+		return ""
+	}
+	for _, operator := range []string{"??", "||"} {
+		index := findLastTopLevelOperator(text, operator)
+		if index == -1 {
+			continue
+		}
+		left := sourceExpressionTypeTextWithHints(source, strings.TrimSpace(text[:index]), hints)
+		right := sourceExpressionTypeTextWithHints(source, strings.TrimSpace(text[index+len(operator):]), hints)
+		if merged := mergeLogicalOperandTypes(left, right, operator); merged != "" {
+			return merged
+		}
+	}
+	return ""
+}
+
+func mergeLogicalOperandTypes(left, right, operator string) string {
+	left = normalizeSourceTypeText(strings.TrimSpace(left))
+	right = normalizeSourceTypeText(strings.TrimSpace(right))
+
+	switch operator {
+	case "??":
+		left = normalizeInternalHelperParameterType(left)
+	case "||":
+		left = normalizeInternalHelperParameterType(left)
+	}
+
+	switch {
+	case left == "":
+		return right
+	case right == "":
+		return left
+	case left == right:
+		return left
+	}
+
+	if right == "string" || isQuotedString(right) {
+		if left == "string" || strings.Contains(left, "string") {
+			return "string"
+		}
+	}
+	if right == "number" || isNumericLiteralType(right) {
+		if left == "number" || strings.Contains(left, "number") {
+			return "number"
+		}
+	}
+
+	return normalizeSourceTypeText(left + " | " + right)
+}
+
+func sourceMemberAccessTypeTextWithHints(source, expression string, hints map[string]string) string {
+	if len(hints) == 0 {
+		return ""
+	}
+	segments, _, end, ok := parseMemberExpressionSegments(expression, 0, len(expression))
+	if !ok || end != len(expression) || len(segments) < 2 {
+		return ""
+	}
+	rootType := strings.TrimSpace(hints[segments[0]])
+	if rootType == "" {
+		return ""
+	}
+	return sourceMemberPathTypeText(source, rootType, segments[1:])
+}
+
+func sourceMemberPathTypeText(source, typeText string, path []string) string {
+	current := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if current == "" {
+		return ""
+	}
+	if expanded := expandLocalSourceTypeText(source, current); expanded != "" {
+		current = normalizeSourceTypeText(expanded)
+	}
+	for _, segment := range path {
+		members, ok := parseObjectTypeMembers(current)
+		if !ok {
+			return ""
+		}
+		next, ok := members[segment]
+		if !ok {
+			return ""
+		}
+		current = normalizeSourceTypeText(strings.TrimSpace(next))
+		if expanded := expandLocalSourceTypeText(source, current); expanded != "" {
+			current = normalizeSourceTypeText(expanded)
+		}
+	}
+	return current
 }
 
 func sourceReducerStateType(expression string) string {
@@ -1897,7 +2343,68 @@ func sourceArrowReturnTypeText(source, expression string) string {
 	if info.ExplicitReturn != "" {
 		return info.ExplicitReturn
 	}
-	return sourceReturnExpressionType(source, info.Body, info.BlockBody, info.ParameterNames, nil, info.Async)
+	if returnType := sourceReturnExpressionType(source, info.Body, info.BlockBody, info.ParameterNames, nil, info.Async); returnType != "" {
+		return returnType
+	}
+	hints := sourceParameterTypeHints(source, info.Parameters)
+	if len(hints) == 0 {
+		return ""
+	}
+
+	body := strings.TrimSpace(info.Body)
+	if info.BlockBody {
+		body = singleReturnExpression(body)
+		if body == "" {
+			body = blockReturnExpression(info.Body)
+		}
+	}
+	if body == "" {
+		return ""
+	}
+	if hinted := sourceExpressionTypeTextWithHints(source, body, hints); hinted != "" {
+		hinted = normalizeInferredTypeText(hinted)
+		if info.Async {
+			return promiseTypeText(hinted)
+		}
+		return hinted
+	}
+	return ""
+}
+
+func sourceKeyTypeFromProps(source string, property SourceProperty, propsType string) string {
+	return sourceKeyTypeFromSource(source, "", property, propsType, nil)
+}
+
+func sourceKeyTypeFromSource(source, file string, property SourceProperty, propsType string, state *buildState) string {
+	expression := sourcePropertyText(source, property)
+	if expression == "" {
+		return ""
+	}
+	if propsType != "" && !isAnyLikeType(propsType) {
+		if info, ok := parseSourceArrowInfo(expression); ok {
+			body := strings.TrimSpace(info.Body)
+			if info.BlockBody {
+				body = singleReturnExpression(body)
+				if body == "" {
+					body = blockReturnExpression(info.Body)
+				}
+			}
+			if body != "" {
+				hints := sourceParameterTypeHintsWithDefault(source, info.Parameters, propsType)
+				if inferred := sourceExpressionTypeTextWithContext(source, file, body, hints, state); inferred != "" {
+					return normalizeInferredTypeText(inferred)
+				}
+			}
+		}
+	}
+	if inferred := sourceExpressionTypeTextWithContext(source, file, expression, nil, state); inferred != "" {
+		if isFunctionLikeTypeText(inferred) {
+			if returnType, ok := parseFunctionReturnType(inferred); ok {
+				return normalizeInferredTypeText(returnType)
+			}
+		}
+	}
+	return ""
 }
 
 func sourceSelectorInferredType(logic ParsedLogic, source, file, expression string, state *buildState) string {
@@ -2271,6 +2778,9 @@ func sourceCommonReturnExpressionType(expression string) string {
 	if text == "" {
 		return ""
 	}
+	if len(text) >= 2 && text[0] == '`' && text[len(text)-1] == '`' {
+		return "string"
+	}
 	for _, marker := range []string{
 		".join(",
 		".toUpperCase(",
@@ -2292,6 +2802,92 @@ func sourceCommonReturnExpressionType(expression string) string {
 		}
 	}
 	return ""
+}
+
+func findLastTopLevelOperator(source, operator string) int {
+	if operator == "" {
+		return -1
+	}
+
+	last := -1
+	parenDepth := 0
+	bracketDepth := 0
+	braceDepth := 0
+	angleDepth := 0
+
+	for i := 0; i < len(source); i++ {
+		switch source[i] {
+		case '\'':
+			end, err := skipQuoted(source, i, '\'')
+			if err != nil {
+				return last
+			}
+			i = end
+		case '"':
+			end, err := skipQuoted(source, i, '"')
+			if err != nil {
+				return last
+			}
+			i = end
+		case '`':
+			end, err := skipTemplate(source, i)
+			if err != nil {
+				return last
+			}
+			i = end
+		case '/':
+			if i+1 < len(source) && source[i+1] == '/' {
+				i += 2
+				for i < len(source) && source[i] != '\n' {
+					i++
+				}
+				continue
+			}
+			if i+1 < len(source) && source[i+1] == '*' {
+				i += 2
+				for i+1 < len(source) && !(source[i] == '*' && source[i+1] == '/') {
+					i++
+				}
+				if i+1 >= len(source) {
+					return last
+				}
+				i++
+				continue
+			}
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '{':
+			braceDepth++
+		case '}':
+			if braceDepth > 0 {
+				braceDepth--
+			}
+		case '<':
+			if shouldOpenAngle(source, i) {
+				angleDepth++
+			}
+		case '>':
+			if angleDepth > 0 {
+				angleDepth--
+			}
+		}
+
+		if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && angleDepth == 0 && strings.HasPrefix(source[i:], operator) {
+			last = i
+			i += len(operator) - 1
+		}
+	}
+	return last
 }
 
 func sourceDependencyTypeForReturnExpression(source, expression string, parameterNames, dependencyTypes []string) string {
@@ -2976,6 +3572,7 @@ func (s *buildState) close() {
 	s.apiClient = nil
 	s.apiSnapshot = ""
 	s.config = nil
+	s.primaryProjectID = ""
 	s.projectByFile = nil
 }
 
@@ -3013,6 +3610,11 @@ func (s *buildState) ensureAPIClient() error {
 	s.apiClient = client
 	s.apiSnapshot = snapshot.Snapshot
 	s.config = config
+	if len(snapshot.Projects) == 1 {
+		if project := tsgoapi.PickProject(snapshot.Projects, s.configFile); project != nil {
+			s.primaryProjectID = project.ID
+		}
+	}
 	if s.projectByFile == nil {
 		s.projectByFile = map[string]string{}
 	}
@@ -3020,6 +3622,9 @@ func (s *buildState) ensureAPIClient() error {
 }
 
 func (s *buildState) projectIDForFile(file string) (string, error) {
+	if s != nil && s.primaryProjectID != "" {
+		return s.primaryProjectID, nil
+	}
 	if err := s.ensureAPIClient(); err != nil {
 		return "", err
 	}
@@ -3121,10 +3726,6 @@ func (s *buildState) inspectFile(file string) (*Report, string, error) {
 	if s == nil {
 		return nil, "", fmt.Errorf("build state is nil")
 	}
-	if err := s.ensureAPIClient(); err != nil {
-		return nil, "", err
-	}
-
 	file = filepath.Clean(file)
 	sourceBytes, err := os.ReadFile(file)
 	if err != nil {
@@ -3136,19 +3737,29 @@ func (s *buildState) inspectFile(file string) (*Report, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	projectID, err := s.projectIDForFile(file)
-	if err != nil {
-		return nil, "", err
-	}
-
 	report := &Report{
 		BinaryPath: s.binaryPath,
 		ProjectDir: s.projectDir,
 		ConfigFile: s.configFile,
 		File:       file,
-		Snapshot:   s.apiSnapshot,
-		Config:     s.config,
 	}
+	if !strings.Contains(source, "kea") {
+		return report, source, nil
+	}
+	if len(logics) == 0 {
+		return report, source, nil
+	}
+
+	if err := s.ensureAPIClient(); err != nil {
+		return nil, "", err
+	}
+	projectID, err := s.projectIDForFile(file)
+	if err != nil {
+		return nil, "", err
+	}
+
+	report.Snapshot = s.apiSnapshot
+	report.Config = s.config
 	for _, logic := range logics {
 		report.Logics = append(report.Logics, inspectLogic(
 			context.Background(),
@@ -4857,6 +5468,50 @@ func sourceArrowReturnTypeFromTypeProbe(source, file string, property SourceProp
 	return sourceArrowReturnTypeFromTypeProbeRange(source, file, property, property.ValueStart, property.ValueEnd, state)
 }
 
+func sourceCallbackReturnTypeFromTypeProbe(source, file string, property SourceProperty, state *buildState) string {
+	if state == nil || file == "" {
+		return ""
+	}
+	if err := state.ensureAPIClient(); err != nil {
+		return ""
+	}
+	projectID, err := state.projectIDForFile(file)
+	if err != nil {
+		return ""
+	}
+
+	end := trimExpressionEnd(source, property.ValueEnd)
+	if end <= property.ValueStart {
+		return ""
+	}
+
+	var fallback string
+	for _, position := range callbackTypeProbePositions(source, property.ValueStart, end) {
+		returnType := normalizeSourceTypeText(callbackReturnTypeAtPositionString(
+			context.Background(),
+			state.apiClient,
+			state.timeout,
+			state.apiSnapshot,
+			projectID,
+			file,
+			position,
+		))
+		if returnType == "" {
+			continue
+		}
+		if !isUsableCallbackReturnType(returnType) {
+			continue
+		}
+		if !isAnyLikeType(returnType) && !typeTextContainsStandaloneToken(returnType, "any") && !typeTextContainsStandaloneToken(returnType, "unknown") {
+			return returnType
+		}
+		if fallback == "" {
+			fallback = returnType
+		}
+	}
+	return fallback
+}
+
 func sourceSelectorReturnTypeFromTypeProbe(source, file string, property SourceProperty, state *buildState) string {
 	start := property.ValueStart
 	end := property.ValueEnd
@@ -4980,6 +5635,72 @@ func sourceArrowReturnTypeFromSignatureProbe(file string, property SourcePropert
 		return typeText
 	}
 	return ""
+}
+
+func callbackReturnTypeAtPositionString(
+	ctx context.Context,
+	client *tsgoapi.Client,
+	timeout time.Duration,
+	snapshot string,
+	projectID string,
+	file string,
+	position int,
+) string {
+	typ, err := client.GetTypeAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, position)
+	if err != nil || typ == nil {
+		return ""
+	}
+
+	signatures, err := client.GetSignaturesOfType(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, typ.ID)
+	if err == nil && len(signatures) > 0 {
+		returnType, err := client.GetReturnTypeOfSignature(
+			tsgoapi.WithTimeout(ctx, timeout),
+			snapshot,
+			projectID,
+			signatures[0].ID,
+		)
+		if err == nil && returnType != nil {
+			if text := normalizeSourceTypeText(safeTypeString(ctx, client, timeout, snapshot, projectID, returnType.ID)); text != "" {
+				return text
+			}
+		}
+	}
+
+	typeText := normalizeSourceTypeText(safeTypeString(ctx, client, timeout, snapshot, projectID, typ.ID))
+	if typeText == "" {
+		return ""
+	}
+	if isFunctionLikeTypeText(typeText) {
+		if returnType, ok := parseFunctionReturnType(typeText); ok {
+			return normalizeSourceTypeText(returnType)
+		}
+	}
+	return ""
+}
+
+func isFunctionLikeTypeText(typeText string) bool {
+	text := strings.TrimSpace(unwrapWrappedExpression(typeText))
+	if text == "" {
+		return false
+	}
+	if text[0] == '(' || text[0] == '<' {
+		return true
+	}
+	if strings.HasPrefix(text, "new (") || strings.HasPrefix(text, "new<") {
+		return true
+	}
+	return false
+}
+
+func isUsableCallbackReturnType(typeText string) bool {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" {
+		return false
+	}
+	if strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[") {
+		return true
+	}
+	return !unbracedMemberTypePattern.MatchString(text)
 }
 
 func isCompatibleProbeReturnType(typeText, source string, probeStart, probeEnd int) bool {
@@ -6113,6 +6834,140 @@ func resolveLocalImportFile(file, importPath string) (string, bool) {
 	return "", false
 }
 
+func resolveImportFile(file, importPath string, state *buildState) (string, bool) {
+	if resolvedFile, ok := resolveLocalImportFile(file, importPath); ok {
+		return resolvedFile, true
+	}
+	return resolveConfiguredImportFile(importPath, state)
+}
+
+func resolveConfiguredImportFile(importPath string, state *buildState) (string, bool) {
+	if state == nil || state.config == nil || state.configFile == "" || importPath == "" {
+		return "", false
+	}
+
+	baseURL := "."
+	if rawBaseURL, ok := state.config.Options["baseUrl"].(string); ok && strings.TrimSpace(rawBaseURL) != "" {
+		baseURL = strings.TrimSpace(rawBaseURL)
+	}
+	configDir := filepath.Dir(state.configFile)
+	root := filepath.Clean(filepath.Join(configDir, filepath.FromSlash(baseURL)))
+
+	for _, candidate := range configuredImportCandidates(importPath, root, state.config.Options["paths"]) {
+		if resolvedFile, ok := resolveAbsoluteImportBase(candidate); ok {
+			return resolvedFile, true
+		}
+	}
+
+	if strings.HasPrefix(importPath, "/") {
+		return resolveAbsoluteImportBase(importPath)
+	}
+	return resolveAbsoluteImportBase(filepath.Join(root, filepath.FromSlash(importPath)))
+}
+
+func configuredImportCandidates(importPath, root string, rawPaths any) []string {
+	pathMap := map[string]any{}
+	switch value := rawPaths.(type) {
+	case map[string]any:
+		pathMap = value
+	case map[string][]string:
+		for key, targets := range value {
+			pathMap[key] = targets
+		}
+	default:
+		return nil
+	}
+	if len(pathMap) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(pathMap))
+	for key := range pathMap {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return len(keys[i]) > len(keys[j])
+	})
+
+	var candidates []string
+	seen := map[string]bool{}
+	for _, pattern := range keys {
+		matches, replacement := matchPathPattern(pattern, importPath)
+		if !matches {
+			continue
+		}
+		for _, target := range pathPatternTargets(pathMap[pattern]) {
+			if strings.TrimSpace(target) == "" {
+				continue
+			}
+			target = strings.ReplaceAll(target, "*", replacement)
+			candidate := filepath.Clean(filepath.Join(root, filepath.FromSlash(target)))
+			if seen[candidate] {
+				continue
+			}
+			seen[candidate] = true
+			candidates = append(candidates, candidate)
+		}
+	}
+	return candidates
+}
+
+func pathPatternTargets(raw any) []string {
+	switch value := raw.(type) {
+	case []any:
+		targets := make([]string, 0, len(value))
+		for _, item := range value {
+			if text, ok := item.(string); ok {
+				targets = append(targets, text)
+			}
+		}
+		return targets
+	case []string:
+		return append([]string(nil), value...)
+	default:
+		return nil
+	}
+}
+
+func matchPathPattern(pattern, importPath string) (bool, string) {
+	if pattern == importPath {
+		return true, ""
+	}
+	star := strings.Index(pattern, "*")
+	if star == -1 {
+		return false, ""
+	}
+	prefix := pattern[:star]
+	suffix := pattern[star+1:]
+	if !strings.HasPrefix(importPath, prefix) || !strings.HasSuffix(importPath, suffix) {
+		return false, ""
+	}
+	if len(importPath) < len(prefix)+len(suffix) {
+		return false, ""
+	}
+	return true, importPath[len(prefix) : len(importPath)-len(suffix)]
+}
+
+func resolveAbsoluteImportBase(basePath string) (string, bool) {
+	candidates := []string{
+		basePath,
+		basePath + ".ts",
+		basePath + ".tsx",
+		basePath + ".js",
+		basePath + ".jsx",
+		filepath.Join(basePath, "index.ts"),
+		filepath.Join(basePath, "index.tsx"),
+		filepath.Join(basePath, "index.js"),
+		filepath.Join(basePath, "index.jsx"),
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return filepath.Clean(candidate), true
+		}
+	}
+	return "", false
+}
+
 func filterImportsByTypeTexts(imports []TypeImport, typeTexts []string) []TypeImport {
 	used := usedImportReferenceNames(typeTexts)
 	if len(used) == 0 {
@@ -6215,6 +7070,17 @@ func previousNonWhitespaceByte(text string, index int) byte {
 		return text[index]
 	}
 	return 0
+}
+
+func previousNonWhitespaceIndex(text string, index int) int {
+	for index > 0 {
+		index--
+		if text[index] == ' ' || text[index] == '\t' || text[index] == '\n' || text[index] == '\r' {
+			continue
+		}
+		return index
+	}
+	return -1
 }
 
 func nextNonWhitespaceByte(text string, index int) byte {

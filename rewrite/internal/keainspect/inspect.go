@@ -592,3 +592,75 @@ func selectorTypeProbePositions(source string, start, end int) []int {
 	}
 	return positions
 }
+
+func callbackTypeProbePositions(source string, start, end int) []int {
+	positions := append([]int(nil), selectorTypeProbePositions(source, start, end)...)
+	appendPosition := func(position int) {
+		if position < start || position >= end {
+			return
+		}
+		for _, existing := range positions {
+			if existing == position {
+				return
+			}
+		}
+		positions = append(positions, position)
+	}
+
+	if arrowIndex, ok, err := findTopLevelArrow(source, start, end); err == nil && ok {
+		appendPosition(skipTrivia(source, arrowIndex+2))
+	}
+
+	parenDepth := 0
+	for i := start; i < end; i++ {
+		switch source[i] {
+		case '\'':
+			skip, err := skipQuoted(source, i, '\'')
+			if err != nil {
+				continue
+			}
+			i = skip
+		case '"':
+			skip, err := skipQuoted(source, i, '"')
+			if err != nil {
+				continue
+			}
+			i = skip
+		case '`':
+			skip, err := skipTemplate(source, i)
+			if err != nil {
+				continue
+			}
+			i = skip
+		case '/':
+			if i+1 < end && source[i+1] == '/' {
+				i += 2
+				for i < end && source[i] != '\n' {
+					i++
+				}
+				continue
+			}
+			if i+1 < end && source[i+1] == '*' {
+				i += 2
+				for i+1 < end && !(source[i] == '*' && source[i+1] == '/') {
+					i++
+				}
+				if i+1 < end {
+					i++
+				}
+				continue
+			}
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+				if parenDepth == 0 {
+					appendPosition(i)
+				}
+			}
+		}
+	}
+
+	return positions
+}

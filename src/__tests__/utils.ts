@@ -5,6 +5,7 @@ import * as path from 'path'
 import * as ts from 'typescript'
 import { ParsedLogic } from '../types'
 import { SyntaxKind } from 'typescript'
+import type { dashboardLogicType, myRandomLogicType } from './utilsType'
 
 test('sourceToSourceFile', () => {
     const source = 'var foo = 5;'
@@ -29,7 +30,7 @@ test('logicSourceToLogicType', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const myRandomLogic = kea({
+        const myRandomLogic = kea<myRandomLogicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),
@@ -64,7 +65,7 @@ test('gatherImports prefers source package path for re-exported npm types', () =
                 "import { kea } from 'kea'",
                 "import type { Layout, LayoutItem } from 'react-grid-layout'",
                 '',
-                'export const dashboardLogic = kea({',
+                'export const dashboardLogic = kea<dashboardLogicType>({',
                 '    reducers: () => ({',
                 '        currentLayout: [null as Layout | null, {}],',
                 '        responsiveLayouts: [null as Record<string, LayoutItem[]> | null, {}],',

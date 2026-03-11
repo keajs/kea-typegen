@@ -102,6 +102,29 @@ export const builderLogic = kea([
 	}
 }
 
+func TestFindLogicsPreservesTypedAssignmentName(t *testing.T) {
+	source := `
+import { kea, type LogicWrapper } from 'kea'
+
+import type { builderLogicType } from './builderLogicType'
+
+export const builderLogic: LogicWrapper<builderLogicType> = kea([
+    path(['builderLogic']),
+])
+`
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+	if logics[0].Name != "builderLogic" {
+		t.Fatalf("expected logic name %q, got %q", "builderLogic", logics[0].Name)
+	}
+}
+
 func TestFindLogicsBuilderArrayCanonicalizesAliasedImports(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea, path as logicPath, actions as logicActions, reducers as logicReducers } from 'kea'",
@@ -298,5 +321,29 @@ func TestFindArrowFunctionReturnProbeBlockBody(t *testing.T) {
 	expected := "[...repositories].sort((a, b) => b.stargazers_count - a.stargazers_count)\n}"
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestCallbackTypeProbePositionsIncludeCurriedCallBody(t *testing.T) {
+	source := `(props) => keyForInsightLogicProps('new')(props)`
+
+	positions := callbackTypeProbePositions(source, 0, len(source))
+	bodyStart := strings.Index(source, "keyForInsightLogicProps")
+	firstCallClose := strings.Index(source, "('new')") + len("('new')") - 1
+
+	hasPosition := func(target int) bool {
+		for _, position := range positions {
+			if position == target {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !hasPosition(bodyStart) {
+		t.Fatalf("expected body start position %d in %v", bodyStart, positions)
+	}
+	if !hasPosition(firstCallClose) {
+		t.Fatalf("expected first call close position %d in %v", firstCallClose, positions)
 	}
 }

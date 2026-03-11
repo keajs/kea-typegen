@@ -1,10 +1,11 @@
 import { logicSourceToLogicType } from '../../utils'
+import type { logicType, logicType, logicType } from './selectorsType'
 
 test('selectors - with a function', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),
@@ -39,7 +40,7 @@ test('selectors - as an object', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),
@@ -74,7 +75,7 @@ test('selectors - as a function returning a object', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),
