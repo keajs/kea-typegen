@@ -3,5 +3,10 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+COMPILED_CLI="$REPO_ROOT/dist/src/cli/typegen.js"
+
+if [ -f "$COMPILED_CLI" ]; then
+    exec node "$COMPILED_CLI" "$@"
+fi
 
 exec "$REPO_ROOT/node_modules/.bin/ts-node" "$REPO_ROOT/src/cli/typegen.ts" "$@"

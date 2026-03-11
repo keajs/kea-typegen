@@ -8,6 +8,7 @@ import { AppOptions } from '../types'
 import { runTypeGen } from '../typegen'
 
 yargs
+    .scriptName('typegen.ts')
     .command('check', '- check what should be done', {}, async (argv) => {
         await runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: false, watch: false })
     })

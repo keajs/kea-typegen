@@ -14,7 +14,7 @@
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples --delete",
         "samples:write:posthog": "ts-node ./src/cli/typegen.ts write --show-ts-errors -c",
-        "bench:samples": "node ./scripts/benchmark-sample-typegen.js",
+        "bench:samples": "./bin/benchmark",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },

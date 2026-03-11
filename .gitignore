@@ -14,3 +14,4 @@ poc/tsgo-api/.gocache
 poc/tsgo-api/bin
 rewrite/.gocache
 rewrite/bin
+.benchmark-*

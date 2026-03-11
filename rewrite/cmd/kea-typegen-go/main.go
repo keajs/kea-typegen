@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -32,6 +33,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	if len(os.Args) == 1 {
+		printTypegenUsage(os.Stdout)
+		fmt.Fprintln(os.Stderr, "Not enough non-option arguments: got 0, need at least 1")
+		os.Exit(1)
+	}
+
+	if isHelpArgument(os.Args[1]) {
+		printTypegenUsage(os.Stdout)
+		return
+	}
+
 	if len(os.Args) > 1 && isTypegenCommand(os.Args[1]) {
 		if err := runTypegenCommand(ctx, os.Args[1], os.Args[2:]); err != nil {
 			fail(err)
@@ -44,12 +56,56 @@ func main() {
 	}
 }
 
+func isHelpArgument(argument string) bool {
+	switch argument {
+	case "-h", "--help", "help":
+		return true
+	default:
+		return false
+	}
+}
+
 func isTypegenCommand(argument string) bool {
 	switch argument {
 	case "check", "write", "watch":
 		return true
 	default:
 		return false
+	}
+}
+
+func printTypegenUsage(output io.Writer) {
+	lines := []string{
+		"kea-typegen-go <command>",
+		"",
+		"Commands:",
+		"  kea-typegen-go check  - check what should be done",
+		"  kea-typegen-go write  - write logicType.ts files",
+		"  kea-typegen-go watch  - watch for changes and write logicType.ts files",
+		"",
+		"Options:",
+		"  -c, --config               Path to tsconfig.json (otherwise auto-detected)",
+		"  -f, --file                 Single file to evaluate (can't be used with --config)",
+		"  -r, --root                 Root for logic paths. E.g: ./frontend/src",
+		"  -t, --types                Folder to write logicType.ts files to.",
+		"  -q, --quiet                Write nothing to stdout",
+		"      --no-import            Do not automatically import generated types in logic files",
+		"      --write-paths          Write paths into logic files that have none",
+		"      --delete               Delete logicType.ts files without a corresponding logic.ts",
+		"      --add-ts-nocheck       Add @ts-nocheck to top of logicType.ts files",
+		"      --convert-to-builders  Convert Kea 2.0 inputs to Kea 3.0 logic builders",
+		"      --import-global-types  Add import statements in logicType.ts files for global types",
+		"      --ignore-import-paths  List of paths we will never import from inside logicType.ts files",
+		"      --show-ts-errors       Show TypeScript errors",
+		"      --use-cache            Cache generated logic files into .typegen",
+		"      --verbose              Slightly more verbose output log",
+		"      --tsgo-bin             Path to the tsgo binary",
+		"      --timeout              Per-request timeout",
+		"      --poll-interval        Watch polling interval",
+		"      --help                 Show help",
+	}
+	for _, line := range lines {
+		fmt.Fprintln(output, line)
 	}
 }
 

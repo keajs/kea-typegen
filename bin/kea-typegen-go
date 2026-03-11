@@ -5,6 +5,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 TMP_ROOT=${TMPDIR:-/tmp}
 CALLER_PWD=$(pwd)
+COMPILED_BINARY="$REPO_ROOT/rewrite/bin/kea-typegen-go"
 
 GOCACHE=${GOCACHE:-"$TMP_ROOT/kea-typegen-gocache"}
 GOMODCACHE=${GOMODCACHE:-"$TMP_ROOT/kea-typegen-gomodcache"}
@@ -14,6 +15,11 @@ mkdir -p "$GOCACHE" "$GOMODCACHE"
 export KEA_TYPEGEN_CWD="$CALLER_PWD"
 export GOCACHE
 export GOMODCACHE
+
+if [ -x "$COMPILED_BINARY" ]; then
+    cd "$REPO_ROOT"
+    exec "$COMPILED_BINARY" "$@"
+fi
 
 cd "$REPO_ROOT/rewrite"
 exec go run ./cmd/kea-typegen-go "$@"
