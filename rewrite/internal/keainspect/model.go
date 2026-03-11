@@ -3357,11 +3357,139 @@ func parseSelectorReturnType(typeText string) (string, bool) {
 		text = strings.TrimSpace(parts[len(parts)-1])
 	}
 
+	if returnType, ok := parseFunctionReturnType(text); ok {
+		return returnType, true
+	}
+	return parseSelectorFunctionArrayReturnType(text)
+}
+
+type selectorFunctionReturnCandidate struct {
+	Type           string
+	ParameterCount int
+}
+
+func parseFunctionReturnType(typeText string) (string, bool) {
+	text := strings.TrimSpace(unwrapWrappedExpression(typeText))
+	if text == "" {
+		return "", false
+	}
 	_, returnType, ok := splitFunctionType(text)
 	if !ok {
 		return "", false
 	}
-	return returnType, true
+	return strings.TrimSpace(returnType), true
+}
+
+func parseSelectorFunctionArrayReturnType(typeText string) (string, bool) {
+	text := strings.TrimSpace(typeText)
+	if !strings.HasSuffix(text, "[]") {
+		return "", false
+	}
+
+	elementType := strings.TrimSpace(text[:len(text)-2])
+	if elementType == "" {
+		return "", false
+	}
+	elementType = strings.TrimSpace(unwrapWrappedExpression(elementType))
+	if elementType == "" {
+		return "", false
+	}
+
+	parts, err := splitTopLevelUnion(elementType)
+	if err != nil || len(parts) == 0 {
+		parts = []string{elementType}
+	}
+
+	candidates := make([]selectorFunctionReturnCandidate, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(unwrapWrappedExpression(part))
+		if part == "" {
+			continue
+		}
+		parameters, returnType, ok := splitFunctionType(part)
+		if !ok {
+			continue
+		}
+		candidates = append(candidates, selectorFunctionReturnCandidate{
+			Type:           normalizeInferredTypeText(strings.TrimSpace(returnType)),
+			ParameterCount: functionParameterCount(parameters),
+		})
+	}
+	if len(candidates) == 0 {
+		return "", false
+	}
+	return pickSelectorFunctionReturnType(candidates), true
+}
+
+func pickSelectorFunctionReturnType(candidates []selectorFunctionReturnCandidate) string {
+	best := candidates[0]
+	bestLoose := isLooselyTypedType(best.Type)
+	bestArrayDepth := typeArrayDepth(best.Type)
+
+	for _, candidate := range candidates[1:] {
+		candidateLoose := isLooselyTypedType(candidate.Type)
+		candidateArrayDepth := typeArrayDepth(candidate.Type)
+
+		switch {
+		case bestLoose != candidateLoose:
+			if !candidateLoose {
+				best = candidate
+				bestLoose = candidateLoose
+				bestArrayDepth = candidateArrayDepth
+			}
+		case bestArrayDepth != candidateArrayDepth:
+			if candidateArrayDepth < bestArrayDepth {
+				best = candidate
+				bestLoose = candidateLoose
+				bestArrayDepth = candidateArrayDepth
+			}
+		case best.ParameterCount != candidate.ParameterCount:
+			if candidate.ParameterCount > best.ParameterCount {
+				best = candidate
+				bestLoose = candidateLoose
+				bestArrayDepth = candidateArrayDepth
+			}
+		default:
+			best = candidate
+			bestLoose = candidateLoose
+			bestArrayDepth = candidateArrayDepth
+		}
+	}
+
+	return best.Type
+}
+
+func functionParameterCount(parameters string) int {
+	text := strings.TrimSpace(parameters)
+	if text == "()" {
+		return 0
+	}
+	parsed, ok := parseFunctionParameters(parameters)
+	if !ok {
+		return 0
+	}
+	return len(parsed)
+}
+
+func typeArrayDepth(typeText string) int {
+	text := strings.TrimSpace(typeText)
+	depth := 0
+	for {
+		text = strings.TrimSpace(unwrapWrappedExpression(text))
+		switch {
+		case strings.HasSuffix(text, "[]"):
+			depth++
+			text = strings.TrimSpace(text[:len(text)-2])
+		case strings.HasPrefix(text, "Array<") && strings.HasSuffix(text, ">"):
+			depth++
+			text = strings.TrimSpace(text[len("Array<") : len(text)-1])
+		case strings.HasPrefix(text, "ReadonlyArray<") && strings.HasSuffix(text, ">"):
+			depth++
+			text = strings.TrimSpace(text[len("ReadonlyArray<") : len(text)-1])
+		default:
+			return depth
+		}
+	}
 }
 
 func selectorReturnTypeNeedsRecovery(member MemberReport) bool {

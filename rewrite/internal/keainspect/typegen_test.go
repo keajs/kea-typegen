@@ -124,7 +124,9 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 	autoImportTypegen := mustReadFile(t, filepath.Join(tempDir, "autoImportLogicType.ts"))
 	for _, expected := range []string{
 		"eventIndex: (state: any, props?: any) => EventIndex",
+		"randomDetectedReturn: (state: any, props?: any) => RandomThing",
 		"randomInterfacedReturn: (state: any, props?: any) => RandomAPI",
+		"randomSpecifiedReturn: (state: any, props?: any) => ExportedApi.RandomThing",
 		"sbla: (state: any, props?: any) => Partial<Record<string, S7>>",
 		"sbla: Partial<Record<string, S7>>",
 	} {
@@ -141,6 +143,39 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		if !strings.Contains(loadersTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, loadersTypegen)
 		}
+	}
+}
+
+func TestRunTypegenRoundsRewritesStaleLogicTypeImports(t *testing.T) {
+	root := repoRoot(t)
+	tempDir := t.TempDir()
+	copyDir(t, filepath.Join(root, "samples"), tempDir)
+
+	_, err := runTypegenRounds(context.Background(), AppOptions{
+		BinaryPath:      tsgoapi.PreferredBinary(root),
+		TsConfigPath:    filepath.Join(tempDir, "tsconfig.json"),
+		PackageJSONPath: filepath.Join(root, "package.json"),
+		RootPath:        tempDir,
+		TypesPath:       tempDir,
+		Write:           true,
+		Delete:          true,
+		Quiet:           true,
+		Log:             func(string) {},
+		Timeout:         15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("runTypegenRounds returned error: %v", err)
+	}
+
+	updated := mustReadFile(t, filepath.Join(tempDir, "githubNamespaceConnectLogic.ts"))
+	if strings.Contains(updated, "../../../../../../tmp/kea-ts-types/githubNamespaceConnectLogicType") {
+		t.Fatalf("expected stale githubNamespaceConnectLogicType import to be rewritten:\n%s", updated)
+	}
+	if strings.Count(updated, "import type { githubNamespaceConnectLogicType }") != 1 {
+		t.Fatalf("expected exactly one githubNamespaceConnectLogicType import after write:\n%s", updated)
+	}
+	if !strings.Contains(updated, "import type { githubNamespaceConnectLogicType } from './githubNamespaceConnectLogicType'") {
+		t.Fatalf("expected local githubNamespaceConnectLogicType import after write:\n%s", updated)
 	}
 }
 
@@ -184,6 +219,102 @@ func TestPlanSourceEditsAddsTypeImportAndGeneric(t *testing.T) {
 	expectedPrefix := "import { kea } from 'kea'\nimport type { propsLogicType } from './propsLogicType'\n\nconst propsLogic = kea<propsLogicType>({"
 	if !strings.Contains(updated, expectedPrefix) {
 		t.Fatalf("updated source missing expected import/generic:\n%s", updated)
+	}
+}
+
+func TestPlanSourceEditsRewritesStaleTypeImportPath(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import type { githubNamespaceConnectLogicType } from '../../../../../../tmp/kea-ts-types/githubNamespaceConnectLogicType'",
+		"",
+		"export const githubNamespaceConnectLogic = kea<githubNamespaceConnectLogicType>({",
+		"    actions: {},",
+		"})",
+		"",
+	}, "\n")
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	file := parsedFile{
+		File:         "/tmp/samples/githubNamespaceConnectLogic.ts",
+		TypeFile:     "/tmp/samples/githubNamespaceConnectLogicType.ts",
+		Source:       source,
+		SourceLogics: sourceLogics,
+		Logics: []ParsedLogic{
+			{Name: "githubNamespaceConnectLogic", TypeName: "githubNamespaceConnectLogicType", Path: []string{"githubNamespaceConnectLogic"}},
+		},
+	}
+
+	plan, err := planSourceEdits(file, AppOptions{})
+	if err != nil {
+		t.Fatalf("planSourceEdits returned error: %v", err)
+	}
+	if plan.ImportCount != 1 {
+		t.Fatalf("expected 1 import edit count, got %d", plan.ImportCount)
+	}
+
+	updated, err := applySourceEditPlan(plan)
+	if err != nil {
+		t.Fatalf("applySourceEditPlan returned error: %v", err)
+	}
+
+	if strings.Contains(updated, "../../../../../../tmp/kea-ts-types/githubNamespaceConnectLogicType") {
+		t.Fatalf("expected stale type import path to be removed:\n%s", updated)
+	}
+	if strings.Count(updated, "import type { githubNamespaceConnectLogicType }") != 1 {
+		t.Fatalf("expected exactly one logic type import after rewrite:\n%s", updated)
+	}
+	if !strings.Contains(updated, "import type { githubNamespaceConnectLogicType } from './githubNamespaceConnectLogicType'") {
+		t.Fatalf("expected rewritten local type import:\n%s", updated)
+	}
+}
+
+func TestPlanSourceEditsDeduplicatesLogicTypeImports(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import type { githubNamespaceConnectLogicType } from '../../../../../../tmp/kea-ts-types/githubNamespaceConnectLogicType'",
+		"import type { githubNamespaceConnectLogicType } from './githubNamespaceConnectLogicType'",
+		"",
+		"export const githubNamespaceConnectLogic = kea<githubNamespaceConnectLogicType>({",
+		"    actions: {},",
+		"})",
+		"",
+	}, "\n")
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	file := parsedFile{
+		File:         "/tmp/samples/githubNamespaceConnectLogic.ts",
+		TypeFile:     "/tmp/samples/githubNamespaceConnectLogicType.ts",
+		Source:       source,
+		SourceLogics: sourceLogics,
+		Logics: []ParsedLogic{
+			{Name: "githubNamespaceConnectLogic", TypeName: "githubNamespaceConnectLogicType", Path: []string{"githubNamespaceConnectLogic"}},
+		},
+	}
+
+	plan, err := planSourceEdits(file, AppOptions{})
+	if err != nil {
+		t.Fatalf("planSourceEdits returned error: %v", err)
+	}
+	if plan.ImportCount != 1 {
+		t.Fatalf("expected 1 import edit count for duplicate cleanup, got %d", plan.ImportCount)
+	}
+
+	updated, err := applySourceEditPlan(plan)
+	if err != nil {
+		t.Fatalf("applySourceEditPlan returned error: %v", err)
+	}
+
+	if strings.Count(updated, "import type { githubNamespaceConnectLogicType }") != 1 {
+		t.Fatalf("expected duplicate logic type imports to collapse to one line:\n%s", updated)
+	}
+	if strings.Contains(updated, "../../../../../../tmp/kea-ts-types/githubNamespaceConnectLogicType") {
+		t.Fatalf("expected stale duplicate type import to be removed:\n%s", updated)
 	}
 }
 

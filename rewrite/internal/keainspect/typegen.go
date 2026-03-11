@@ -651,17 +651,22 @@ func planSourceEdits(file parsedFile, options AppOptions) (sourceEditPlan, error
 		return plan, nil
 	}
 
-	importStates, imports, typeImportPath, err := analyzeTypeImportNeeds(file)
+	importStates, imports, typeImportPath, needsImportCleanup, err := analyzeTypeImportNeeds(file)
 	if err != nil {
 		return plan, err
 	}
+	needsTypeImportEdits := needsImportCleanup
 	for _, state := range importStates {
 		if !state.HasExpectedImport || state.HasExtraTypeArguments {
 			plan.ImportCount++
+			needsTypeImportEdits = true
 		}
 	}
+	if needsImportCleanup && plan.ImportCount == 0 {
+		plan.ImportCount++
+	}
 
-	if plan.ImportCount > 0 {
+	if needsTypeImportEdits || plan.ImportCount > 0 {
 		importEdits, typeArgEdits, err := buildTypeImportEdits(file, imports, importStates, typeImportPath)
 		if err != nil {
 			return plan, err
@@ -682,7 +687,7 @@ func planSourceEdits(file parsedFile, options AppOptions) (sourceEditPlan, error
 	return plan, nil
 }
 
-func analyzeTypeImportNeeds(file parsedFile) ([]logicImportState, []namedImportDecl, string, error) {
+func analyzeTypeImportNeeds(file parsedFile) ([]logicImportState, []namedImportDecl, string, bool, error) {
 	decls := findNamedImportDecls(file.Source, file.File)
 	typeImportPath := typeImportLocation(file.File, file.TypeFile)
 	typeImportAbs := filepath.Clean(file.TypeFile)
@@ -692,7 +697,7 @@ func analyzeTypeImportNeeds(file parsedFile) ([]logicImportState, []namedImportD
 		sourceLogic := file.SourceLogics[index]
 		typeArgStart, typeArgEnd, typeArgText, hasTypeArg, err := keaTypeArgumentSpan(file.Source, sourceLogic)
 		if err != nil {
-			return nil, nil, "", err
+			return nil, nil, "", false, err
 		}
 		state := logicImportState{
 			TypeArgStart: typeArgStart,
@@ -720,34 +725,52 @@ func analyzeTypeImportNeeds(file parsedFile) ([]logicImportState, []namedImportD
 		states = append(states, state)
 	}
 
-	return states, decls, typeImportPath, nil
+	_, desiredNames := desiredTypeImportNames(file.Logics)
+	exactDecls, staleDecls := matchingTypeImportDecls(decls, typeImportAbs, typeImportPath, desiredNames)
+	needsImportCleanup := len(staleDecls) > 0 || len(exactDecls) > 1
+
+	return states, decls, typeImportPath, needsImportCleanup, nil
 }
 
 func buildTypeImportEdits(file parsedFile, decls []namedImportDecl, states []logicImportState, typeImportPath string) ([]textEdit, []textEdit, error) {
-	typeNames := make([]string, 0, len(file.Logics))
-	for _, logic := range file.Logics {
-		typeNames = append(typeNames, logic.TypeName)
-	}
-	sort.Strings(typeNames)
+	typeNames, desiredNames := desiredTypeImportNames(file.Logics)
 	importLine := fmt.Sprintf("import type { %s } from '%s'", strings.Join(typeNames, ", "), typeImportPath)
 	typeImportAbs := filepath.Clean(file.TypeFile)
 
 	var importEdits []textEdit
-	replacedImport := false
-	for _, decl := range decls {
-		if typeImportDeclMatches(decl, typeImportAbs, typeImportPath) {
-			importEdits = append(importEdits, textEdit{Start: decl.Start, End: decl.End, Replacement: importLine})
-			replacedImport = true
-			break
-		}
-	}
-	if !replacedImport {
+	exactDecls, staleDecls := matchingTypeImportDecls(decls, typeImportAbs, typeImportPath, desiredNames)
+	if len(exactDecls) == 0 && len(staleDecls) == 0 {
 		insertPos, err := importInsertionPoint(file.Source)
 		if err != nil {
 			return nil, nil, err
 		}
 		replacement := importLine + "\n"
 		importEdits = append(importEdits, textEdit{Start: insertPos, End: insertPos, Replacement: replacement})
+	} else {
+		primary := firstTypeImportDecl(exactDecls, staleDecls)
+		replacementSpecifiers := typeNames
+		if len(exactDecls) > 0 {
+			replacementSpecifiers = mergeImportSpecifierLists(splitImportSpecifierList(primary.SpecifiersText), typeNames)
+		}
+		replacement := replacementForTypeImportDecl(file.Source, primary, typeImportPath, replacementSpecifiers)
+		if file.Source[primary.Start:primary.End] != replacement {
+			importEdits = append(importEdits, textEdit{Start: primary.Start, End: primary.End, Replacement: replacement})
+		}
+
+		for _, decl := range exactDecls {
+			if decl.Start == primary.Start && decl.End == primary.End {
+				continue
+			}
+			if typeImportDeclUsesOnlyNames(decl, desiredNames) {
+				importEdits = append(importEdits, textEdit{Start: decl.Start, End: decl.End, Replacement: ""})
+			}
+		}
+		for _, decl := range staleDecls {
+			if decl.Start == primary.Start && decl.End == primary.End {
+				continue
+			}
+			importEdits = append(importEdits, textEdit{Start: decl.Start, End: decl.End, Replacement: ""})
+		}
 	}
 
 	typeArgEdits := make([]textEdit, 0, len(states))
@@ -1364,6 +1387,58 @@ func splitImportSpecifierList(text string) []string {
 	return specifiers
 }
 
+func desiredTypeImportNames(logics []ParsedLogic) ([]string, map[string]bool) {
+	typeNames := make([]string, 0, len(logics))
+	desiredNames := make(map[string]bool, len(logics))
+	for _, logic := range logics {
+		typeNames = append(typeNames, logic.TypeName)
+		desiredNames[logic.TypeName] = true
+	}
+	sort.Strings(typeNames)
+	return typeNames, desiredNames
+}
+
+func matchingTypeImportDecls(decls []namedImportDecl, typeImportAbs, typeImportPath string, desiredNames map[string]bool) ([]namedImportDecl, []namedImportDecl) {
+	exactDecls := make([]namedImportDecl, 0)
+	staleDecls := make([]namedImportDecl, 0)
+	for _, decl := range decls {
+		if !decl.IsTypeOnly {
+			continue
+		}
+		if typeImportDeclMatches(decl, typeImportAbs, typeImportPath) {
+			exactDecls = append(exactDecls, decl)
+			continue
+		}
+		if typeImportDeclUsesOnlyNames(decl, desiredNames) {
+			staleDecls = append(staleDecls, decl)
+		}
+	}
+	return exactDecls, staleDecls
+}
+
+func firstTypeImportDecl(exactDecls, staleDecls []namedImportDecl) namedImportDecl {
+	if len(exactDecls) > 0 {
+		return exactDecls[0]
+	}
+	return staleDecls[0]
+}
+
+func typeImportDeclUsesOnlyNames(decl namedImportDecl, desiredNames map[string]bool) bool {
+	if len(desiredNames) == 0 || decl.DefaultImport != "" {
+		return false
+	}
+	specifiers := parseImportSpecifiers(decl.SpecifiersText, decl.Path)
+	if len(specifiers) == 0 {
+		return false
+	}
+	for localName := range specifiers {
+		if !desiredNames[localName] {
+			return false
+		}
+	}
+	return true
+}
+
 func findNamedImportDecls(source, file string) []namedImportDecl {
 	decls := make([]namedImportDecl, 0)
 	for _, match := range importClausePattern.FindAllStringSubmatchIndex(source, -1) {
@@ -1413,6 +1488,26 @@ func buildNamedImportDecl(source, file string, start, end, specStart, specEnd, p
 		DefaultImport:  strings.TrimSpace(defaultImport),
 		IsTypeOnly:     strings.Contains(rawDecl, "import type"),
 	}
+}
+
+func replacementForTypeImportDecl(source string, decl namedImportDecl, importPath string, specifiers []string) string {
+	trailing := importDeclTrailing(source, decl)
+	if decl.DefaultImport != "" {
+		return fmt.Sprintf("import type %s, { %s } from '%s'%s", decl.DefaultImport, strings.Join(specifiers, ", "), importPath, trailing)
+	}
+	return fmt.Sprintf("import type { %s } from '%s'%s", strings.Join(specifiers, ", "), importPath, trailing)
+}
+
+func importDeclTrailing(source string, decl namedImportDecl) string {
+	trailing := "\n"
+	if decl.Start >= 0 && decl.End <= len(source) && decl.End > decl.Start {
+		raw := source[decl.Start:decl.End]
+		trimmed := strings.TrimRight(raw, "\r\n")
+		if len(trimmed) < len(raw) {
+			trailing = raw[len(trimmed):]
+		}
+	}
+	return trailing
 }
 
 func extendImportMatchEnd(source string, end int) int {

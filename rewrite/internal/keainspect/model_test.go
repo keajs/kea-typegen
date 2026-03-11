@@ -502,6 +502,40 @@ func TestParseSelectorsPrefersReportedReturnType(t *testing.T) {
 	}
 }
 
+func TestParseSelectorReturnTypeHandlesWriteRoundFunctionArrays(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		typeText string
+		expected string
+	}{
+		{
+			name:     "single function array",
+			typeText: "(() => EventIndex)[]",
+			expected: "EventIndex",
+		},
+		{
+			name:     "dependency array union",
+			typeText: "((() => never[]) | (() => RandomThing))[]",
+			expected: "RandomThing",
+		},
+		{
+			name:     "prefers shallower final array return",
+			typeText: "(((selectors: any) => Repository[][]) | ((repositories: Repository[]) => Repository[]))[]",
+			expected: "Repository[]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			returnType, ok := parseSelectorReturnType(tc.typeText)
+			if !ok {
+				t.Fatalf("expected selector return type to parse for %q", tc.typeText)
+			}
+			if returnType != tc.expected {
+				t.Fatalf("expected selector return type %q, got %q", tc.expected, returnType)
+			}
+		})
+	}
+}
+
 func TestParseLoaderMemberTypeHandlesTupleLoader(t *testing.T) {
 	defaultType, properties, ok := parseLoaderMemberType("[Record<string, any>, { loadIt: () => { id: number; name: void; pinned: boolean; }; }]")
 	if !ok {
@@ -710,8 +744,8 @@ func TestBuildParsedLogicsRecoversCollapsedImportedSelectorsAndListenersFromSour
 		parsedByFile: map[string][]ParsedLogic{
 			filepath.Clean(targetFile): {
 				{
-					Name: "githubLogic",
-					Path: []string{"githubLogic"},
+					Name:       "githubLogic",
+					Path:       []string{"githubLogic"},
 					PathString: "githubLogic",
 					Actions: []ParsedAction{
 						{

@@ -127,6 +127,7 @@
   - `samples/autoImportLogic.ts` authoritative connected import reuse so `Repository` stays owned by `./types` instead of being spuriously re-imported from package scanning
   - `samples/autoImportLogic.ts` selector recovery for both truncated `sbla` and explicit alias return types such as `randomSpecifiedReturn`
   - `samples/autoImportLogic.ts` native write rounds now keep selector surfaces closer to the TS generator even after reduced generated type feedback, including `EventIndex`, `RandomAPI`, and `Partial<Record<string, S7>>`
+  - `samples/autoImportLogic.ts` write-round selector recovery now also preserves the TS generator's inferred-vs-explicit ownership split for `randomDetectedReturn: RandomThing` versus `randomSpecifiedReturn: ExportedApi.RandomThing`
   - `samples/githubImportLogic.ts` and `samples/githubImportViaWildcardLogic.ts` imported listener action typing for computed `logic.actionTypes.*` keys
   - `samples/githubImportLogic.ts` and `samples/githubImportViaWildcardLogic.ts` imported selector passthrough plus computed imported listeners now also survive native write rounds with reduced generated type feedback
   - `samples/githubImportLogic.ts` and `samples/githubImportViaWildcardLogic.ts` omission of generic `sharedListeners` entries whose payloads only recover as `any`, keeping `BreakPointFunction` out of the emitted imports
@@ -135,6 +136,7 @@
 - Native CLI source-edit helpers now have focused tests for:
   - `.kearc` path/bool resolution into Go app options
   - adding missing `import type { logicType } from './logicType'` plus `kea<logicType>` annotations
+  - rewriting stale generated `logicType` imports when the source still points at an old `--types` location, and deduplicating duplicate `logicType` imports left behind by earlier runs
   - inserting missing object `path` declarations for `--write-paths`
   - converting object-style inputs to builders plus adding the needed runtime imports, including reuse of existing aliases such as `path as logicPath`
   - avoiding duplicate builder `path(...)` insertion when an existing builder logic already uses an alias such as `logicPath(...)`
