@@ -271,10 +271,13 @@ env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go r
 - Useful commands:
 
 ```bash
+cd /Users/marius/Projects/Kea/kea-typegen
+./bin/kea-typegen-js check -r ./samples
+./bin/kea-typegen-go check -r ./samples --verbose
 cd /Users/marius/Projects/Kea/kea-typegen/rewrite
 env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go test ./...
-env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go run ./cmd/kea-typegen-go -file ../samples/propsLogic.ts -format typegen
-env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go run ./cmd/kea-typegen-go -file ../samples/builderLogic.ts -format model
+../bin/kea-typegen-go -file ../samples/propsLogic.ts -format typegen
+../bin/kea-typegen-go -file ../samples/builderLogic.ts -format model
 cd /Users/marius/Projects/Kea/kea-typegen
 node ./scripts/benchmark-sample-typegen.js -n 5 -w 1
 ```

@@ -15,6 +15,8 @@ import (
 	"kea-typegen/rewrite/internal/tsgoapi"
 )
 
+const invocationDirEnv = "KEA_TYPEGEN_CWD"
+
 type stringSliceFlag []string
 
 func (s *stringSliceFlag) String() string {
@@ -94,7 +96,7 @@ func runTypegenCommand(ctx context.Context, command string, args []string) error
 	options.Write = command != "check"
 	options.Watch = command == "watch"
 
-	resolved, err := keainspect.ResolveAppOptions(options, visitedFlags(flags), mustGetwd())
+	resolved, err := keainspect.ResolveAppOptions(options, visitedFlags(flags), cliWorkingDir())
 	if err != nil {
 		return err
 	}
@@ -118,10 +120,10 @@ func runLegacyCommand() error {
 	}
 
 	report, err := keainspect.InspectFile(context.Background(), keainspect.InspectOptions{
-		BinaryPath: mustAbs(*tsgoBin),
-		ProjectDir: mustAbs(*projectDir),
-		ConfigFile: mustAbs(*configFile),
-		File:       mustAbs(*filePath),
+		BinaryPath: mustAbsFrom(cliWorkingDir(), *tsgoBin),
+		ProjectDir: mustAbsFrom(cliWorkingDir(), *projectDir),
+		ConfigFile: mustAbsFrom(cliWorkingDir(), *configFile),
+		File:       mustAbsFrom(cliWorkingDir(), *filePath),
 		Timeout:    *timeout,
 	})
 	if err != nil {
@@ -166,7 +168,7 @@ func findBaseDir() string {
 	if _, err := os.Stat(filepath.Join(wd, "rewrite", "go.mod")); err == nil {
 		return wd
 	}
-	return mustAbs(filepath.Join(wd, ".."))
+	return mustAbsFrom(wd, "..")
 }
 
 func mustGetwd() string {
@@ -177,8 +179,18 @@ func mustGetwd() string {
 	return wd
 }
 
-func mustAbs(path string) string {
-	abs, err := filepath.Abs(path)
+func cliWorkingDir() string {
+	if value := strings.TrimSpace(os.Getenv(invocationDirEnv)); value != "" {
+		return mustAbsFrom(mustGetwd(), value)
+	}
+	return mustGetwd()
+}
+
+func mustAbsFrom(base, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	abs, err := filepath.Abs(filepath.Join(base, path))
 	if err != nil {
 		fail(err)
 	}

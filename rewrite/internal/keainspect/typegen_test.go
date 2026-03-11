@@ -50,6 +50,47 @@ func TestResolveAppOptionsIncludesKeaConfig(t *testing.T) {
 	}
 }
 
+func TestResolveAppOptionsSingleFileDiscoversProjectFromSourcePath(t *testing.T) {
+	tempDir := t.TempDir()
+	projectDir := filepath.Join(tempDir, "samples")
+	sourceDir := filepath.Join(projectDir, "nested")
+	sourceFile := filepath.Join(sourceDir, "logic.ts")
+	otherDir := filepath.Join(tempDir, "rewrite")
+
+	for _, dir := range []string{projectDir, sourceDir, otherDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("os.MkdirAll %s: %v", dir, err)
+		}
+	}
+	for _, file := range []string{
+		filepath.Join(projectDir, "tsconfig.json"),
+		filepath.Join(projectDir, "package.json"),
+		sourceFile,
+	} {
+		if err := os.WriteFile(file, []byte("{}"), 0o644); err != nil {
+			t.Fatalf("os.WriteFile %s: %v", file, err)
+		}
+	}
+
+	options, err := ResolveAppOptions(AppOptions{SourceFilePath: sourceFile}, nil, otherDir)
+	if err != nil {
+		t.Fatalf("ResolveAppOptions returned error: %v", err)
+	}
+
+	if options.TsConfigPath != filepath.Join(projectDir, "tsconfig.json") {
+		t.Fatalf("unexpected tsConfigPath: %s", options.TsConfigPath)
+	}
+	if options.PackageJSONPath != filepath.Join(projectDir, "package.json") {
+		t.Fatalf("unexpected packageJsonPath: %s", options.PackageJSONPath)
+	}
+	if options.RootPath != projectDir {
+		t.Fatalf("unexpected rootPath: %s", options.RootPath)
+	}
+	if options.TypesPath != projectDir {
+		t.Fatalf("unexpected typesPath: %s", options.TypesPath)
+	}
+}
+
 func TestNormalizedTypeImportsIgnoresResolvedRelativeFilesWithExternalTypesDir(t *testing.T) {
 	tempDir := t.TempDir()
 	sourceDir := filepath.Join(tempDir, "src")

@@ -190,6 +190,10 @@ func ResolveAppOptions(options AppOptions, setFlags map[string]bool, cwd string)
 	resolved.RootPath = resolveCLIPath(resolved.RootPath)
 	resolved.TypesPath = resolveCLIPath(resolved.TypesPath)
 	resolved.IgnoreImportPaths = resolveCLIPaths(resolved.IgnoreImportPaths)
+	sourceDir := ""
+	if resolved.SourceFilePath != "" {
+		sourceDir = filepath.Dir(resolved.SourceFilePath)
+	}
 
 	configPath := ""
 	if resolved.TsConfigPath != "" {
@@ -197,6 +201,9 @@ func ResolveAppOptions(options AppOptions, setFlags map[string]bool, cwd string)
 	}
 	if configPath == "" && resolved.RootPath != "" {
 		configPath = findConfigUp(resolved.RootPath, ".kearc")
+	}
+	if configPath == "" && sourceDir != "" {
+		configPath = findConfigUp(sourceDir, ".kearc")
 	}
 	if configPath == "" {
 		configPath = findConfigUp(cwd, ".kearc")
@@ -283,24 +290,29 @@ func ResolveAppOptions(options AppOptions, setFlags map[string]bool, cwd string)
 		}
 	}
 
+	if resolved.TsConfigPath == "" {
+		resolved.TsConfigPath = firstNonEmpty(
+			findConfigUp(sourceDir, "tsconfig.json"),
+			findConfigUp(resolved.RootPath, "tsconfig.json"),
+			findConfigUp(cwd, "tsconfig.json"),
+		)
+	}
 	if resolved.RootPath == "" {
-		if resolved.TsConfigPath != "" {
+		switch {
+		case resolved.TsConfigPath != "":
 			resolved.RootPath = filepath.Dir(resolved.TsConfigPath)
-		} else {
+		case sourceDir != "":
+			resolved.RootPath = sourceDir
+		default:
 			resolved.RootPath = cwd
 		}
 	}
 	if resolved.TypesPath == "" {
 		resolved.TypesPath = resolved.RootPath
 	}
-	if resolved.TsConfigPath == "" {
-		resolved.TsConfigPath = firstNonEmpty(
-			findConfigUp(resolved.RootPath, "tsconfig.json"),
-			findConfigUp(cwd, "tsconfig.json"),
-		)
-	}
 	if resolved.PackageJSONPath == "" {
 		resolved.PackageJSONPath = firstNonEmpty(
+			findConfigUp(sourceDir, "package.json"),
 			findConfigUp(resolved.RootPath, "package.json"),
 			findConfigUp(cwd, "package.json"),
 		)
