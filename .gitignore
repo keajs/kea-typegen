@@ -5,3 +5,11 @@ dist/
 form-plugin/lib/tsconfig.tsbuildinfo
 form-plugin/lib/**/*.map
 samples/.typegen
+poc/tsgo-lsp/.gocache
+poc/tsgo-lsp/tsgo-lsp
+poc/tsgo-lsp/bin
+poc/tsgo-lsp/node_modules
+poc/tsgo-api/.gocache
+poc/tsgo-api/bin
+rewrite/.gocache
+rewrite/bin
