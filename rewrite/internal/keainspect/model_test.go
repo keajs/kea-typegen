@@ -337,6 +337,128 @@ func TestBuildParsedLogicsResolvesDefaultImportedConnectTargets(t *testing.T) {
 	}
 }
 
+func TestParseConnectedTargetReferenceSupportsWrappedNamespaceTargets(t *testing.T) {
+	for _, tc := range []struct {
+		expression string
+		baseAlias  string
+		logicName  string
+	}{
+		{
+			expression: `github["githubLogic"]`,
+			baseAlias:  "github",
+			logicName:  "githubLogic",
+		},
+		{
+			expression: `github['githubLogic']()`,
+			baseAlias:  "github",
+			logicName:  "githubLogic",
+		},
+		{
+			expression: `github?.githubLogic?.()`,
+			baseAlias:  "github",
+			logicName:  "githubLogic",
+		},
+		{
+			expression: `((github['githubLogic'] as typeof github.githubLogic)!)`,
+			baseAlias:  "github",
+			logicName:  "githubLogic",
+		},
+		{
+			expression: `(github['githubLogic'] satisfies typeof github.githubLogic)`,
+			baseAlias:  "github",
+			logicName:  "githubLogic",
+		},
+	} {
+		target, ok := parseConnectedTargetReference(tc.expression)
+		if !ok {
+			t.Fatalf("expected %q to parse as a connected target", tc.expression)
+		}
+		if target.BaseAlias != tc.baseAlias || target.LogicName != tc.logicName {
+			t.Fatalf("expected %q to parse as %s/%s, got %+v", tc.expression, tc.baseAlias, tc.logicName, target)
+		}
+	}
+}
+
+func TestBuildParsedLogicsResolvesBracketedAssertedNamespaceConnectTargets(t *testing.T) {
+	tempDir := t.TempDir()
+	targetFile := filepath.Join(tempDir, "githubLogic.ts")
+	if err := os.WriteFile(targetFile, []byte("export default null\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile targetFile: %v", err)
+	}
+
+	sourceFile := filepath.Join(tempDir, "namespaceBracketConnectLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import * as github from './githubLogic'",
+		"",
+		"export const namespaceBracketConnectLogic = kea({",
+		"    connect: {",
+		"        actions: [((github['githubLogic'] as typeof github.githubLogic)!), ['setRepositories']],",
+		"        values: [((github['githubLogic'] as typeof github.githubLogic)!)(), ['repositories']],",
+		"    },",
+		"})",
+		"",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       sourceFile,
+		Logics: []LogicReport{
+			{
+				Name:      "namespaceBracketConnectLogic",
+				InputKind: "object",
+			},
+		},
+	}
+
+	state := &buildState{
+		binaryPath: "tsgo",
+		projectDir: tempDir,
+		configFile: filepath.Join(tempDir, "tsconfig.json"),
+		parsedByFile: map[string][]ParsedLogic{
+			filepath.Clean(targetFile): {
+				{
+					Name: "githubLogic",
+					Actions: []ParsedAction{
+						{
+							Name:         "setRepositories",
+							FunctionType: "(repositories: Repository[]) => { repositories: Repository[]; }",
+							PayloadType:  "{ repositories: Repository[]; }",
+						},
+					},
+					Selectors: []ParsedField{
+						{Name: "repositories", Type: "Repository[]"},
+					},
+					Imports: []TypeImport{
+						{Path: "./types", Names: []string{"Repository"}},
+					},
+				},
+			},
+		},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+
+	logics, err := buildParsedLogicsFromSource(report, source, state)
+	if err != nil {
+		t.Fatalf("buildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasAction(logic.Actions, "setRepositories") {
+		t.Fatalf("expected connected action for setRepositories, got %+v", logic.Actions)
+	}
+	if !hasImport(logic.Imports, "./types", "Repository") {
+		t.Fatalf("expected connected Repository import, got %+v", logic.Imports)
+	}
+	if !hasReducer(logic.Selectors, "repositories", "Repository[]") {
+		t.Fatalf("expected connected repositories selector type Repository[], got %+v", logic.Selectors)
+	}
+}
+
 func TestEmitTypegenRendersNamespaceAndDefaultImports(t *testing.T) {
 	rendered := EmitTypegenAt([]ParsedLogic{
 		{
@@ -377,6 +499,306 @@ func TestParseSelectorsPrefersReportedReturnType(t *testing.T) {
 	}
 	if selectors[0].Type != "string" {
 		t.Fatalf("expected selector type %q, got %q", "string", selectors[0].Type)
+	}
+}
+
+func TestParseLoaderMemberTypeHandlesTupleLoader(t *testing.T) {
+	defaultType, properties, ok := parseLoaderMemberType("[Record<string, any>, { loadIt: () => { id: number; name: void; pinned: boolean; }; }]")
+	if !ok {
+		t.Fatalf("expected tuple loader member type to parse")
+	}
+	if defaultType != "Record<string, any>" {
+		t.Fatalf("expected default type %q, got %q", "Record<string, any>", defaultType)
+	}
+	if properties["loadIt"] != "() => { id: number; name: void; pinned: boolean; }" {
+		t.Fatalf("unexpected loadIt property type: %#v", properties)
+	}
+
+	actions := parseLoaderActions("misc", properties, "__default")
+	if len(actions) != 3 {
+		t.Fatalf("expected request/success/failure loader actions, got %+v", actions)
+	}
+}
+
+func TestParseReducerStateTypeWidensBooleanLiteralState(t *testing.T) {
+	stateType, ok := parseReducerStateType("[false, { setUsername: () => true; setRepositories: () => false; setFetchError: () => false; }]")
+	if !ok {
+		t.Fatalf("expected reducer state type to parse")
+	}
+	if stateType != "boolean" {
+		t.Fatalf("expected reducer state type %q, got %q", "boolean", stateType)
+	}
+}
+
+func TestParseLoadersWithSourceRecoversCollapsedTupleLoaderMembers(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"export const loadersLogic = kea({",
+		"    loaders: {",
+		"        dashboard: {",
+		"            __default: null as Dashboard | null,",
+		"            addDashboard: ({ name }: { name: string }) => ({ id: -1, name, pinned: true } as Dashboard),",
+		"        },",
+		"        shouldNotBeNeverButAny: {",
+		"            __default: [],",
+		"        },",
+		"        misc: [",
+		"            {} as Record<string, any>,",
+		"            {",
+		"                loadIt: () => ({ id: -1, name, pinned: true }),",
+		"            },",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	property := mustFindLogicProperty(t, logics[0], "loaders")
+	actions, reducers := parseLoadersWithSource(SectionReport{
+		Name: "loaders",
+		Members: []MemberReport{
+			{Name: "dashboard", TypeString: "{ __default: Dashboard | null; addDashboard: ({ name }: { name: string; }) => Dashboard; }"},
+			{Name: "shouldNotBeNeverButAny", TypeString: "{ __default: never[]; }"},
+			{Name: "misc", TypeString: "Record<string, any>[]"},
+		},
+	}, source, property, "", nil)
+
+	for _, actionName := range []string{"loadIt", "loadItSuccess", "loadItFailure"} {
+		if !hasAction(actions, actionName) {
+			t.Fatalf("expected source recovery to synthesize %s, got %+v", actionName, actions)
+		}
+	}
+	for _, reducer := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "misc", typ: "Record<string, any>"},
+		{name: "miscLoading", typ: "boolean"},
+		{name: "shouldNotBeNeverButAny", typ: "any[]"},
+	} {
+		if !hasReducer(reducers, reducer.name, reducer.typ) {
+			t.Fatalf("expected reducer %s: %s, got %+v", reducer.name, reducer.typ, reducers)
+		}
+	}
+}
+
+func TestParseReducersWithSourceRecoversCollapsedLiteralReducerState(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"export const githubLogic = kea({",
+		"    reducers: {",
+		"        username: [",
+		"            'keajs',",
+		"            {",
+		"                setUsername: (_, { username }) => username,",
+		"            },",
+		"        ],",
+		"        isLoading: [",
+		"            false,",
+		"            {",
+		"                setUsername: () => true,",
+		"                setRepositories: () => false,",
+		"                setFetchError: () => false,",
+		"            },",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	property := mustFindLogicProperty(t, logics[0], "reducers")
+	reducers := parseReducersWithSource(SectionReport{
+		Name: "reducers",
+		Members: []MemberReport{
+			{Name: "username", TypeString: "(string | { setUsername: (_: any, { username }: { username: any; }) => any; })[]"},
+			{Name: "isLoading", TypeString: "(boolean | { setUsername: () => boolean; setRepositories: () => boolean; setFetchError: () => boolean; })[]"},
+		},
+	}, source, property)
+
+	for _, reducer := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "username", typ: "string"},
+		{name: "isLoading", typ: "boolean"},
+	} {
+		if !hasReducer(reducers, reducer.name, reducer.typ) {
+			t.Fatalf("expected reducer %s: %s, got %+v", reducer.name, reducer.typ, reducers)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversCollapsedImportedSelectorsAndListenersFromSource(t *testing.T) {
+	tempDir := t.TempDir()
+	targetFile := filepath.Join(tempDir, "githubLogic.ts")
+	typesFile := filepath.Join(tempDir, "types.ts")
+	sourceFile := filepath.Join(tempDir, "githubImportLogic.ts")
+	for path, content := range map[string]string{
+		targetFile: "export {}",
+		typesFile: strings.Join([]string{
+			"export interface Repository {",
+			"    id: number",
+			"}",
+			"",
+		}, "\n"),
+		sourceFile: "",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("os.WriteFile %s: %v", path, err)
+		}
+	}
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import { githubLogic } from './githubLogic'",
+		"import { Repository } from './types'",
+		"",
+		"export const githubImportLogic = kea({",
+		"    selectors: {",
+		"        repositorySelectorCopy: [() => [githubLogic.selectors.repositories], (repositories) => repositories],",
+		"    },",
+		"    listeners: () => ({",
+		"        [githubLogic.actionTypes.setUsername]: ({ username }) => {",
+		"            console.log(username)",
+		"        },",
+		"    }),",
+		"})",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sourceFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("os.WriteFile sourceFile: %v", err)
+	}
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       sourceFile,
+		Logics: []LogicReport{
+			{
+				Name:      "githubImportLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{Name: "repositorySelectorCopy", TypeString: "((repositories: any) => any)[]", ReturnTypeString: "any"},
+						},
+					},
+					{
+						Name:                "listeners",
+						EffectiveTypeString: "{ [x: number]: ({ username }: { username: any; }) => void; }",
+						PrintedTypeNode:     "{ [x: number]: ({ username }: { username: any; }) => void; }",
+					},
+				},
+			},
+		},
+	}
+
+	state := &buildState{
+		binaryPath: "tsgo",
+		projectDir: tempDir,
+		configFile: filepath.Join(tempDir, "tsconfig.json"),
+		parsedByFile: map[string][]ParsedLogic{
+			filepath.Clean(targetFile): {
+				{
+					Name: "githubLogic",
+					Path: []string{"githubLogic"},
+					PathString: "githubLogic",
+					Actions: []ParsedAction{
+						{
+							Name:         "setUsername",
+							FunctionType: "(username: string) => { username: string; }",
+							PayloadType:  "{ username: string; }",
+						},
+					},
+					Reducers: []ParsedField{
+						{Name: "repositories", Type: "Repository[]"},
+					},
+					Imports: []TypeImport{
+						{Path: "./types", Names: []string{"Repository"}},
+					},
+				},
+			},
+		},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+
+	logics, err := buildParsedLogicsFromSource(report, source, state)
+	if err != nil {
+		t.Fatalf("buildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "repositorySelectorCopy"); !ok || selector.Type != "Repository[]" {
+		t.Fatalf("expected repositorySelectorCopy selector type Repository[], got %+v", logic.Selectors)
+	}
+	listener, ok := findParsedListener(logic.Listeners, "set username (githubLogic)")
+	if !ok {
+		t.Fatalf("expected computed imported listener to recover from source, got %+v", logic.Listeners)
+	}
+	if listener.PayloadType != "{ username: string; }" {
+		t.Fatalf("expected listener payload type { username: string; }, got %+v", listener)
+	}
+	if !hasImport(logic.Imports, "./types", "Repository") {
+		t.Fatalf("expected Repository import to be preserved, got %+v", logic.Imports)
+	}
+}
+
+func TestParseSelectorsWithSourceRecoversCollapsedBlockBodiedArraySelector(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"export const githubLogic = kea({",
+		"    selectors: {",
+		"        sortedRepositories: [",
+		"            (selectors) => [selectors.repositories],",
+		"            (repositories) => {",
+		"                return [...repositories].sort((a, b) => b.stargazers_count - a.stargazers_count)",
+		"            },",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	property := mustFindLogicProperty(t, logics[0], "selectors")
+	selectors := parseSelectorsWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{Name: "sortedRepositories", TypeString: "((repositories: any[]) => any[])[]", ReturnTypeString: "any[]"},
+			},
+		},
+		ParsedLogic{
+			Reducers: []ParsedField{
+				{Name: "repositories", Type: "Repository[]"},
+			},
+		},
+		source,
+		property,
+		"/tmp/githubLogic.ts",
+		nil,
+	)
+
+	if selector, ok := findParsedField(selectors, "sortedRepositories"); !ok || selector.Type != "Repository[]" {
+		t.Fatalf("expected sortedRepositories selector type Repository[], got %+v", selectors)
 	}
 }
 
@@ -467,11 +889,59 @@ func TestBuildParsedLogicsSynthesizesLoadersAndDefaults(t *testing.T) {
 		"loadSessions: 'load sessions (scenes.homepage.index.*)'",
 		"loadSessionsSuccess: 'load sessions success (scenes.homepage.index.*)'",
 		"loadSessionsFailure: 'load sessions failure (scenes.homepage.index.*)'",
-		"'updateName': ((action: { type: 'update name (scenes.homepage.index.*)'; payload: { name: string; } }, previousState: any) => void | Promise<void>)[]",
+		"updateName: ((action: { type: 'update name (scenes.homepage.index.*)'; payload: { name: string; } }, previousState: any) => void | Promise<void>)[]",
 		"afterMount: () => void",
-		"'someRandomFunction': (payload: { name: string; id?: number | undefined; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number | undefined; } }, previousState: any) => void | Promise<void>",
+		"someRandomFunction: (payload: { name: string; id?: number | undefined; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number | undefined; } }, previousState: any) => void | Promise<void>",
 		"sessionsLoading: boolean",
 		"payload?: string",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsLoadersSample(t *testing.T) {
+	report := inspectSampleReport(t, "loadersLogic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if action, ok := findParsedAction(logic.Actions, "addDashboard"); !ok || action.FunctionType != "(name: string) => { name: string; }" {
+		t.Fatalf("expected explicit addDashboard action signature to be preserved, got %+v", action)
+	}
+	for _, actionName := range []string{"loadIt", "loadItSuccess", "loadItFailure"} {
+		if !hasAction(logic.Actions, actionName) {
+			t.Fatalf("expected synthesized %s action, got %+v", actionName, logic.Actions)
+		}
+	}
+	for _, reducer := range []struct {
+		name     string
+		typeText string
+	}{
+		{name: "misc", typeText: "Record<string, any>"},
+		{name: "miscLoading", typeText: "boolean"},
+		{name: "shouldNotBeNeverButAny", typeText: "any[]"},
+		{name: "shouldNotBeNeverButAnyLoading", typeText: "boolean"},
+	} {
+		if !hasReducer(logic.Reducers, reducer.name, reducer.typeText) {
+			t.Fatalf("expected reducer %s to have type %s, got %+v", reducer.name, reducer.typeText, logic.Reducers)
+		}
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"addDashboard: (name: string) => void",
+		"loadIt: () => void",
+		"loadItSuccess: (misc: { id: number; name: void; pinned: boolean; }, payload?: any) => void",
+		"shouldNotBeNeverButAny: any[]",
+		"misc: Record<string, any>",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
@@ -584,6 +1054,35 @@ func TestBuildParsedLogicsPrefersSymbolBackedConnectedValueTypes(t *testing.T) {
 	}
 }
 
+func TestBuildParsedLogicsGithubSamplePreservesBooleanReducerState(t *testing.T) {
+	report := inspectSampleReport(t, "githubLogic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasReducer(logic.Reducers, "isLoading", "boolean") {
+		t.Fatalf("expected isLoading reducer type boolean, got %+v", logic.Reducers)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	selectorBlock := extractInterfaceBlock(t, rendered, "selector", "selectors")
+	if !strings.Contains(selectorBlock, "isLoading: boolean") {
+		t.Fatalf("expected aggregate selector block to include boolean isLoading:\n%s", selectorBlock)
+	}
+	if strings.Contains(selectorBlock, "sortedRepositories") {
+		t.Fatalf("expected aggregate selector block to exclude derived selectors:\n%s", selectorBlock)
+	}
+	if strings.Contains(rendered, "isLoading: false") {
+		t.Fatalf("expected emitted output to avoid literal false reducer state:\n%s", rendered)
+	}
+}
+
 func TestBuildParsedLogicsAutoImportRichTypes(t *testing.T) {
 	report := inspectSampleReport(t, "autoImportLogic.ts")
 
@@ -613,6 +1112,22 @@ func TestBuildParsedLogicsAutoImportRichTypes(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestExpandImportedTypeAliasTextResolvesRelativeAlias(t *testing.T) {
+	root := repoRoot(t)
+	sourceFile := filepath.Join(root, "samples", "autoImportLogic.ts")
+	source := mustReadFile(t, sourceFile)
+	importedSource := mustReadFile(t, filepath.Join(root, "samples", "autoImportTypes.ts"))
+
+	if expanded := expandLocalSourceTypeText(importedSource, "S6"); expanded != "Partial<Record<string, S7>>" {
+		t.Fatalf("expected local alias S6 to expand inside autoImportTypes.ts, got %q", expanded)
+	}
+
+	expanded := expandImportedTypeAliasText(source, sourceFile, "S6")
+	if expanded != "Partial<Record<string, S7>>" {
+		t.Fatalf("expected imported alias S6 to expand to Partial<Record<string, S7>>, got %q", expanded)
 	}
 }
 
@@ -777,7 +1292,7 @@ func TestBuildParsedLogicsNormalizesTypedFormBuilder(t *testing.T) {
 	}
 }
 
-func TestBuildParsedLogicsNormalizesBuilderForms(t *testing.T) {
+func TestBuildParsedLogicsDefersBuilderFormsPluginOutputs(t *testing.T) {
 	report := inspectSampleReport(t, "builderLogic.ts")
 
 	logics, err := BuildParsedLogics(report)
@@ -789,7 +1304,7 @@ func TestBuildParsedLogicsNormalizesBuilderForms(t *testing.T) {
 	}
 
 	logic := logics[0]
-	for _, expectedAction := range []string{
+	for _, unexpectedAction := range []string{
 		"setMyFormValue",
 		"setMyFormValues",
 		"setMyFormManualErrors",
@@ -800,73 +1315,51 @@ func TestBuildParsedLogicsNormalizesBuilderForms(t *testing.T) {
 		"submitMyFormSuccess",
 		"submitMyFormFailure",
 	} {
-		if !hasAction(logic.Actions, expectedAction) {
-			t.Fatalf("expected %s action from forms builder, got %+v", expectedAction, logic.Actions)
+		if hasAction(logic.Actions, unexpectedAction) {
+			t.Fatalf("expected builder forms action %s to stay deferred for parity, got %+v", unexpectedAction, logic.Actions)
 		}
 	}
-	for _, expectedReducer := range []struct {
-		name string
-		typ  string
-	}{
-		{name: "isMyFormSubmitting", typ: "boolean"},
-		{name: "showMyFormErrors", typ: "boolean"},
-		{name: "myFormChanged", typ: "boolean"},
-		{name: "myFormTouches", typ: "Record<string, boolean>"},
-		{name: "myFormManualErrors", typ: "Record<string, any>"},
+	for _, unexpectedReducer := range []string{
+		"myForm",
+		"isMyFormSubmitting",
+		"showMyFormErrors",
+		"myFormChanged",
+		"myFormTouches",
+		"myFormManualErrors",
 	} {
-		if !hasReducer(logic.Reducers, expectedReducer.name, expectedReducer.typ) {
-			t.Fatalf("expected reducer %s: %s, got %+v", expectedReducer.name, expectedReducer.typ, logic.Reducers)
+		if _, ok := findParsedField(logic.Reducers, unexpectedReducer); ok {
+			t.Fatalf("expected builder forms reducer %s to stay deferred for parity, got %+v", unexpectedReducer, logic.Reducers)
 		}
 	}
-	if reducer, ok := findParsedField(logic.Reducers, "myForm"); !ok || !strings.Contains(reducer.Type, "key1: string") || !strings.Contains(reducer.Type, "asd:") {
-		t.Fatalf("expected myForm reducer type from forms defaults, got %+v", logic.Reducers)
-	}
-	if reducer, ok := findParsedField(logic.Reducers, "myForm"); !ok || strings.Contains(reducer.Type, "...") || !strings.Contains(reducer.Type, "key39: string") || !strings.Contains(reducer.Type, "asd: true") {
-		t.Fatalf("expected myForm reducer type to keep the full expanded defaults shape, got %+v", reducer)
-	}
-	for _, expectedSelector := range []struct {
-		name string
-		typ  string
-	}{
-		{name: "myFormTouched", typ: "boolean"},
-		{name: "myFormAllErrors", typ: "Record<string, any>"},
-		{name: "myFormHasErrors", typ: "boolean"},
-		{name: "isMyFormValid", typ: "boolean"},
+	for _, unexpectedSelector := range []string{
+		"myFormTouched",
+		"myFormValidationErrors",
+		"myFormAllErrors",
+		"myFormHasErrors",
+		"myFormErrors",
+		"isMyFormValid",
 	} {
-		if selector, ok := findParsedField(logic.Selectors, expectedSelector.name); !ok || selector.Type != expectedSelector.typ {
-			t.Fatalf("expected selector %s: %s, got %+v", expectedSelector.name, expectedSelector.typ, selector)
+		if _, ok := findParsedField(logic.Selectors, unexpectedSelector); ok {
+			t.Fatalf("expected builder forms selector %s to stay deferred for parity, got %+v", unexpectedSelector, logic.Selectors)
 		}
 	}
-	if selector, ok := findParsedField(logic.Selectors, "myFormValidationErrors"); !ok || !strings.Contains(selector.Type, "DeepPartialMap<") || !strings.Contains(selector.Type, "ValidationErrorType") {
-		t.Fatalf("expected myFormValidationErrors selector type, got %+v", logic.Selectors)
-	}
-	for _, actionName := range []string{"setMyFormValues", "resetMyForm", "submitMyFormRequest", "submitMyFormSuccess"} {
-		action, ok := findParsedAction(logic.Actions, actionName)
-		if !ok {
-			t.Fatalf("expected %s action from forms builder, got %+v", actionName, logic.Actions)
-		}
-		if strings.Contains(action.FunctionType, "...") || strings.Contains(action.PayloadType, "...") || !strings.Contains(action.FunctionType, "key39: string") || !strings.Contains(action.FunctionType, "asd: true") {
-			t.Fatalf("expected %s action type to keep the full expanded defaults shape, got %+v", actionName, action)
-		}
-	}
-	for _, expectedImport := range []string{"DeepPartial", "DeepPartialMap", "FieldName", "ValidationErrorType"} {
-		if !hasImport(logic.Imports, "kea-forms", expectedImport) {
-			t.Fatalf("expected %s import from kea-forms, got %+v", expectedImport, logic.Imports)
+	for _, unexpectedImport := range []string{"DeepPartial", "DeepPartialMap", "FieldName", "ValidationErrorType"} {
+		if hasImport(logic.Imports, "kea-forms", unexpectedImport) {
+			t.Fatalf("expected builder forms import %s to stay deferred for parity, got %+v", unexpectedImport, logic.Imports)
 		}
 	}
 
 	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
-	for _, expected := range []string{
+	for _, unexpected := range []string{
 		"import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from 'kea-forms'",
 		"setMyFormValue: (key: FieldName, value: any) => void",
 		"submitMyFormFailure: (error: Error, errors: Record<string, any>) => void",
-		"setMyFormValues: (values: DeepPartial<{ asd: true;",
 		"myFormTouches: Record<string, boolean>",
 		"myFormValidationErrors: (state: any, props?: any) => DeepPartialMap<",
 		"isMyFormValid: (state: any, props?: any) => boolean",
 	} {
-		if !strings.Contains(rendered, expected) {
-			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		if strings.Contains(rendered, unexpected) {
+			t.Fatalf("expected emitted output to defer builder forms parity and omit %q:\n%s", unexpected, rendered)
 		}
 	}
 }
@@ -901,7 +1394,7 @@ func TestBuildParsedLogicsResolvesExternalConnectActionsFromSymbols(t *testing.T
 	for _, expected := range []string{
 		"import type { LocationChangedPayload } from 'kea-router/lib/types'",
 		"locationChanged: ({ method, pathname, search, searchParams, hash, hashParams, initial, }: LocationChangedPayload) => void",
-		"'locationChanged': ((action: { type: 'location changed (containers.pages.main)'; payload:",
+		"locationChanged: ((action: { type: 'location changed (containers.pages.main)'; payload:",
 		"hashParams: Record<string, any>",
 		"searchParams: Record<string, any>",
 	} {
@@ -978,10 +1471,16 @@ func TestBuildParsedLogicsResolvesImportedActionTypeListeners(t *testing.T) {
 	if listener.ActionType != "{ type: 'set username (githubLogic)'; payload: { username: string; } }" {
 		t.Fatalf("expected imported listener action type to be normalized, got %+v", listener)
 	}
+	if len(logic.SharedListeners) != 0 {
+		t.Fatalf("expected generic shared listeners to be omitted, got %+v", logic.SharedListeners)
+	}
 
 	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
 	if strings.Contains(rendered, "'set username (githubLogic)': ((action: { type: string; payload: any }, previousState: any) => void | Promise<void>)[]") {
 		t.Fatalf("expected imported listener typing to avoid generic fallback:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "import type { Logic, BreakPointFunction } from 'kea'") || strings.Contains(rendered, "'bla': (payload: any") {
+		t.Fatalf("expected generic shared listeners to stay out of emitted output:\n%s", rendered)
 	}
 	for _, expected := range []string{
 		"'set username (githubLogic)': ((action: { type: 'set username (githubLogic)'; payload: { username: string; } }, previousState: any) => void | Promise<void>)[]",
@@ -990,6 +1489,42 @@ func TestBuildParsedLogicsResolvesImportedActionTypeListeners(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestBuildParsedLogicsResolvesWildcardImportedActionTypeListeners(t *testing.T) {
+	report := inspectSampleReport(t, "githubImportViaWildcardLogic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	logic := logics[0]
+
+	listener, ok := findParsedListener(logic.Listeners, "set username (githubLogic)")
+	if !ok {
+		t.Fatalf("expected wildcard-imported listener for set username (githubLogic), got %+v", logic.Listeners)
+	}
+	if listener.PayloadType != "{ username: string; }" {
+		t.Fatalf("expected wildcard-imported listener payload type { username: string; }, got %+v", listener)
+	}
+	if len(logic.SharedListeners) != 0 {
+		t.Fatalf("expected generic wildcard shared listeners to be omitted, got %+v", logic.SharedListeners)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"import type { Logic } from 'kea'",
+		"import type { Repository } from './wildcardExportTypes'",
+		"'set username (githubLogic)': ((action: { type: 'set username (githubLogic)'; payload: { username: string; } }, previousState: any) => void | Promise<void>)[]",
+		"repositorySelectorCopy: (state: any, props?: any) => Repository[]",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+	if strings.Contains(rendered, "BreakPointFunction") || strings.Contains(rendered, "'bla': (payload: any") {
+		t.Fatalf("expected wildcard shared listeners to stay out of emitted output:\n%s", rendered)
 	}
 }
 
@@ -1036,7 +1571,7 @@ func TestBuildParsedLogicsNormalizesBooleanActionShorthands(t *testing.T) {
 	for _, expected := range []string{
 		"deleteAction: () => {",
 		"payload: { value: true }",
-		"'hideButtonActions': ((action: { type: 'hide button actions (complexLogic)'; payload: { value: true } }, previousState: any) => void | Promise<void>)[]",
+		"hideButtonActions: ((action: { type: 'hide button actions (complexLogic)'; payload: { value: true } }, previousState: any) => void | Promise<void>)[]",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
@@ -1070,6 +1605,35 @@ func TestBuildParsedLogicsBuilderLazyLoaders(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestBuildParsedLogicsBuilderSamplePreservesBooleanReducerState(t *testing.T) {
+	report := inspectSampleReport(t, "builderLogic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasReducer(logic.Reducers, "isLoading", "boolean") {
+		t.Fatalf("expected builder isLoading reducer type boolean, got %+v", logic.Reducers)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	selectorBlock := extractInterfaceBlock(t, rendered, "selector", "selectors")
+	if !strings.Contains(selectorBlock, "isLoading: boolean") {
+		t.Fatalf("expected aggregate selector block to include boolean isLoading:\n%s", selectorBlock)
+	}
+	if strings.Contains(selectorBlock, "sortedRepositories") {
+		t.Fatalf("expected aggregate selector block to exclude builder derived selectors:\n%s", selectorBlock)
+	}
+	if strings.Contains(rendered, "isLoading: false") {
+		t.Fatalf("expected emitted output to avoid literal false builder reducer state:\n%s", rendered)
 	}
 }
 
@@ -1132,6 +1696,17 @@ func inspectSampleReport(t *testing.T, fileName string) *Report {
 	return report
 }
 
+func mustFindLogicProperty(t *testing.T, logic SourceLogic, name string) SourceProperty {
+	t.Helper()
+	for _, property := range logic.Properties {
+		if property.Name == name {
+			return property
+		}
+	}
+	t.Fatalf("expected source logic to contain property %q", name)
+	return SourceProperty{}
+}
+
 func hasAction(actions []ParsedAction, name string) bool {
 	for _, action := range actions {
 		if action.Name == name {
@@ -1171,4 +1746,24 @@ func findParsedListener(listeners []ParsedListener, name string) (ParsedListener
 		}
 	}
 	return ParsedListener{}, false
+}
+
+func extractInterfaceBlock(t *testing.T, rendered, startProperty, endProperty string) string {
+	t.Helper()
+
+	startMarker := "    " + startProperty + ":"
+	endMarker := "\n    " + endProperty + ":"
+
+	start := strings.Index(rendered, startMarker)
+	if start == -1 {
+		t.Fatalf("expected rendered output to contain %q:\n%s", startMarker, rendered)
+	}
+
+	rest := rendered[start:]
+	end := strings.Index(rest, endMarker)
+	if end == -1 {
+		t.Fatalf("expected rendered output to contain %q after %q:\n%s", endMarker, startMarker, rendered)
+	}
+
+	return rest[:end]
 }

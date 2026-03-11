@@ -211,7 +211,7 @@ func renderListeners(listeners []ParsedListener) string {
 
 	lines := []string{"{"}
 	for _, listener := range listeners {
-		lines = append(lines, fmt.Sprintf("    %s: ((action: %s, previousState: any) => void | Promise<void>)[]", quoteString(listener.Name), listener.ActionType))
+		lines = append(lines, fmt.Sprintf("    %s: ((action: %s, previousState: any) => void | Promise<void>)[]", renderPropertyName(listener.Name), listener.ActionType))
 	}
 	lines = append(lines, "}")
 	return strings.Join(lines, "\n")
@@ -291,7 +291,7 @@ func renderSelector(logic ParsedLogic) string {
 	lines := []string{
 		"(",
 		"    state: any,",
-		fmt.Sprintf(") => %s", renderFieldShape(mergedValueFields(logic))),
+		fmt.Sprintf(") => %s", renderFieldShape(logic.Reducers)),
 	}
 	return strings.Join(lines, "\n")
 }
@@ -317,7 +317,7 @@ func renderSharedListeners(listeners []ParsedSharedListener) string {
 
 	lines := []string{"{"}
 	for _, listener := range listeners {
-		lines = append(lines, fmt.Sprintf("    %s: (payload: %s, breakpoint: BreakPointFunction, action: %s, previousState: any) => void | Promise<void>", quoteString(listener.Name), listener.PayloadType, listener.ActionType))
+		lines = append(lines, fmt.Sprintf("    %s: (payload: %s, breakpoint: BreakPointFunction, action: %s, previousState: any) => void | Promise<void>", renderPropertyName(listener.Name), listener.PayloadType, listener.ActionType))
 	}
 	lines = append(lines, "}")
 	return strings.Join(lines, "\n")
@@ -419,6 +419,33 @@ func camelCaseToWords(text string) string {
 
 func quoteString(text string) string {
 	return "'" + strings.ReplaceAll(text, "'", "\\'") + "'"
+}
+
+func renderPropertyName(name string) string {
+	if isSimpleIdentifier(name) {
+		return name
+	}
+	return quoteString(name)
+}
+
+func isSimpleIdentifier(text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return false
+	}
+	for i := 0; i < len(text); i++ {
+		ch := text[i]
+		if i == 0 {
+			if !isIdentifierStart(ch) {
+				return false
+			}
+			continue
+		}
+		if !isIdentifierPart(ch) {
+			return false
+		}
+	}
+	return true
 }
 
 func fallbackType(value, fallback string) string {

@@ -1,10 +1,15 @@
 package keainspect
 
 import (
+	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"kea-typegen/rewrite/internal/tsgoapi"
 )
 
 func TestResolveAppOptionsIncludesKeaConfig(t *testing.T) {
@@ -42,6 +47,100 @@ func TestResolveAppOptionsIncludesKeaConfig(t *testing.T) {
 	}
 	if options.TypesPath != rootPath {
 		t.Fatalf("unexpected typesPath: %s", options.TypesPath)
+	}
+}
+
+func TestNormalizedTypeImportsIgnoresResolvedRelativeFilesWithExternalTypesDir(t *testing.T) {
+	tempDir := t.TempDir()
+	sourceDir := filepath.Join(tempDir, "src")
+	typesDir := filepath.Join(tempDir, "generated")
+	sourceFile := filepath.Join(sourceDir, "logic.ts")
+	typeFile := filepath.Join(typesDir, "logicType.ts")
+
+	for _, dir := range []string{sourceDir, typesDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("os.MkdirAll %s: %v", dir, err)
+		}
+	}
+	for _, file := range []string{
+		filepath.Join(tempDir, "package.json"),
+		sourceFile,
+		filepath.Join(sourceDir, "types.ts"),
+		filepath.Join(sourceDir, "donotimport.ts"),
+	} {
+		if err := os.WriteFile(file, []byte(""), 0o644); err != nil {
+			t.Fatalf("os.WriteFile %s: %v", file, err)
+		}
+	}
+
+	imports := normalizedTypeImports([]ParsedLogic{
+		{
+			File: sourceFile,
+			Imports: []TypeImport{
+				{Path: "./types", Names: []string{"Kept"}},
+				{Path: "./donotimport", Names: []string{"Ignored"}},
+			},
+		},
+	}, fileEmitOptions{
+		TypeFile:        typeFile,
+		PackageJSONPath: filepath.Join(tempDir, "package.json"),
+		IgnoreImportPaths: []string{
+			filepath.Join(sourceDir, "donotimport.ts"),
+		},
+	})
+
+	if len(imports) != 1 {
+		t.Fatalf("expected only non-ignored import to remain, got %+v", imports)
+	}
+	if imports[0].Path != "../src/types" {
+		t.Fatalf("expected kept import path %q, got %+v", "../src/types", imports)
+	}
+	if len(imports[0].Names) != 1 || imports[0].Names[0] != "Kept" {
+		t.Fatalf("expected kept import names, got %+v", imports)
+	}
+}
+
+func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
+	root := repoRoot(t)
+	tempDir := t.TempDir()
+	copyDir(t, filepath.Join(root, "samples"), tempDir)
+
+	_, err := runTypegenRounds(context.Background(), AppOptions{
+		BinaryPath:      tsgoapi.PreferredBinary(root),
+		TsConfigPath:    filepath.Join(tempDir, "tsconfig.json"),
+		PackageJSONPath: filepath.Join(root, "package.json"),
+		RootPath:        tempDir,
+		TypesPath:       tempDir,
+		Write:           true,
+		Delete:          true,
+		Quiet:           true,
+		Log:             func(string) {},
+		Timeout:         15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("runTypegenRounds returned error: %v", err)
+	}
+
+	autoImportTypegen := mustReadFile(t, filepath.Join(tempDir, "autoImportLogicType.ts"))
+	for _, expected := range []string{
+		"eventIndex: (state: any, props?: any) => EventIndex",
+		"randomInterfacedReturn: (state: any, props?: any) => RandomAPI",
+		"sbla: (state: any, props?: any) => Partial<Record<string, S7>>",
+		"sbla: Partial<Record<string, S7>>",
+	} {
+		if !strings.Contains(autoImportTypegen, expected) {
+			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, autoImportTypegen)
+		}
+	}
+
+	loadersTypegen := mustReadFile(t, filepath.Join(tempDir, "loadersLogicType.ts"))
+	for _, expected := range []string{
+		"loadItSuccess: (misc: { id: number; name: void; pinned: boolean; }, payload?: any) => void",
+		"payload: { misc: { id: number; name: void; pinned: boolean; }; payload?: any }",
+	} {
+		if !strings.Contains(loadersTypegen, expected) {
+			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, loadersTypegen)
+		}
 	}
 }
 
@@ -85,6 +184,43 @@ func TestPlanSourceEditsAddsTypeImportAndGeneric(t *testing.T) {
 	expectedPrefix := "import { kea } from 'kea'\nimport type { propsLogicType } from './propsLogicType'\n\nconst propsLogic = kea<propsLogicType>({"
 	if !strings.Contains(updated, expectedPrefix) {
 		t.Fatalf("updated source missing expected import/generic:\n%s", updated)
+	}
+}
+
+func copyDir(t *testing.T, sourceDir, targetDir string) {
+	t.Helper()
+
+	err := filepath.WalkDir(sourceDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relative, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+		targetPath := filepath.Join(targetDir, relative)
+
+		if entry.IsDir() {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(targetPath, data, info.Mode())
+	})
+	if err != nil {
+		t.Fatalf("copyDir(%s, %s) returned error: %v", sourceDir, targetDir, err)
 	}
 }
 

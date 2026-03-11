@@ -2,7 +2,9 @@ import { kea } from 'kea'
 
 import * as github from './githubLogic'
 
-export const githubNamespaceConnectLogic = kea({
+import type { githubNamespaceConnectLogicType } from '../../../../../../tmp/kea-ts-types/githubNamespaceConnectLogicType'
+
+export const githubNamespaceConnectLogic = kea<githubNamespaceConnectLogicType>({
     path: ['githubNamespaceConnectLogic'],
     connect: {
         actions: [github.githubLogic, ['setRepositories']],

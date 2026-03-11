@@ -1144,7 +1144,11 @@ func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath strin
 
 	nodeModulesPath := filepath.Join(filepath.Dir(firstNonEmpty(packageJSONPath, filepath.Join(filepath.Dir(sourceFile), "package.json"))), "node_modules")
 	if strings.HasPrefix(finalPath, ".") {
-		fullPath = filepath.Clean(filepath.Join(filepath.Dir(sourceFile), finalPath))
+		if resolvedFile, ok := resolveLocalImportFile(sourceFile, finalPath); ok {
+			fullPath = resolvedFile
+		} else {
+			fullPath = filepath.Clean(filepath.Join(filepath.Dir(sourceFile), finalPath))
+		}
 		finalPath = fullPath
 	} else if strings.HasPrefix(finalPath, "node_modules"+string(os.PathSeparator)) {
 		fullPath = filepath.Clean(filepath.Join(filepath.Dir(nodeModulesPath), finalPath))
