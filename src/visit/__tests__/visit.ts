@@ -1,11 +1,12 @@
 import { programFromSource } from '../../utils'
 import { visitProgram } from '../visit'
+import type { logicType } from './visitType'
 
 test('visitProgram', () => {
     const logicSource = `
         import { kea } from 'kea'
         
-        const logic = kea({
+        const logic = kea<logicType>({
             actions: () => ({
                 updateName: (name: string) => ({ name }),
                 updateOtherName: (otherName: string) => ({ otherName }),

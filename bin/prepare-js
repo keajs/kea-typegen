@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+
+if [ ! -x "$REPO_ROOT/node_modules/.bin/ts-node" ] || [ ! -x "$REPO_ROOT/node_modules/.bin/tsc" ]; then
+    if command -v yarn >/dev/null 2>&1; then
+        (cd "$REPO_ROOT" && yarn install --frozen-lockfile)
+    elif command -v npm >/dev/null 2>&1; then
+        (cd "$REPO_ROOT" && npm install)
+    else
+        echo "Neither yarn nor npm is available to install JavaScript dependencies." >&2
+        exit 1
+    fi
+fi
+
+cd "$REPO_ROOT"
+exec ./node_modules/.bin/tsc -p .

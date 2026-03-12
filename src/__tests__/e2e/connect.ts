@@ -1,4 +1,5 @@
 import { logicSourceToLogicType } from '../../utils'
+import type { logicType, logicType, logicType, logicType, logicType, logicType } from './connectType'
 
 test('connect actions from another logic', () => {
     const logicSource = `
@@ -32,7 +33,7 @@ test('connect actions from another logic', () => {
             values: {};
         }
         const otherLogic = {} as otherLogicType;
-        const logic = kea({
+        const logic = kea<logicType>({
             connect: {
                 actions: [
                     otherLogic, [
@@ -78,7 +79,7 @@ test('connect actions from multiple other logics', () => {
             values: {};
         }
         const otherLogic = {} as otherLogicType;
-        const logic = kea({
+        const logic = kea<logicType>({
             connect: {
                 actions: [
                     otherLogic, [
@@ -126,7 +127,7 @@ test('connect actions and rename', () => {
             values: {};
         }
         const otherLogic = {} as otherLogicType;
-        const logic = kea({
+        const logic = kea<logicType>({
             connect: {
                 actions: [
                     otherLogic, [
@@ -176,7 +177,7 @@ test('connect values from another logic', () => {
             };
         }
         const otherLogic = {} as otherLogicType;
-        const logic = kea({
+        const logic = kea<logicType>({
             connect: {
                 values: [
                     otherLogic, [
@@ -226,7 +227,7 @@ test('connect props from another logic', () => {
             };
         }
         const otherLogic = {} as otherLogicType;
-        const logic = kea({
+        const logic = kea<logicType>({
             connect: {
                 props: [
                     otherLogic, [
@@ -276,7 +277,7 @@ test('connect values and rename', () => {
             };
         }
         const otherLogic = {} as otherLogicType;
-        const logic = kea({
+        const logic = kea<logicType>({
             connect: {
                 values: [
                     otherLogic, [

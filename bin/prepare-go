@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+TMP_ROOT=${TMPDIR:-/tmp}
+
+TSGO_BIN="$REPO_ROOT/.tsgo/node_modules/.bin/tsgo"
+GO_BIN_DIR="$REPO_ROOT/rewrite/bin"
+GO_BIN="$GO_BIN_DIR/kea-typegen-go"
+
+if [ ! -x "$TSGO_BIN" ]; then
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "npm is required to install the .tsgo runtime dependency." >&2
+        exit 1
+    fi
+    (cd "$REPO_ROOT/.tsgo" && npm install)
+fi
+
+mkdir -p "$GO_BIN_DIR"
+
+GOCACHE=${GOCACHE:-"$TMP_ROOT/kea-typegen-gocache"}
+GOMODCACHE=${GOMODCACHE:-"$TMP_ROOT/kea-typegen-gomodcache"}
+export GOCACHE
+export GOMODCACHE
+
+cd "$REPO_ROOT/rewrite"
+exec go build -o "$GO_BIN" ./cmd/kea-typegen-go
