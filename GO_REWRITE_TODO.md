@@ -421,6 +421,54 @@ env KEA_TYPEGEN_CWD=/tmp/posthog-go-fresh2.yk8yw3 ./bin/kea-typegen-go write -q 
     - representative expected beneficiaries include `setLinkedFeatureFlag(flag: FeatureFlagType | null)`-style actions and similar `any`-widened object payloads
     - this pass is covered by targeted tests, but a fresh clean-clone PostHog re-sweep after that exact change could not be completed in this sandbox because multiple old background `tsgo` processes from prior full-project runs could not be terminated here
     - rerun the clean-clone PostHog compare first next session to measure that last payload-recovery change before choosing the next parity target
+- Follow-up work later on March 12, 2026 after the stale-background-process issue:
+  - sample parity was re-closed locally after two regressions were fixed:
+    - builder internal-selector helper gating now treats truncated tuple-shaped selector member types as helper-capable again, which restores `samples/builderLogic.ts`
+    - object-style action payload normalization now strips top-level `| null` / `| undefined` members again, but only for object-style action payload objects; builder actions still preserve nullable payload members where the TS generator does
+  - loader success-action synthesis now falls back to the loader's default state type when `typescript-go` collapses the async return to junk such as `PromiseConstructor`; targeted verification on PostHog's `featurePreviewsLogic` now yields `loadEarlyAccessFeaturesSuccess(rawEarlyAccessFeatures: EarlyAccessFeature[], ...)`
+  - repo-local benchmark status on the current head is back to:
+    - semantic accuracy `16/16 (100.0%)`
+    - semantic diffs `0`
+  - a fresh clean-clone PostHog compare was rerun on the current head before the loader-success fallback landed:
+    - total files: `739`
+    - semantic matches: `147`
+    - semantic accuracy: `19.89%`
+    - exact matches: `0`
+    - `TS_ONLY: 0`
+    - `GO_ONLY: 0`
+    - semantic diffs: `592`
+  - the same fresh compare showed the internal selector helper over-emission gap dropping from `399` Go files down to `73`, while JS stayed at `3`
+  - representative still-open PostHog gaps from that `147/739` snapshot:
+    - builder/object reducer state recovery still degrades on some commented or identifier-backed reducer tuples in files such as `frontend/src/layout/navigation-3000/navigationLogic.tsx`
+    - a few selector helpers are still over-emitted, for example `frontend/src/exporter/exporterViewLogicType.ts`
+    - the loader-success fallback above should remove at least one of the top measured diffs (`frontend/src/layout/FeaturePreviews/featurePreviewsLogicType.ts`), but the full clean-clone compare has not yet been rerun after that exact change
+  - next step: rerun the fresh clean-clone PostHog compare on the current head, then choose between loader-related residuals and reducer-state/comment handling based on the updated top diffs
+- Follow-up work later on March 12, 2026 on the current repo head:
+  - builder reducer source recovery is now better for the real PostHog navigation patterns that `typescript-go` collapses into array-of-union member types:
+    - leading comments on the first tuple element no longer block reducer-state inference
+    - typed local constants now provide a fallback reducer-state type when initializer probing does not recover cleanly
+    - targeted regression coverage now includes builder reducers shaped like `sidebarWidth`, `sidebarOverslide`, and `internalSearchTerm`
+  - verified canary effect:
+    - `frontend/src/layout/navigation-3000/navigationLogic.tsx` now recovers `sidebarWidth: number`, `sidebarOverslide: number`, and `internalSearchTerm: string` in the Go model/typegen path instead of `DEFAULT_SIDEBAR_WIDTH_PX` or handler-union array types
+  - repo-local benchmark status after that reducer fix remained:
+    - semantic accuracy `16/16 (100.0%)`
+    - semantic diffs `0`
+  - an existing-clone PostHog refresh on `.posthog-kea-sweep.DWrDii` followed by a semantic compare moved:
+    - semantic matches from `148` to `164`
+    - semantic accuracy from `20.03%` to `22.19%`
+    - semantic diffs from `591` to `575`
+  - top remaining diffs in that refreshed existing-clone snapshot still include:
+    - `frontend/src/exporter/exporterViewLogicType.ts`
+    - `frontend/src/layout/FeaturePreviews/featurePreviewsLogicType.ts`
+    - `frontend/src/layout/navigation-3000/navigationLogicType.ts`
+    - the wider `frontend/src/layout/navigation-3000/...` family
+  - that refreshed existing-clone write still did not exit cleanly in this sandbox and kept re-entering the native write loop, so treat the `164/739` snapshot as a useful parity datapoint but not as a clean convergence result
+  - one more local fix landed after that `164/739` compare:
+    - builder internal selector helpers are now omitted when the recovered helper signature is still fully uninformative (`any -> any`)
+    - targeted regression coverage now includes the `exporterViewLogic` shape
+    - verified canary effect: `frontend/src/exporter/exporterViewLogic.ts` no longer emits `__keaTypeGenInternalSelectorTypes.exportedData` in the Go typegen output
+    - repo-local benchmark status after that helper-gating change still remains at `16/16` semantic matches
+    - a fresh repo-wide PostHog compare has not yet been rerun after that exact helper-gating change
 
 ### Main parity gaps found in the sample sweep
 
