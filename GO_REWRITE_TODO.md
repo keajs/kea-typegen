@@ -390,6 +390,37 @@ env KEA_TYPEGEN_CWD=/tmp/posthog-go-fresh2.yk8yw3 ./bin/kea-typegen-go write -q 
   - current working theory for the oscillation:
     - loader success-action payload typing is still overly dependent on tsgo-fed member text instead of a stable source-backed async return union
     - selector return / internal-helper recovery around `new Set([...])` is still unstable when reduced generated `*Type.ts` feedback is present
+- Follow-up work on March 12, 2026 after the `85/739` snapshot from the current repo head:
+  - listener parsing now treats source-returned listener object entries as authoritative when they are available, instead of trusting `typescript-go` member lists that often degrade into destructured parameters such as `actions`, `values`, or `props`
+  - unresolved local listener keys are now omitted in that source-backed path instead of emitting generic `{ type: string; payload: any }` listeners
+  - action payload normalization no longer strips `| null` or `| undefined` out of object payload members, so source-backed payload recovery can preserve member nullability/optionality instead of flattening it away
+  - targeted regressions now cover:
+    - source-backed listener entry recovery with omission of unresolved local listener keys
+    - preserving nullable/optional action payload members even when `typescript-go` reports the action return payload as `any`
+  - fresh clean-clone compare artifacts from this run:
+    - JS clone: `/tmp/posthog-kea-js.up2cui`
+    - Go clone: `/tmp/posthog-kea-go4.85ISWt`
+    - compare command:
+      - `node ./scripts/compare-generated-typegen.js --ts-dir /tmp/posthog-kea-js.up2cui --go-dir /tmp/posthog-kea-go4.85ISWt --top 20`
+    - result:
+      - total files: `739`
+      - semantic matches: `96`
+      - semantic accuracy: `12.99%`
+      - exact matches: `0`
+      - `TS_ONLY: 0`
+      - `GO_ONLY: 0`
+      - semantic diffs: `643`
+    - this moved the fresh compare from `85/739` to `96/739` on the current repo head
+  - concrete canary effects from the verified `96/739` snapshot:
+    - `frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts` no longer leaks `setQuickFilterValue` into `listeners`
+    - `frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts` now preserves `loadPropertyValues` payload members such as `endpoint: string | undefined` and `newInput: string | undefined`
+    - `frontend/src/scenes/dashboard/dashboardLogicType.ts` no longer emits bogus generic listener keys like `actions`, `props`, `values`, `cache`, or `sharedListeners`
+    - `frontend/src/scenes/insights/insightVizDataLogicType.ts` no longer keeps generic `loadDataSuccess` / `loadDataFailure` listener placeholders when the source-backed listener map cannot type them yet
+  - there is one more local improvement already landed after the `96/739` compare:
+    - action payload recovery from source now also runs when `typescript-go` returns non-empty but `any`-heavy payload types, not just when the payload is empty or truncated
+    - representative expected beneficiaries include `setLinkedFeatureFlag(flag: FeatureFlagType | null)`-style actions and similar `any`-widened object payloads
+    - this pass is covered by targeted tests, but a fresh clean-clone PostHog re-sweep after that exact change could not be completed in this sandbox because multiple old background `tsgo` processes from prior full-project runs could not be terminated here
+    - rerun the clean-clone PostHog compare first next session to measure that last payload-recovery change before choosing the next parity target
 
 ### Main parity gaps found in the sample sweep
 

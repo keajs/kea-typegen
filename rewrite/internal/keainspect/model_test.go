@@ -2294,6 +2294,185 @@ func TestBuildParsedLogicsDefersBuilderFormsPluginOutputs(t *testing.T) {
 	}
 }
 
+func TestBuildParsedLogicsUsesSourceListenerEntriesAndOmitsUnresolvedLocalListeners(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, listeners, path } from 'kea'",
+		"",
+		"export const listenerDemoLogic = kea([",
+		"    path(['listenerDemoLogic']),",
+		"    actions({",
+		"        updateName: (name: string) => ({ name }),",
+		"    }),",
+		"    listeners(({ actions, values }) => ({",
+		"        updateName: ({ name }) => {",
+		"            actions.updateName(name)",
+		"        },",
+		"        setQuickFilterValue: ({ name, value }) => {",
+		"            console.log(name, value, values)",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/listenerDemoLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "listenerDemoLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "updateName",
+								TypeString:       "(name: string) => { name: string; }",
+								ReturnTypeString: "{ name: string; }",
+							},
+						},
+					},
+					{
+						Name: "listeners",
+						Members: []MemberReport{
+							{Name: "actions", TypeString: "{ updateName: (name: string) => void; }"},
+							{Name: "values", TypeString: "{ name: string; }"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	listener, ok := findParsedListener(logic.Listeners, "updateName")
+	if !ok {
+		t.Fatalf("expected source-backed listener for updateName, got %+v", logic.Listeners)
+	}
+	if listener.PayloadType != "{ name: string; }" {
+		t.Fatalf("expected updateName listener payload type { name: string; }, got %+v", listener)
+	}
+	for _, unexpected := range []string{"actions", "values", "setQuickFilterValue"} {
+		if _, ok := findParsedListener(logic.Listeners, unexpected); ok {
+			t.Fatalf("expected unresolved local listener %q to be omitted, got %+v", unexpected, logic.Listeners)
+		}
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"updateName: ((action: { type: 'update name (listenerDemoLogic)'; payload: { name: string; } }, previousState: any) => void | Promise<void>)[]",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+	for _, unexpected := range []string{
+		"setQuickFilterValue: ((action: { type: string; payload: any }, previousState: any) => void | Promise<void>)[]",
+		"actions: ((action: { type: string; payload: any }, previousState: any) => void | Promise<void>)[]",
+		"values: ((action: { type: string; payload: any }, previousState: any) => void | Promise<void>)[]",
+	} {
+		if strings.Contains(rendered, unexpected) {
+			t.Fatalf("expected emitted output to omit %q:\n%s", unexpected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsPreservesNullableActionPayloadProperties(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"type DemoFlag = { id: string }",
+		"",
+		"export const nullableActionLogic = kea([",
+		"    path(['nullableActionLogic']),",
+		"    actions({",
+		"        setLinkedFlag: (flag: DemoFlag | null) => ({ flag }),",
+		"        setAutocompleteKey: (key: string | null) => ({ key }),",
+		"        loadSomething: (endpoint: string | undefined, newInput: string | undefined) => ({ endpoint, newInput }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/nullableActionLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "nullableActionLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "setLinkedFlag",
+								TypeString:       "(flag: DemoFlag | null) => { flag: any; }",
+								ReturnTypeString: "{ flag: any; }",
+							},
+							{
+								Name:             "setAutocompleteKey",
+								TypeString:       "(key: string | null) => { key: any; }",
+								ReturnTypeString: "{ key: any; }",
+							},
+							{
+								Name:             "loadSomething",
+								TypeString:       "(endpoint: string | undefined, newInput: string | undefined) => { endpoint: any; newInput: any; }",
+								ReturnTypeString: "{ endpoint: any; newInput: any; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	for _, expected := range []struct {
+		name        string
+		payloadType string
+	}{
+		{name: "setLinkedFlag", payloadType: "{ flag: DemoFlag | null; }"},
+		{name: "setAutocompleteKey", payloadType: "{ key: string | null; }"},
+		{name: "loadSomething", payloadType: "{ endpoint: string | undefined; newInput: string | undefined; }"},
+	} {
+		action, ok := findParsedAction(logic.Actions, expected.name)
+		if !ok {
+			t.Fatalf("expected action %q, got %+v", expected.name, logic.Actions)
+		}
+		if action.PayloadType != expected.payloadType {
+			t.Fatalf("expected payload type %q for %s, got %+v", expected.payloadType, expected.name, action)
+		}
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"setLinkedFlag: (flag: DemoFlag | null) => {",
+		"payload: { flag: DemoFlag | null; }",
+		"payload: { key: string | null; }",
+		"payload: { endpoint: string | undefined; newInput: string | undefined; }",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
 func TestBuildParsedLogicsResolvesExternalConnectActionsFromSymbols(t *testing.T) {
 	report := inspectSampleReport(t, "routerConnectLogic.ts")
 

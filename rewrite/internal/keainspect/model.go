@@ -317,7 +317,7 @@ func parseActionsWithSource(section SectionReport, source string, property Sourc
 				if explicitReturn != "" {
 					payloadType = explicitReturn
 				}
-				if (payloadType == "" || strings.Contains(payloadType, "...")) && explicitReturn == "" {
+				if actionPayloadNeedsSourceRecovery(payloadType) && explicitReturn == "" {
 					if inferred := sourceActionPayloadTypeFromSource(source, expression); inferred != "" {
 						payloadType = inferred
 					}
@@ -340,6 +340,26 @@ func parseActionsWithSource(section SectionReport, source string, property Sourc
 		})
 	}
 	return actions
+}
+
+func actionPayloadNeedsSourceRecovery(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	switch {
+	case text == "":
+		return true
+	case strings.Contains(text, "..."):
+		return true
+	case isAnyLikeType(text):
+		return true
+	case typeTextContainsStandaloneToken(text, "any"):
+		return true
+	case typeTextContainsStandaloneToken(text, "unknown"):
+		return true
+	case isGenericIndexSignatureType(text):
+		return true
+	default:
+		return false
+	}
 }
 
 func parseReducers(section SectionReport) []ParsedField {
@@ -3465,56 +3485,77 @@ func parseListenersWithSource(
 	state *buildState,
 ) ([]ParsedListener, []TypeImport) {
 	resolvedExternal := resolveListenerActionReferences(source, file, property, state)
-	listeners := make([]ParsedListener, 0, len(section.Members)+len(resolvedExternal))
+	sourceEntries := sectionSourceEntries(source, property)
+	listeners := make([]ParsedListener, 0, len(section.Members)+len(sourceEntries)+len(resolvedExternal))
 	var imports []TypeImport
-	seenNames := map[string]bool{}
+	memberByName := map[string]MemberReport{}
 	for _, member := range section.Members {
-		payloadType := "any"
-		actionType := "{ type: string; payload: any }"
+		memberByName[member.Name] = member
+	}
 
-		if action, ok := findParsedAction(logic.Actions, member.Name); ok {
-			payloadType = fallbackType(action.PayloadType, "any")
-			actionType = fmt.Sprintf("{ type: %s; payload: %s }", quoteString(actionTypeString(logic, action.Name)), payloadType)
-		} else if resolved, ok := resolvedExternal[member.Name]; ok {
-			payloadType = resolved.PayloadType
-			actionType = resolved.ActionType
+	seenNames := map[string]bool{}
+	appendListener := func(name string, member *MemberReport, allowGenericFallback bool) {
+		name = strings.TrimSpace(name)
+		if name == "" || seenNames[name] {
+			return
+		}
+
+		if action, ok := findParsedAction(logic.Actions, name); ok {
+			payloadType := fallbackType(action.PayloadType, "any")
+			listeners = append(listeners, ParsedListener{
+				Name:        name,
+				PayloadType: payloadType,
+				ActionType:  fmt.Sprintf("{ type: %s; payload: %s }", quoteString(actionTypeString(logic, action.Name)), payloadType),
+			})
+			seenNames[name] = true
+			return
+		}
+
+		if resolved, ok := resolvedExternal[name]; ok {
+			listeners = append(listeners, ParsedListener{
+				Name:        name,
+				PayloadType: resolved.PayloadType,
+				ActionType:  resolved.ActionType,
+			})
 			imports = mergeTypeImports(imports, resolved.Imports)
-		} else if payload := listenerPayloadTypeFromMember(member); payload != "" {
+			seenNames[name] = true
+			return
+		}
+
+		if !allowGenericFallback || member == nil {
+			return
+		}
+
+		payloadType := "any"
+		if payload := listenerPayloadTypeFromMember(*member); payload != "" {
 			payloadType = payload
-		}
-
-		listeners = append(listeners, ParsedListener{
-			Name:        member.Name,
-			PayloadType: payloadType,
-			ActionType:  actionType,
-		})
-		seenNames[member.Name] = true
-	}
-
-	if len(resolvedExternal) == 0 {
-		return listeners, imports
-	}
-
-	orderedNames := make([]string, 0, len(resolvedExternal))
-	for _, entry := range sectionSourceEntries(source, property) {
-		_, typeName, _, ok := resolveActionReferenceFromSourceKey(source, file, entry.Name, state)
-		if !ok || seenNames[typeName] {
-			continue
-		}
-		orderedNames = append(orderedNames, typeName)
-		seenNames[typeName] = true
-	}
-	for _, name := range orderedNames {
-		resolved, ok := resolvedExternal[name]
-		if !ok {
-			continue
 		}
 		listeners = append(listeners, ParsedListener{
 			Name:        name,
-			PayloadType: resolved.PayloadType,
-			ActionType:  resolved.ActionType,
+			PayloadType: payloadType,
+			ActionType:  "{ type: string; payload: any }",
 		})
-		imports = mergeTypeImports(imports, resolved.Imports)
+		seenNames[name] = true
+	}
+
+	if len(sourceEntries) > 0 {
+		for _, entry := range sourceEntries {
+			name := entry.Name
+			if _, typeName, _, ok := resolveActionReferenceFromSourceKey(source, file, entry.Name, state); ok {
+				name = typeName
+			}
+			if member, ok := memberByName[name]; ok {
+				appendListener(name, &member, false)
+			} else {
+				appendListener(name, nil, false)
+			}
+		}
+		return listeners, imports
+	}
+
+	for _, member := range section.Members {
+		member := member
+		appendListener(member.Name, &member, true)
 	}
 	return listeners, imports
 }
@@ -5741,12 +5782,7 @@ func normalizeInferredTypeText(typeText string) string {
 }
 
 func normalizeActionPayloadType(typeText string) string {
-	text := normalizeInferredTypeText(typeText)
-	if strings.HasPrefix(strings.TrimSpace(text), "{") && strings.HasSuffix(strings.TrimSpace(text), "}") {
-		text = strings.ReplaceAll(text, " | null", "")
-		text = strings.ReplaceAll(text, " | undefined", "")
-	}
-	return normalizeInferredTypeText(text)
+	return normalizeInferredTypeText(typeText)
 }
 
 func normalizeInternalHelperParameterType(typeText string) string {
