@@ -469,6 +469,33 @@ env KEA_TYPEGEN_CWD=/tmp/posthog-go-fresh2.yk8yw3 ./bin/kea-typegen-go write -q 
     - verified canary effect: `frontend/src/exporter/exporterViewLogic.ts` no longer emits `__keaTypeGenInternalSelectorTypes.exportedData` in the Go typegen output
     - repo-local benchmark status after that helper-gating change still remains at `16/16` semantic matches
     - a fresh repo-wide PostHog compare has not yet been rerun after that exact helper-gating change
+- Follow-up work later on March 12, 2026 on the current repo head:
+  - computed selector-key recovery now resolves imported string constants used in computed selector names, so Go emits the public selector name instead of the raw key expression for shapes such as `[SIDE_PANEL_CONTEXT_KEY]`
+  - preferred printed return-type normalization now preserves explicit optional `| undefined` unions instead of collapsing them away
+  - targeted regression coverage now includes:
+    - imported computed selector keys canonicalizing to their resolved public names
+    - printed function return types preserving `currentUsage?: number | undefined`
+  - verification after those changes:
+    - `env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go test ./internal/keainspect` passes
+    - `./bin/benchmark -c write -n 1 -w 1` still passes at `16/16` semantic matches
+  - fresh disposable-clone PostHog compares on current head used:
+    - JS baseline clone: `/tmp/posthog-kea-compare.mBG1N6/js`
+    - Go compare clones: `/tmp/posthog-kea-rerun.ZnnObS/go` and a confirming rerun on `/tmp/posthog-kea-rerun2.tPZD8G/go`
+  - measured result on current head:
+    - total files: `739`
+    - semantic matches: `175`
+    - semantic accuracy: `23.68%`
+    - exact matches: `0`
+    - `TS_ONLY: 0`
+    - `GO_ONLY: 0`
+    - semantic diffs: `564`
+  - effect from this pass:
+    - the computed selector-key fix was measurable (`173/739` -> `175/739`)
+    - the optional-`undefined` preservation fix is now covered by tests but did not flip additional full-compare files by itself in this snapshot
+  - representative still-open gaps from the `175/739` snapshot:
+    - `frontend/src/layout/navigation-3000/navigationLogicType.ts`: connected `setScene` still degrades payload members such as `scrollToTop` / `exportedScene` to `any`
+    - `frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts`: `updateOption` still widens `updates` away from `Partial<QuickFilterOption>` and `suggestions` is still `any` instead of `any[]`
+    - `frontend/src/layout/FeaturePreviews/featurePreviewsLogicType.ts`: `submitEarlyAccessFeatureFeedbackSuccess` still collapses the success payload to `any`
 
 ### Main parity gaps found in the sample sweep
 

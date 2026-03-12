@@ -206,7 +206,7 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		}
 	}
 	if section, ok := sections["actions"]; ok {
-		parsed.Actions = parseActionsWithSource(section, source, properties["actions"], logicReport.InputKind)
+		parsed.Actions = parseActionsWithSource(section, source, properties["actions"], logicReport.InputKind, report.File, state)
 	}
 	if section, ok := sections["defaults"]; ok {
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseDefaultFieldsWithSource(section, source, properties["defaults"])...)
@@ -277,10 +277,17 @@ func preferredTypeText(section SectionReport) string {
 }
 
 func parseActions(section SectionReport) []ParsedAction {
-	return parseActionsWithSource(section, "", SourceProperty{}, "")
+	return parseActionsWithSource(section, "", SourceProperty{}, "", "", nil)
 }
 
-func parseActionsWithSource(section SectionReport, source string, property SourceProperty, inputKind string) []ParsedAction {
+func parseActionsWithSource(
+	section SectionReport,
+	source string,
+	property SourceProperty,
+	inputKind string,
+	file string,
+	state *buildState,
+) []ParsedAction {
 	sourceMembers := sectionSourceProperties(source, property)
 	actions := make([]ParsedAction, 0, len(section.Members))
 	for _, member := range section.Members {
@@ -315,12 +322,18 @@ func parseActionsWithSource(section SectionReport, source string, property Sourc
 		if nested, ok := sourceMembers[member.Name]; ok {
 			expression := sourcePropertyText(source, nested)
 			if parameters, explicitReturn, ok := parseSourceArrowSignature(expression); ok {
+				parameters = normalizeFunctionParametersText(parameters)
 				if explicitReturn != "" {
 					payloadType = explicitReturn
 				}
 				if actionPayloadNeedsSourceRecovery(payloadType) && explicitReturn == "" {
 					if inferred := sourceActionPayloadTypeFromSource(source, expression); inferred != "" {
 						payloadType = inferred
+					}
+					if sourceActionHasDefaultedParameters(expression) {
+						if probed := sourceArrowReturnTypeFromTypeProbe(source, file, nested, state); isUsableActionPayloadProbeType(probed) {
+							payloadType = probed
+						}
 					}
 				}
 				if payloadType == "" {
@@ -329,6 +342,9 @@ func parseActionsWithSource(section SectionReport, source string, property Sourc
 					}
 				}
 				if payloadType != "" {
+					if memberParameters, _, ok := splitFunctionType(functionType); ok && !sourceActionParametersArePreferred(parameters) {
+						parameters = memberParameters
+					}
 					functionType = parameters + " => " + payloadType
 				}
 			}
@@ -344,6 +360,62 @@ func parseActionsWithSource(section SectionReport, source string, property Sourc
 		})
 	}
 	return actions
+}
+
+func typeTextNeedsSourceRecovery(typeText string) bool {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" || isAnyLikeType(text) {
+		return true
+	}
+	return typeTextContainsStandaloneToken(text, "any") || typeTextContainsStandaloneToken(text, "unknown")
+}
+
+func sourceActionParametersArePreferred(parameters string) bool {
+	parts, ok := splitFunctionParameterParts(parameters)
+	if !ok {
+		return false
+	}
+	for _, part := range parts {
+		part = normalizeParameterDeclarationText(part)
+		if part == "" {
+			continue
+		}
+		typeText := parameterTypeText(part)
+		if typeText == "" || typeTextNeedsSourceRecovery(typeText) {
+			return false
+		}
+	}
+	return true
+}
+
+func parameterTypeText(part string) string {
+	_, typeText, ok := splitTopLevelProperty(part)
+	if !ok {
+		return ""
+	}
+	return normalizeSourceTypeText(typeText)
+}
+
+func sourceActionHasDefaultedParameters(expression string) bool {
+	info, ok := parseSourceArrowInfo(expression)
+	if !ok {
+		return false
+	}
+	parts, ok := splitFunctionParameterParts(info.Parameters)
+	if !ok {
+		return false
+	}
+	for _, part := range parts {
+		if index := findTopLevelParameterDefault(strings.TrimSpace(part)); index != -1 {
+			return true
+		}
+	}
+	return false
+}
+
+func isUsableActionPayloadProbeType(typeText string) bool {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	return strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}")
 }
 
 func actionPayloadNeedsSourceRecovery(typeText string) bool {
@@ -460,7 +532,7 @@ func preferredMemberReturnTypeText(member MemberReport) string {
 	printed := strings.TrimSpace(member.PrintedReturnTypeNode)
 	raw := strings.TrimSpace(member.ReturnTypeString)
 	if printed != "" && (!strings.Contains(printed, "...") || strings.Contains(raw, "...")) {
-		return normalizeSourceTypeText(printed)
+		return normalizeSourceTypeTextWithOptions(printed, false)
 	}
 	return raw
 }
@@ -1716,13 +1788,14 @@ func parseSelectorsWithSource(
 	state *buildState,
 ) []ParsedField {
 	sourceMembers := sectionSourceProperties(source, property)
-	sourceEntries := sectionSourceEntries(source, property)
+	sourceEntries := canonicalizeSourceObjectEntries(source, file, sectionSourceEntries(source, property), state)
 	entryByName := sourceEntriesByName(sourceEntries)
 	memberByName := map[string]MemberReport{}
 	orderedNames := make([]string, 0, len(section.Members)+len(sourceEntries))
 	seenNames := map[string]bool{}
 
 	for _, member := range section.Members {
+		member.Name = canonicalSourceObjectMemberName(source, file, member.Name, state)
 		memberByName[member.Name] = member
 		if !seenNames[member.Name] {
 			seenNames[member.Name] = true
@@ -1809,13 +1882,14 @@ func parseInternalSelectorTypesWithSource(
 	state *buildState,
 ) []ParsedFunction {
 	sourceMembers := sectionSourceProperties(source, property)
-	sourceEntries := sectionSourceEntries(source, property)
+	sourceEntries := canonicalizeSourceObjectEntries(source, file, sectionSourceEntries(source, property), state)
 	entryByName := sourceEntriesByName(sourceEntries)
 	memberByName := map[string]MemberReport{}
 	orderedNames := make([]string, 0, len(section.Members)+len(sourceEntries))
 	seenNames := map[string]bool{}
 
 	for _, member := range section.Members {
+		member.Name = canonicalSourceObjectMemberName(source, file, member.Name, state)
 		memberByName[member.Name] = member
 		if !seenNames[member.Name] {
 			seenNames[member.Name] = true
@@ -2065,6 +2139,88 @@ func sourceEntriesByName(entries []sourceObjectEntry) map[string]sourceObjectEnt
 	return result
 }
 
+func canonicalizeSourceObjectEntries(
+	source, file string,
+	entries []sourceObjectEntry,
+	state *buildState,
+) []sourceObjectEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+	result := make([]sourceObjectEntry, 0, len(entries))
+	for _, entry := range entries {
+		entry.Name = canonicalSourceObjectMemberName(source, file, entry.Name, state)
+		result = append(result, entry)
+	}
+	return result
+}
+
+func canonicalSourceObjectMemberName(source, file, name string, state *buildState) string {
+	if resolved := resolveComputedSourceObjectKeyName(source, file, name, state); resolved != "" {
+		return resolved
+	}
+	return name
+}
+
+func resolveComputedSourceObjectKeyName(source, file, name string, state *buildState) string {
+	text := strings.TrimSpace(name)
+	if len(text) < 3 || text[0] != '[' || text[len(text)-1] != ']' {
+		return ""
+	}
+	return sourceStringLiteralValueWithContext(source, file, text[1:len(text)-1], state)
+}
+
+func sourceStringLiteralValueWithContext(source, file, expression string, state *buildState) string {
+	text := trimLeadingSourceTrivia(expression)
+	if text == "" {
+		return ""
+	}
+	for {
+		trimmed := strings.TrimSpace(text)
+		switch {
+		case strings.HasSuffix(trimmed, " as const"):
+			text = strings.TrimSpace(strings.TrimSuffix(trimmed, " as const"))
+		default:
+			text = unwrapWrappedExpression(trimmed)
+			goto normalized
+		}
+	}
+
+normalized:
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	switch text[0] {
+	case '\'', '"':
+		end, err := skipQuoted(text, 0, text[0])
+		if err == nil && end == len(text)-1 {
+			return text[1:end]
+		}
+	case '`':
+		end, err := skipTemplate(text, 0)
+		if err == nil && end == len(text)-1 && !strings.Contains(text, "${") {
+			return text[1:end]
+		}
+	}
+
+	identifier, ok := sourceIdentifierExpression(text)
+	if !ok {
+		return ""
+	}
+	if initializer := findLocalValueInitializer(source, identifier); initializer != "" {
+		if literal := sourceStringLiteralValueWithContext(source, file, initializer, state); literal != "" {
+			return literal
+		}
+	}
+	if importedSource, importedFile, initializer, ok := sourceImportedValueInitializer(source, file, identifier, state); ok {
+		if literal := sourceStringLiteralValueWithContext(importedSource, importedFile, initializer, state); literal != "" {
+			return literal
+		}
+	}
+	return ""
+}
+
 func sourcePropertyText(source string, property SourceProperty) string {
 	if source == "" || property.ValueEnd <= property.ValueStart {
 		return ""
@@ -2088,7 +2244,7 @@ func sourceActionPayloadTypeFromSource(source, expression string) string {
 	if body == "" {
 		return ""
 	}
-	hints := sourceParameterTypeHints(source, info.Parameters)
+	hints := sourceParameterTypeHints(source, normalizeFunctionParametersText(info.Parameters))
 	return sourceObjectLiteralTypeTextWithHints(source, body, hints)
 }
 
@@ -3631,6 +3787,10 @@ func lastTopLevelKeyword(source, keyword string) int {
 }
 
 func normalizeSourceTypeText(text string) string {
+	return normalizeSourceTypeTextWithOptions(text, true)
+}
+
+func normalizeSourceTypeTextWithOptions(text string, collapseOptionalUndefined bool) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
@@ -3640,7 +3800,9 @@ func normalizeSourceTypeText(text string) string {
 	text = strings.ReplaceAll(text, "( ", "(")
 	text = strings.ReplaceAll(text, " )", ")")
 	text = strings.ReplaceAll(text, ",)", ")")
-	text = optionalUndefinedUnionPattern.ReplaceAllString(text, "$1")
+	if collapseOptionalUndefined {
+		text = optionalUndefinedUnionPattern.ReplaceAllString(text, "$1")
+	}
 	return text
 }
 
@@ -6035,6 +6197,139 @@ func parseFunctionParameters(parameters string) ([]parsedParameter, bool) {
 		params = append(params, parsedParameter{Text: part, Type: typeText})
 	}
 	return params, true
+}
+
+func splitFunctionParameterParts(parameters string) ([]string, bool) {
+	text := strings.TrimSpace(parameters)
+	if len(text) < 2 || text[0] != '(' || text[len(text)-1] != ')' {
+		return nil, false
+	}
+
+	parts, err := splitTopLevelList(text[1 : len(text)-1])
+	if err != nil {
+		return nil, false
+	}
+	return parts, true
+}
+
+func normalizeFunctionParametersText(parameters string) string {
+	parts, ok := splitFunctionParameterParts(parameters)
+	if !ok {
+		return normalizeSourceTypeText(parameters)
+	}
+
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if item := normalizeParameterDeclarationText(part); item != "" {
+			normalized = append(normalized, item)
+		}
+	}
+	return "(" + strings.Join(normalized, ", ") + ")"
+}
+
+func normalizeParameterDeclarationText(part string) string {
+	text := strings.TrimSpace(part)
+	if text == "" {
+		return ""
+	}
+
+	baseText, hadDefault := stripTopLevelParameterDefault(text)
+	text = normalizeSourceTypeText(baseText)
+	if hadDefault {
+		text = addOptionalMarkerToParameterText(text)
+	}
+	return text
+}
+
+func stripTopLevelParameterDefault(text string) (string, bool) {
+	index := findTopLevelParameterDefault(text)
+	if index == -1 {
+		return text, false
+	}
+	return strings.TrimSpace(text[:index]), true
+}
+
+func findTopLevelParameterDefault(text string) int {
+	parenDepth := 0
+	bracketDepth := 0
+	braceDepth := 0
+	angleDepth := 0
+
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\'':
+			end, err := skipQuoted(text, i, '\'')
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '"':
+			end, err := skipQuoted(text, i, '"')
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '`':
+			end, err := skipTemplate(text, i)
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '{':
+			braceDepth++
+		case '}':
+			if braceDepth > 0 {
+				braceDepth--
+			}
+		case '<':
+			if shouldOpenAngle(text, i) {
+				angleDepth++
+			}
+		case '>':
+			if angleDepth > 0 {
+				angleDepth--
+			}
+		case '=':
+			if i+1 < len(text) && text[i+1] == '>' {
+				continue
+			}
+			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && angleDepth == 0 {
+				return i
+			}
+		}
+	}
+
+	return -1
+}
+
+func addOptionalMarkerToParameterText(text string) string {
+	index := findTopLevelDelimiter(text, ':')
+	if index == -1 {
+		return text
+	}
+
+	name := strings.TrimSpace(text[:index])
+	if name == "" || strings.HasSuffix(name, "?") {
+		return text
+	}
+	last := name[len(name)-1]
+	switch last {
+	case ')', '}', ']':
+		return text
+	}
+	return name + "?: " + strings.TrimSpace(text[index+1:])
 }
 
 func unwrapPromiseType(typeText string) string {

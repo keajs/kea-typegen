@@ -1199,6 +1199,80 @@ func TestParseSelectorsWithSourceRecoversCollapsedBlockBodiedArraySelector(t *te
 	}
 }
 
+func TestParseSelectorsWithSourceCanonicalizesImportedComputedStringKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	logicFile := filepath.Join(tempDir, "logic.ts")
+	typesFile := filepath.Join(tempDir, "types.ts")
+
+	if err := os.WriteFile(typesFile, []byte("export const SIDE_PANEL_CONTEXT_KEY = 'sidePanelContext' as const\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import { SIDE_PANEL_CONTEXT_KEY } from './types'",
+		"",
+		"type SidePanelSceneContext = { activity_scope?: string } | null",
+		"",
+		"export const logic = kea({",
+		"    selectors: {",
+		"        [SIDE_PANEL_CONTEXT_KEY]: [",
+		"            () => [],",
+		"            (): SidePanelSceneContext => null,",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	property := mustFindLogicProperty(t, logics[0], "selectors")
+	selectors := parseSelectorsWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{Name: "[SIDE_PANEL_CONTEXT_KEY]", TypeString: "((state: any) => any[])[]", ReturnTypeString: "any"},
+			},
+		},
+		ParsedLogic{},
+		source,
+		property,
+		logicFile,
+		&buildState{},
+	)
+
+	selector, ok := findParsedField(selectors, "sidePanelContext")
+	if !ok {
+		t.Fatalf("expected sidePanelContext selector, got %+v", selectors)
+	}
+	if selector.Type != "SidePanelSceneContext" {
+		t.Fatalf("expected sidePanelContext selector type SidePanelSceneContext, got %+v", selector)
+	}
+	if _, ok := findParsedField(selectors, "[SIDE_PANEL_CONTEXT_KEY]"); ok {
+		t.Fatalf("expected computed selector key to be canonicalized, got %+v", selectors)
+	}
+	if got := canonicalSourceObjectMemberName(source, logicFile, "[SIDE_PANEL_CONTEXT_KEY]", &buildState{}); got != "sidePanelContext" {
+		t.Fatalf("expected canonical selector key sidePanelContext, got %q", got)
+	}
+}
+
+func TestPreferredMemberReturnTypeTextPreservesOptionalUndefinedInPrintedFunctionTypes(t *testing.T) {
+	member := MemberReport{
+		PrintedReturnTypeNode: "(feature: AvailableFeature, currentUsage?: number | undefined) => boolean",
+		ReturnTypeString:      "(feature: AvailableFeature, currentUsage?: number | undefined) => boolean",
+	}
+
+	if got := preferredMemberReturnTypeText(member); got != "(feature: AvailableFeature, currentUsage?: number | undefined) => boolean" {
+		t.Fatalf("expected preferred member return type to preserve optional undefined, got %q", got)
+	}
+}
+
 func TestBuildParsedLogicsSynthesizesLoadersAndDefaults(t *testing.T) {
 	root := repoRoot(t)
 	sourcePath := filepath.Join(root, "samples", "logic.ts")
@@ -2064,6 +2138,179 @@ func TestBuildParsedLogicsRecoversSelectorOptionsAndConnectedValueTypesEndToEnd(
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected rendered sceneLogic output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversConnectedActionPayloadsWithDefaultedSourceParameters(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["src/**/*"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	sceneTypesFile := filepath.Join(tempDir, "src", "scenes", "sceneTypes.ts")
+	if err := os.MkdirAll(filepath.Dir(sceneTypesFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	sceneTypesSource := strings.Join([]string{
+		"export type SceneProps = Record<string, any>",
+		"",
+		"export interface SceneExport<T = SceneProps> {",
+		"    props?: T",
+		"}",
+		"",
+		"export interface SceneParams {",
+		"    params: Record<string, any>",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(sceneTypesFile, []byte(sceneTypesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	sceneLogicFile := filepath.Join(tempDir, "src", "scenes", "sceneLogic.ts")
+	sceneLogicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"import { SceneExport, SceneParams } from './sceneTypes'",
+		"",
+		"export const sceneLogic = kea([",
+		"    path(['scenes', 'sceneLogic']),",
+		"    actions({",
+		"        setScene: (",
+		"            sceneId: string,",
+		"            sceneKey: string | undefined,",
+		"            tabId: string,",
+		"            params: SceneParams,",
+		"            scrollToTop: boolean = false,",
+		"            exportedScene?: SceneExport,",
+		"        ) => ({",
+		"            sceneId,",
+		"            sceneKey,",
+		"            tabId,",
+		"            params,",
+		"            scrollToTop,",
+		"            exportedScene,",
+		"        }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(sceneLogicFile, []byte(sceneLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	navigationLogicFile := filepath.Join(tempDir, "src", "layout", "navigationLogic.ts")
+	if err := os.MkdirAll(filepath.Dir(navigationLogicFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	navigationLogicSource := strings.Join([]string{
+		"import { connect, kea, path } from 'kea'",
+		"import { sceneLogic } from '../scenes/sceneLogic'",
+		"",
+		"export const navigationLogic = kea([",
+		"    path(['layout', 'navigationLogic']),",
+		"    connect(() => ({",
+		"        actions: [sceneLogic, ['setScene']],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(navigationLogicFile, []byte(navigationLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	sceneReport, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       sceneLogicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error for sceneLogic: %v", err)
+	}
+
+	sceneLogics, err := BuildParsedLogics(sceneReport)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error for sceneLogic: %v", err)
+	}
+	if len(sceneLogics) != 1 {
+		t.Fatalf("expected 1 scene logic, got %d", len(sceneLogics))
+	}
+	sceneLogic := sceneLogics[0]
+	sceneAction, ok := findParsedAction(sceneLogic.Actions, "setScene")
+	if !ok {
+		t.Fatalf("expected setScene action, got %+v", sceneLogic.Actions)
+	}
+	for _, expected := range []string{
+		"scrollToTop?: boolean",
+		"exportedScene?: SceneExport",
+		"exportedScene: SceneExport<SceneProps> | undefined",
+		"scrollToTop: boolean",
+	} {
+		if !strings.Contains(sceneAction.FunctionType, expected) {
+			t.Fatalf("expected scene setScene function type to contain %q, got %q", expected, sceneAction.FunctionType)
+		}
+	}
+	if !hasImport(sceneLogic.Imports, "./sceneTypes", "SceneProps") {
+		t.Fatalf("expected SceneProps import in scene logic, got %+v", sceneLogic.Imports)
+	}
+
+	navigationReport, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       navigationLogicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error for navigationLogic: %v", err)
+	}
+
+	navigationLogics, err := BuildParsedLogics(navigationReport)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error for navigationLogic: %v", err)
+	}
+	if len(navigationLogics) != 1 {
+		t.Fatalf("expected 1 navigation logic, got %d", len(navigationLogics))
+	}
+	navigationLogic := navigationLogics[0]
+	action, ok := findParsedAction(navigationLogic.Actions, "setScene")
+	if !ok {
+		t.Fatalf("expected connected setScene action, got %+v", navigationLogic.Actions)
+	}
+	for _, expected := range []string{
+		"scrollToTop?: boolean",
+		"exportedScene?: SceneExport",
+		"exportedScene: SceneExport<SceneProps> | undefined",
+	} {
+		if !strings.Contains(action.FunctionType, expected) {
+			t.Fatalf("expected connected setScene function type to contain %q, got %q", expected, action.FunctionType)
+		}
+	}
+	if !hasImport(navigationLogic.Imports, "../scenes/sceneTypes", "SceneProps") {
+		t.Fatalf("expected SceneProps import in navigation logic, got %+v", navigationLogic.Imports)
+	}
+
+	rendered := EmitTypegenAt(navigationLogics, time.Date(2026, time.March, 12, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"import type { SceneExport, SceneParams, SceneProps } from '../scenes/sceneTypes'",
+		"scrollToTop?: boolean, exportedScene?: SceneExport",
+		"exportedScene: SceneExport<SceneProps> | undefined",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected rendered navigation typegen to contain %q:\n%s", expected, rendered)
 		}
 	}
 }
