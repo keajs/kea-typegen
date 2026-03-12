@@ -141,6 +141,78 @@ func TestNormalizedTypeImportsIgnoresResolvedRelativeFilesWithExternalTypesDir(t
 	}
 }
 
+func TestNormalizedTypeImportsRewritesConfiguredAliasImportsToRelativePaths(t *testing.T) {
+	tempDir := t.TempDir()
+	frontendDir := filepath.Join(tempDir, "frontend")
+	sourceDir := filepath.Join(frontendDir, "src", "layout", "FeaturePreviews")
+	typeFile := filepath.Join(sourceDir, "featurePreviewsLogicType.ts")
+	sourceFile := filepath.Join(sourceDir, "featurePreviewsLogic.ts")
+
+	for _, dir := range []string{
+		sourceDir,
+		filepath.Join(frontendDir, "src", "lib", "utils"),
+		filepath.Join(frontendDir, "src"),
+		filepath.Join(tempDir, "products", "hog"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("os.MkdirAll %s: %v", dir, err)
+		}
+	}
+	for _, file := range []string{
+		filepath.Join(tempDir, "package.json"),
+		filepath.Join(tempDir, "tsconfig.json"),
+		sourceFile,
+		filepath.Join(frontendDir, "src", "lib", "utils", "product-intents.ts"),
+		filepath.Join(frontendDir, "src", "types.ts"),
+		filepath.Join(tempDir, "products", "hog", "types.ts"),
+	} {
+		if err := os.WriteFile(file, []byte(""), 0o644); err != nil {
+			t.Fatalf("os.WriteFile %s: %v", file, err)
+		}
+	}
+
+	imports := normalizedTypeImports([]ParsedLogic{
+		{
+			File: sourceFile,
+			Imports: []TypeImport{
+				{Path: "lib/utils/product-intents", Names: []string{"ProductCrossSellProperties"}},
+				{Path: "~/types", Names: []string{"UserType"}},
+				{Path: "products/hog/types", Names: []string{"ProductType"}},
+				{Path: "posthog-js", Names: []string{"EarlyAccessFeature"}},
+			},
+		},
+	}, fileEmitOptions{
+		TypeFile:        typeFile,
+		PackageJSONPath: filepath.Join(tempDir, "package.json"),
+		ImportState: &buildState{
+			configFile: filepath.Join(tempDir, "tsconfig.json"),
+			config: &tsgoapi.ConfigResponse{
+				Options: map[string]any{
+					"baseUrl": "frontend",
+					"paths": map[string]any{
+						"lib/*":      []any{"src/lib/*"},
+						"~/*":        []any{"src/*"},
+						"products/*": []any{"../products/*"},
+					},
+				},
+			},
+		},
+	})
+
+	if !hasImport(imports, "../../lib/utils/product-intents", "ProductCrossSellProperties") {
+		t.Fatalf("expected lib alias import to rewrite relative, got %+v", imports)
+	}
+	if !hasImport(imports, "../../types", "UserType") {
+		t.Fatalf("expected ~ alias import to rewrite relative, got %+v", imports)
+	}
+	if !hasImport(imports, "../../../../products/hog/types", "ProductType") {
+		t.Fatalf("expected products alias import to rewrite relative, got %+v", imports)
+	}
+	if !hasImport(imports, "posthog-js", "EarlyAccessFeature") {
+		t.Fatalf("expected package import to stay package-qualified, got %+v", imports)
+	}
+}
+
 func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 	root := repoRoot(t)
 	tempDir := t.TempDir()
@@ -185,7 +257,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"upperCaseName: (state: any, props?: any) => string",
 		"capitalizedName: string",
 		"upperCaseName: string",
-		"someRandomFunction: (payload: { name: string; id?: number; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number; } }, previousState: any) => void | Promise<void>",
+		"someRandomFunction: (payload: { name: string; id?: number; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number; }; }, previousState: any) => void | Promise<void>",
 		"__keaTypeGenInternalSelectorTypes: {",
 		"capitalizedName: (name: string, number: number) => string",
 		"upperCaseName: (capitalizedName: string) => string",

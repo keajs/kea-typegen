@@ -103,6 +103,7 @@ type fileEmitOptions struct {
 	SourceFile        string
 	PackageJSONPath   string
 	RootPath          string
+	ImportState       *buildState
 	AddTsNocheck      bool
 	ImportGlobalTypes bool
 	IgnoreImportPaths []string
@@ -425,7 +426,7 @@ func processProjectOnce(ctx context.Context, options AppOptions) (runSummary, er
 		}
 	}
 
-	return writeTypegenFiles(files, state.compilerTypes(), options)
+	return writeTypegenFiles(files, state.compilerTypes(), state, options)
 }
 
 func collectParsedFiles(options AppOptions, state *buildState) ([]parsedFile, error) {
@@ -469,7 +470,7 @@ func collectParsedFiles(options AppOptions, state *buildState) ([]parsedFile, er
 	return parsedFiles, nil
 }
 
-func writeTypegenFiles(files []parsedFile, compilerTypes []string, options AppOptions) (runSummary, error) {
+func writeTypegenFiles(files []parsedFile, compilerTypes []string, state *buildState, options AppOptions) (runSummary, error) {
 	ignoredPrefixes := ignoredImportPrefixes(options, compilerTypes)
 	summary := runSummary{}
 	generatedAt := time.Now().UTC()
@@ -480,6 +481,7 @@ func writeTypegenFiles(files []parsedFile, compilerTypes []string, options AppOp
 			SourceFile:        file.File,
 			PackageJSONPath:   options.PackageJSONPath,
 			RootPath:          options.RootPath,
+			ImportState:       state,
 			AddTsNocheck:      options.AddTsNocheck,
 			ImportGlobalTypes: options.ImportGlobalTypes,
 			IgnoreImportPaths: ignoredPrefixes,
@@ -625,7 +627,7 @@ func normalizedTypeImports(logics []ParsedLogic, options fileEmitOptions) []Type
 	grouped := map[string]map[string]bool{}
 	for _, logic := range logics {
 		for _, item := range logic.Imports {
-			finalPath, fullPath := normalizeImportPath(item.Path, logic.File, options.TypeFile, options.PackageJSONPath)
+			finalPath, fullPath := normalizeImportPath(item.Path, logic.File, options.TypeFile, options.PackageJSONPath, options.ImportState)
 			if finalPath == "" || shouldIgnoreImportPath(fullPath, options.IgnoreImportPaths) {
 				continue
 			}
@@ -1173,7 +1175,7 @@ func shouldIgnoreImportPath(fullPath string, ignoredPrefixes []string) bool {
 	return false
 }
 
-func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath string) (string, string) {
+func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath string, state *buildState) (string, string) {
 	finalPath := importPath
 	fullPath := importPath
 
@@ -1188,6 +1190,9 @@ func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath strin
 	} else if strings.HasPrefix(finalPath, "node_modules"+string(os.PathSeparator)) {
 		fullPath = filepath.Clean(filepath.Join(filepath.Dir(nodeModulesPath), finalPath))
 		finalPath = fullPath
+	} else if resolvedFile, ok := resolveImportFile(sourceFile, finalPath, state); ok {
+		fullPath = resolvedFile
+		finalPath = resolvedFile
 	}
 
 	if strings.HasPrefix(finalPath, nodeModulesPath+string(os.PathSeparator)) {

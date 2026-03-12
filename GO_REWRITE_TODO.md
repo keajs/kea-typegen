@@ -277,6 +277,44 @@ ln -s /Users/marius/Projects/PostHog/posthog/node_modules /tmp/posthog-typegen-g
     - [`frontend/src/scenes/billing/billingLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/billing/billingLogicType.ts): Go now emits `loadBilling`, `updateBillingLimits`, and `switchFlatrateSubscriptionPlan`, but still misses JS-only `deactivateProduct` and still keeps an extra `breakpoint` parameter where JS emits a flatter action signature
     - [`frontend/src/scenes/insights/insightLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/insights/insightLogicType.ts): `key` and `props` are now correct, but Go still misses connected value typing such as `featureFlags: FeatureFlagsSet`
     - [`frontend/src/scenes/experiments/ExperimentForm/variantsPanelLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/experiments/ExperimentForm/variantsPanelLogicType.ts): selector/helper instability remains visible as `Set<any>` instead of `Set<string>` and `any`-heavy `validateFeatureFlagKeySuccess` payloads
+- Follow-up sweep after alias-aware local `connect(...)` resolution, lazy-loader helper filtering, and multiline payload normalization:
+  - rerun command on the existing Go clone:
+    - `env KEA_TYPEGEN_CWD=/tmp/posthog-typegen-sweep.W8Co3b/go GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go run ./cmd/kea-typegen-go write -q --tsgo-bin /Users/marius/Projects/Kea/kea-typegen/.tsgo/node_modules/.bin/tsgo`
+  - compare command:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir /tmp/posthog-typegen-sweep.W8Co3b/js --go-dir /tmp/posthog-typegen-sweep.W8Co3b/go --top 30`
+  - result:
+    - total files: `739`
+    - semantic matches: `50`
+    - semantic accuracy: `6.77%`
+    - exact matches: `0`
+    - `TS_ONLY: 0`
+    - `GO_ONLY: 0`
+    - semantic diffs: `689`
+  - artifacts:
+    - compare summary JSON: [`/tmp/posthog-typegen-sweep.W8Co3b/compare-summary-after-connect-lazyloader.json`](/tmp/posthog-typegen-sweep.W8Co3b/compare-summary-after-connect-lazyloader.json)
+  - this is another real step forward (`44/739` -> `50/739`)
+  - useful confirmation from the rerun:
+    - the repo-wide rerun on the already-generated clone exited cleanly this time, unlike the earlier stuck rerun on the same sweep workspace
+  - the old blockers are now closed in the representative files:
+    - [`frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts) now includes both `loadPropertyValues` and `propertyOptions`
+    - [`frontend/src/scenes/billing/billingLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/billing/billingLogicType.ts) now includes `deactivateProduct` and no longer leaks `breakpoint` into the public action signature
+  - the remaining representative semantic gaps have narrowed:
+    - [`frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/lib/components/QuickFilters/quickFilterFormLogicType.ts): connected surface is present, but `updateOption` still widens `updates` to `QuickFilterOption`, `suggestions` is still `any` instead of `any[]`, `setQuickFilterValue` still leaks into listeners, and generated imports still use `~/types` instead of JS-relative imports
+    - [`frontend/src/scenes/billing/billingLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/billing/billingLogicType.ts): connected values now include `preflight` and `currentOrganization`, but `featureFlags` is still malformed (`(FeatureFlagsSet | { setFeatureFlags: ... })[]`), several action payloads still lose nullability precision, and generated imports still use `~/...` aliases where JS emits relative paths
+    - [`frontend/src/scenes/insights/insightLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/insights/insightLogicType.ts): still a good canary for local connected value typing, especially `featureFlags: FeatureFlagsSet`
+    - [`frontend/src/scenes/experiments/ExperimentForm/variantsPanelLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/scenes/experiments/ExperimentForm/variantsPanelLogicType.ts): selector/helper instability remains visible as `Set<any>` instead of `Set<string>` and `any`-heavy `validateFeatureFlagKeySuccess` payloads
+- Follow-up work on March 12, 2026 after the `50/739` snapshot:
+  - tsconfig-aware import normalization now resolves aliased local imports during emit using the existing build-state config/path resolver instead of preserving raw `~/`, `lib/`, `scenes/`, or `products/` specifiers
+  - a compare rerun on the same existing sweep clone moved semantic matches from `50` to `75` (`10.15%`) and semantic diffs from `689` to `664`
+  - useful concrete effect from that pass:
+    - `rg -l --glob '*Type.ts' "from '(~|lib/|scenes/|products/)'" /tmp/posthog-typegen-sweep.W8Co3b/go` now returns `0`
+    - representative imports such as `featurePreviewsLogicType.ts` `../../lib/utils/product-intents` and `../../types` now match the JS generator's relative ownership
+  - reducer source recovery now also handles helper-call defaults with middle reducer options objects, e.g. `featureFlags: [getPersistedFeatureFlags(), { persist: true }, { ...handlers }]`
+    - the canary [`frontend/src/lib/logic/featureFlagLogicType.ts`](/tmp/posthog-typegen-sweep.W8Co3b/go/frontend/src/lib/logic/featureFlagLogicType.ts) now emits `featureFlags: FeatureFlagsSet` again instead of the earlier malformed tuple-array surface
+    - a focused propagation attempt across the affected connected files was directionally positive but not cleanly measurable because an older long-running full-project write on the same sweep workspace was still mutating files in the background
+  - verification from this run:
+    - `env GOCACHE=/tmp/kea-typegen-gocache GOMODCACHE=/tmp/kea-typegen-gomodcache go test ./internal/keainspect` passes
+    - `./bin/benchmark -c write -n 1 -w 1` still passes at `16/16` semantic matches
 - Runtime note:
   - the `go run ./cmd/kea-typegen-go ...` development path was misleading here because it includes compile overhead; that path exceeded the earlier `180s` timeout on a fresh clone
   - the compiled binary is better, but fresh-project runtime is still not healthy enough:

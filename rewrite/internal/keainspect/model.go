@@ -211,7 +211,7 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseDefaultFieldsWithSource(section, source, properties["defaults"])...)
 	}
 	if section, ok := sections["reducers"]; ok {
-		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseReducersWithSource(section, source, properties["reducers"])...)
+		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseReducersWithSource(section, source, properties["reducers"], report.File, state)...)
 	}
 	if section, ok := sections["windowValues"]; ok {
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseWindowValues(section)...)
@@ -343,21 +343,21 @@ func parseActionsWithSource(section SectionReport, source string, property Sourc
 }
 
 func parseReducers(section SectionReport) []ParsedField {
-	return parseReducersWithSource(section, "", SourceProperty{})
+	return parseReducersWithSource(section, "", SourceProperty{}, "", nil)
 }
 
-func parseReducersWithSource(section SectionReport, source string, property SourceProperty) []ParsedField {
+func parseReducersWithSource(section SectionReport, source string, property SourceProperty, file string, state *buildState) []ParsedField {
 	sourceMembers := sectionSourceProperties(source, property)
 	sourceEntries := sourceEntriesByName(sectionSourceEntries(source, property))
 	reducers := make([]ParsedField, 0, len(section.Members))
 	for _, member := range section.Members {
 		stateType := "any"
 		if nested, ok := sourceMembers[member.Name]; ok {
-			if hinted := sourceReducerStateType(sourcePropertyText(source, nested)); hinted != "" {
+			if hinted := sourceReducerStateTypeWithContext(source, file, sourcePropertyText(source, nested), state); hinted != "" {
 				stateType = hinted
 			}
 		} else if entry, ok := sourceEntries[member.Name]; ok {
-			if hinted := sourceReducerStateType(entry.Value); hinted != "" {
+			if hinted := sourceReducerStateTypeWithContext(source, file, entry.Value, state); hinted != "" {
 				stateType = hinted
 			}
 		}
@@ -818,6 +818,122 @@ func findLocalValueInitializer(source, name string) string {
 	return strings.TrimSpace(source[start:end])
 }
 
+func findLocalFunctionReturnType(source, name string) string {
+	functionPattern := regexp.MustCompile(`(?m)^\s*(?:export\s+)?function\s+` + regexp.QuoteMeta(name) + `\b`)
+	match := functionPattern.FindStringIndex(source)
+	if match == nil {
+		return ""
+	}
+
+	start := skipTrivia(source, match[1])
+	if start < len(source) && source[start] == '<' {
+		end, err := findMatching(source, start, '<', '>')
+		if err != nil {
+			return ""
+		}
+		start = skipTrivia(source, end+1)
+	}
+	if start >= len(source) || source[start] != '(' {
+		return ""
+	}
+	end, err := findMatching(source, start, '(', ')')
+	if err != nil {
+		return ""
+	}
+	start = skipTrivia(source, end+1)
+	if start >= len(source) || source[start] != ':' {
+		return ""
+	}
+	start = skipTrivia(source, start+1)
+	end = findFunctionReturnTypeEnd(source, start)
+	if end <= start {
+		return ""
+	}
+	return normalizeSourceTypeText(source[start:end])
+}
+
+func findFunctionReturnTypeEnd(source string, start int) int {
+	parenDepth := 0
+	bracketDepth := 0
+	braceDepth := 0
+	angleDepth := 0
+
+	for i := start; i < len(source); i++ {
+		switch source[i] {
+		case '\'':
+			end, err := skipQuoted(source, i, '\'')
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '"':
+			end, err := skipQuoted(source, i, '"')
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '`':
+			end, err := skipTemplate(source, i)
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '/':
+			if i+1 < len(source) && source[i+1] == '/' {
+				i += 2
+				for i < len(source) && source[i] != '\n' {
+					i++
+				}
+				continue
+			}
+			if i+1 < len(source) && source[i+1] == '*' {
+				i += 2
+				for i+1 < len(source) && !(source[i] == '*' && source[i+1] == '/') {
+					i++
+				}
+				if i+1 >= len(source) {
+					return -1
+				}
+				i++
+				continue
+			}
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '{':
+			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && angleDepth == 0 {
+				prefix := strings.TrimSpace(source[start:i])
+				if prefix != "" && !strings.HasSuffix(prefix, "|") && !strings.HasSuffix(prefix, "&") {
+					return i
+				}
+			}
+			braceDepth++
+		case '}':
+			if braceDepth > 0 {
+				braceDepth--
+			}
+		case '<':
+			if shouldOpenAngle(source, i) {
+				angleDepth++
+			}
+		case '>':
+			if angleDepth > 0 {
+				angleDepth--
+			}
+		}
+	}
+	return -1
+}
+
 func sourceImportedValueInitializer(source, file, identifier string, state *buildState) (string, string, string, bool) {
 	if state == nil || file == "" || identifier == "" {
 		return "", "", "", false
@@ -1170,7 +1286,7 @@ func sourceLoaderMemberTypeFromExpression(source, expression string) (string, ma
 		return "", nil, false
 	}
 
-	if properties, ok := sourceLoaderObjectProperties(source, text); ok {
+	if properties, ok := sourceLoaderObjectProperties(source, text, ""); ok {
 		return strings.TrimSpace(properties["__default"]), properties, true
 	}
 
@@ -1184,7 +1300,7 @@ func sourceLoaderMemberTypeFromExpression(source, expression string) (string, ma
 	}
 
 	defaultType := normalizeInferredTypeText(sourceExpressionTypeText(source, strings.TrimSpace(parts[0])))
-	properties, ok := sourceLoaderObjectProperties(source, strings.TrimSpace(parts[1]))
+	properties, ok := sourceLoaderObjectProperties(source, strings.TrimSpace(parts[1]), defaultType)
 	if !ok {
 		return "", nil, false
 	}
@@ -1197,7 +1313,7 @@ func sourceLoaderMemberTypeFromProperty(source string, property SourceProperty, 
 		return "", nil, false
 	}
 
-	if properties, ok := sourceLoaderObjectPropertiesFromRange(source, property.ValueStart, property.ValueEnd, file, state); ok {
+	if properties, ok := sourceLoaderObjectPropertiesFromRange(source, property.ValueStart, property.ValueEnd, file, state, ""); ok {
 		return strings.TrimSpace(properties["__default"]), properties, true
 	}
 
@@ -1211,7 +1327,7 @@ func sourceLoaderMemberTypeFromProperty(source string, property SourceProperty, 
 	}
 
 	defaultType := normalizeInferredTypeText(sourceExpressionTypeText(source, parts[0].Text))
-	properties, ok := sourceLoaderObjectPropertiesFromRange(source, parts[1].Start, parts[1].End, file, state)
+	properties, ok := sourceLoaderObjectPropertiesFromRange(source, parts[1].Start, parts[1].End, file, state, defaultType)
 	if !ok {
 		return "", nil, false
 	}
@@ -1219,7 +1335,7 @@ func sourceLoaderMemberTypeFromProperty(source string, property SourceProperty, 
 	return defaultType, properties, true
 }
 
-func sourceLoaderObjectProperties(source, expression string) (map[string]string, bool) {
+func sourceLoaderObjectProperties(source, expression, defaultTypeHint string) (map[string]string, bool) {
 	objectStart, objectEnd, ok, err := FindInspectableObjectLiteral(expression, 0, len(expression))
 	if err != nil || !ok {
 		return nil, false
@@ -1239,6 +1355,10 @@ func sourceLoaderObjectProperties(source, expression string) (map[string]string,
 		}
 		if functionType := sourceArrowFunctionTypeText(source, value); functionType != "" {
 			result[nested.Name] = functionType
+			continue
+		}
+		if functionType := sourceLoaderArrowFunctionTypeTextWithFallback(source, value, defaultTypeHint); functionType != "" {
+			result[nested.Name] = functionType
 		}
 	}
 
@@ -1248,7 +1368,7 @@ func sourceLoaderObjectProperties(source, expression string) (map[string]string,
 	return result, true
 }
 
-func sourceLoaderObjectPropertiesFromRange(source string, valueStart, valueEnd int, file string, state *buildState) (map[string]string, bool) {
+func sourceLoaderObjectPropertiesFromRange(source string, valueStart, valueEnd int, file string, state *buildState, defaultTypeHint string) (map[string]string, bool) {
 	objectStart, objectEnd, ok, err := FindInspectableObjectLiteral(source, valueStart, valueEnd)
 	if err != nil || !ok {
 		return nil, false
@@ -1268,6 +1388,10 @@ func sourceLoaderObjectPropertiesFromRange(source string, valueStart, valueEnd i
 		}
 		if functionType := sourceArrowFunctionTypeTextFromRange(source, file, nested, state); functionType != "" {
 			result[nested.Name] = functionType
+			continue
+		}
+		if functionType := sourceLoaderArrowFunctionTypeTextWithFallback(source, value, defaultTypeHint); functionType != "" {
+			result[nested.Name] = functionType
 		}
 	}
 
@@ -1275,6 +1399,22 @@ func sourceLoaderObjectPropertiesFromRange(source string, valueStart, valueEnd i
 		return nil, false
 	}
 	return result, true
+}
+
+func sourceLoaderArrowFunctionTypeTextWithFallback(source, expression, defaultTypeHint string) string {
+	info, ok := parseSourceArrowInfo(expression)
+	if !ok {
+		return ""
+	}
+
+	returnType := normalizeInferredTypeText(strings.TrimSpace(defaultTypeHint))
+	if returnType == "" {
+		return ""
+	}
+	if info.Async {
+		returnType = promiseTypeText(returnType)
+	}
+	return info.Parameters + " => " + returnType
 }
 
 func hasLoaderActionProperties(properties map[string]string) bool {
@@ -1308,7 +1448,7 @@ func parseLoaderActions(loaderName string, properties map[string]string, skipPro
 			continue
 		}
 
-		basePayload := firstParameterType(parameters)
+		parameters, basePayload := loaderActionParameters(parameters)
 		if basePayload == "" {
 			basePayload = "any"
 		}
@@ -1332,6 +1472,43 @@ func parseLoaderActions(loaderName string, properties map[string]string, skipPro
 		)
 	}
 	return actions
+}
+
+func loaderActionParameters(parameters string) (string, string) {
+	parsed, ok := parseFunctionParameters(parameters)
+	if !ok {
+		return parameters, firstParameterType(parameters)
+	}
+
+	kept := make([]string, 0, len(parsed))
+	firstType := ""
+	for _, parameter := range parsed {
+		if isLoaderHelperParameter(parameter) {
+			continue
+		}
+		kept = append(kept, parameter.Text)
+		if firstType == "" {
+			firstType = parameter.Type
+		}
+	}
+
+	if len(kept) == 0 {
+		return "()", ""
+	}
+	return "(" + strings.Join(kept, ", ") + ")", firstType
+}
+
+func isLoaderHelperParameter(parameter parsedParameter) bool {
+	if name, ok := sourceParameterName(parameter.Text); ok {
+		switch name {
+		case "breakpoint":
+			return true
+		}
+	}
+
+	typeText := normalizeSourceTypeText(parameter.Type)
+	return typeTextContainsStandaloneToken(typeText, "BreakPointFunction") ||
+		typeTextContainsStandaloneToken(typeText, "BreakpointFunction")
 }
 
 func parseLazyLoaderMemberType(typeText string) (string, map[string]string, bool) {
@@ -2069,6 +2246,10 @@ func sourceMemberPathTypeText(source, typeText string, path []string) string {
 }
 
 func sourceReducerStateType(expression string) string {
+	return sourceReducerStateTypeWithContext(expression, "", expression, nil)
+}
+
+func sourceReducerStateTypeWithContext(source, file, expression string, state *buildState) string {
 	text := strings.TrimSpace(expression)
 	if text == "" {
 		return ""
@@ -2078,9 +2259,9 @@ func sourceReducerStateType(expression string) string {
 	if err == nil && ok {
 		parts, err := splitTopLevelList(text[arrayStart+1 : arrayEnd])
 		if err == nil && len(parts) > 0 {
-			stateType := sourceReducerLiteralStateType(strings.TrimSpace(parts[0]))
+			stateType := sourceReducerLiteralStateTypeWithContext(source, file, strings.TrimSpace(parts[0]), state)
 			if len(parts) > 1 {
-				if widened := sourceWidenReducerStateTypeFromHandlers(stateType, strings.TrimSpace(parts[1])); widened != "" {
+				if widened := sourceWidenReducerStateTypeFromHandlers(stateType, strings.TrimSpace(parts[len(parts)-1])); widened != "" {
 					stateType = widened
 				}
 			}
@@ -2091,13 +2272,7 @@ func sourceReducerStateType(expression string) string {
 		return ""
 	}
 
-	if hinted := sourceAssertedType(text); hinted != "" {
-		return normalizeInferredTypeText(hinted)
-	}
-	if inferred := sourceExpressionTypeText(text, text); inferred != "" {
-		return normalizeInferredTypeText(widenLiteralReducerStateType(inferred))
-	}
-	return ""
+	return sourceReducerLiteralStateTypeWithContext(source, file, text, state)
 }
 
 func sourceLoaderDefaultType(source string, property SourceProperty) string {
@@ -2138,8 +2313,25 @@ func sourceSelectorReturnType(expression string) string {
 }
 
 func sourceReducerLiteralStateType(expression string) string {
+	return sourceReducerLiteralStateTypeWithContext(expression, "", expression, nil)
+}
+
+func sourceReducerLiteralStateTypeWithContext(source, file, expression string, state *buildState) string {
 	if hinted := sourceAssertedType(expression); hinted != "" {
 		return normalizeInferredTypeText(hinted)
+	}
+	if source != "" {
+		text := strings.TrimSpace(unwrapWrappedExpression(expression))
+		if callee, ok := stripTrailingCallExpression(text); ok {
+			if identifier, ok := sourceIdentifierExpression(callee); ok {
+				if returnType := findLocalFunctionReturnType(source, identifier); returnType != "" {
+					return normalizeInferredTypeText(widenLiteralReducerStateType(returnType))
+				}
+			}
+		}
+		if inferred := sourceExpressionTypeTextWithContext(source, file, expression, nil, state); inferred != "" && !isAnyLikeType(inferred) {
+			return normalizeInferredTypeText(widenLiteralReducerStateType(inferred))
+		}
 	}
 	if inferred := sourceExpressionTypeText(expression, expression); inferred != "" {
 		return normalizeInferredTypeText(widenLiteralReducerStateType(inferred))
@@ -3113,12 +3305,150 @@ func normalizeSourceTypeText(text string) string {
 	if text == "" {
 		return ""
 	}
+	text = normalizeTypeLiteralText(text)
 	text = strings.Join(strings.Fields(text), " ")
 	text = strings.ReplaceAll(text, "( ", "(")
 	text = strings.ReplaceAll(text, " )", ")")
 	text = strings.ReplaceAll(text, ",)", ")")
 	text = optionalUndefinedUnionPattern.ReplaceAllString(text, "$1")
 	return text
+}
+
+func normalizeTypeLiteralText(text string) string {
+	var builder strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] != '{' {
+			builder.WriteByte(text[i])
+			continue
+		}
+
+		end, err := findMatching(text, i, '{', '}')
+		if err != nil {
+			builder.WriteByte(text[i])
+			continue
+		}
+
+		inner := normalizeTypeLiteralText(text[i+1 : end])
+		normalized, ok := normalizeTypeLiteralBody(inner)
+		if !ok {
+			builder.WriteByte(text[i])
+			continue
+		}
+
+		builder.WriteString("{")
+		if normalized != "" {
+			builder.WriteString(" ")
+			builder.WriteString(normalized)
+			builder.WriteString(" ")
+		}
+		builder.WriteString("}")
+		i = end
+	}
+	return builder.String()
+}
+
+func normalizeTypeLiteralBody(text string) (string, bool) {
+	body := strings.TrimSpace(text)
+	if body == "" {
+		return "", true
+	}
+
+	entries, err := splitTopLevelTypeMembers(body)
+	if err != nil {
+		return "", false
+	}
+
+	parts := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if name, value, ok := splitTopLevelTypeMember(entry); ok {
+			parts = append(parts, strings.TrimSpace(name)+": "+normalizeSourceTypeText(value))
+			continue
+		}
+		parts = append(parts, normalizeSourceTypeText(entry))
+	}
+	if len(parts) == 0 {
+		return "", true
+	}
+	return strings.Join(parts, "; ") + ";", true
+}
+
+func splitTopLevelTypeMember(entry string) (string, string, bool) {
+	index := findTopLevelDelimiter(entry, ':')
+	if index == -1 {
+		return "", "", false
+	}
+	name := strings.TrimSpace(entry[:index])
+	value := strings.TrimSpace(entry[index+1:])
+	if name == "" || value == "" {
+		return "", "", false
+	}
+	return name, value, true
+}
+
+func findTopLevelDelimiter(text string, delimiter byte) int {
+	parenDepth := 0
+	bracketDepth := 0
+	braceDepth := 0
+	angleDepth := 0
+
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\'':
+			end, err := skipQuoted(text, i, '\'')
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '"':
+			end, err := skipQuoted(text, i, '"')
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '`':
+			end, err := skipTemplate(text, i)
+			if err != nil {
+				return -1
+			}
+			i = end
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '{':
+			braceDepth++
+		case '}':
+			if braceDepth > 0 {
+				braceDepth--
+			}
+		case '<':
+			if shouldOpenAngle(text, i) {
+				angleDepth++
+			}
+		case '>':
+			if angleDepth > 0 {
+				angleDepth--
+			}
+		default:
+			if text[i] == delimiter && parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && angleDepth == 0 {
+				return i
+			}
+		}
+	}
+
+	return -1
 }
 
 func parseListeners(section SectionReport, logic ParsedLogic) []ParsedListener {
@@ -3230,10 +3560,14 @@ func resolveActionReferenceFromSourceKey(source, file, keyText string, state *bu
 	if !ok {
 		return ParsedAction{}, "", nil, false
 	}
-	return action, actionTypeString(targetLogic, action.Name), filterImportsByTypeTexts(targetLogic.Imports, []string{
+	imports := filterImportsByTypeTexts(targetLogic.Imports, []string{
 		action.FunctionType,
 		action.PayloadType,
-	}), true
+	})
+	if targetLogic.File != "" && file != "" {
+		imports = rebaseTypeImports(imports, targetLogic.File, file)
+	}
+	return action, actionTypeString(targetLogic, action.Name), imports, true
 }
 
 func parseActionTypeReference(keyText string) (string, string, bool) {
@@ -3857,7 +4191,7 @@ func enrichConnectedSections(source, file string, property SourceProperty, secti
 				}
 			}
 			if hasLocalLogic {
-				imports = mergeTypeImports(imports, filterImportsByTypeTexts(targetLogic.Imports, addedTypeTexts))
+				imports = mergeTypeImports(imports, rebaseTypeImports(filterImportsByTypeTexts(targetLogic.Imports, addedTypeTexts), targetLogic.File, file))
 			}
 			if len(addedTypeTexts) > 0 {
 				continue
@@ -3906,7 +4240,7 @@ func enrichConnectedSections(source, file string, property SourceProperty, secti
 				}
 			}
 			if hasLocalLogic {
-				imports = mergeTypeImports(imports, filterImportsByTypeTexts(targetLogic.Imports, addedTypeTexts))
+				imports = mergeTypeImports(imports, rebaseTypeImports(filterImportsByTypeTexts(targetLogic.Imports, addedTypeTexts), targetLogic.File, file))
 			}
 		}
 	}
@@ -4012,66 +4346,41 @@ func resolveConnectedLogic(source, file, expression string, state *buildState) (
 	}
 
 	if candidate, ok := parseNamedValueImports(source)[target.BaseAlias]; ok {
-		if strings.HasPrefix(candidate.Path, ".") {
-			resolvedFile, ok := resolveLocalImportFile(file, candidate.Path)
-			if !ok {
-				return ParsedLogic{}, false
-			}
-
-			logics, err := state.loadLogics(resolvedFile)
-			if err != nil {
-				return ParsedLogic{}, false
-			}
-			return findConnectedLogic(logics, target.LogicName, candidate.ImportedName, target.BaseAlias)
-		}
-
-		logicName := packageConnectedLogicName(target, candidate.ImportedName)
-		if logic, ok := loadPackageTypegenLogic(file, candidate.Path, logicName); ok {
+		if logic, ok := resolveImportedConnectedLogic(file, candidate.Path, packageConnectedLogicName(target, candidate.ImportedName), state, target.LogicName, candidate.ImportedName, target.BaseAlias); ok {
 			return logic, true
 		}
 	}
 
 	if candidate, ok := parseDefaultValueImports(source)[target.BaseAlias]; ok {
-		if strings.HasPrefix(candidate.Path, ".") {
-			resolvedFile, ok := resolveLocalImportFile(file, candidate.Path)
-			if !ok {
-				return ParsedLogic{}, false
-			}
-
-			logics, err := state.loadLogics(resolvedFile)
-			if err != nil {
-				return ParsedLogic{}, false
-			}
-			return findConnectedLogic(logics, target.LogicName, target.BaseAlias)
-		}
-
-		logicName := packageConnectedLogicName(target, target.BaseAlias)
-		if logic, ok := loadPackageTypegenLogic(file, candidate.Path, logicName); ok {
+		if logic, ok := resolveImportedConnectedLogic(file, candidate.Path, packageConnectedLogicName(target, target.BaseAlias), state, target.LogicName, target.BaseAlias); ok {
 			return logic, true
 		}
 	}
 
 	if importPath, ok := parseNamespaceValueImports(source)[target.BaseAlias]; ok {
-		if strings.HasPrefix(importPath, ".") {
-			resolvedFile, ok := resolveLocalImportFile(file, importPath)
-			if !ok {
-				return ParsedLogic{}, false
-			}
-
-			logics, err := state.loadLogics(resolvedFile)
-			if err != nil {
-				return ParsedLogic{}, false
-			}
-			return findConnectedLogic(logics, target.LogicName)
-		}
-
-		if target.LogicName != "" {
-			if logic, ok := loadPackageTypegenLogic(file, importPath, target.LogicName); ok {
-				return logic, true
-			}
+		if logic, ok := resolveImportedConnectedLogic(file, importPath, target.LogicName, state, target.LogicName); ok {
+			return logic, true
 		}
 	}
 
+	return ParsedLogic{}, false
+}
+
+func resolveImportedConnectedLogic(file, importPath, packageLogicName string, state *buildState, names ...string) (ParsedLogic, bool) {
+	if resolvedFile, ok := resolveImportFile(file, importPath, state); ok {
+		logics, err := state.loadLogics(resolvedFile)
+		if err != nil {
+			return ParsedLogic{}, false
+		}
+		return findConnectedLogic(logics, names...)
+	}
+
+	if strings.TrimSpace(packageLogicName) == "" {
+		return ParsedLogic{}, false
+	}
+	if logic, ok := loadPackageTypegenLogic(file, importPath, packageLogicName); ok {
+		return logic, true
+	}
 	return ParsedLogic{}, false
 }
 
@@ -4134,6 +4443,49 @@ func packageQualifiedImports(rootDir, rootName, typeFile string, imports []TypeI
 		qualified = append(qualified, TypeImport{Path: path, Names: append([]string(nil), item.Names...)})
 	}
 	return qualified
+}
+
+func rebaseTypeImports(imports []TypeImport, fromFile, toFile string) []TypeImport {
+	if len(imports) == 0 {
+		return nil
+	}
+
+	fromFile = filepath.Clean(fromFile)
+	toFile = filepath.Clean(toFile)
+	if fromFile == "" || toFile == "" || fromFile == toFile {
+		return imports
+	}
+
+	rebased := make([]TypeImport, 0, len(imports))
+	for _, item := range imports {
+		path := item.Path
+		if strings.HasPrefix(path, ".") {
+			if resolvedFile, ok := resolveLocalImportFile(fromFile, path); ok {
+				if importPath, ok := relativeImportPath(toFile, resolvedFile); ok {
+					path = importPath
+				}
+			}
+		}
+		rebased = append(rebased, TypeImport{Path: path, Names: append([]string(nil), item.Names...)})
+	}
+	return rebased
+}
+
+func relativeImportPath(fromFile, toFile string) (string, bool) {
+	if fromFile == "" || toFile == "" {
+		return "", false
+	}
+
+	relative, err := filepath.Rel(filepath.Dir(fromFile), toFile)
+	if err != nil {
+		return "", false
+	}
+	relative = filepath.ToSlash(relative)
+	relative = strings.TrimSuffix(relative, filepath.Ext(relative))
+	if !strings.HasPrefix(relative, ".") {
+		relative = "./" + relative
+	}
+	return relative, true
 }
 
 func findPackageLogicTypeFile(rootDir, typeName string) (string, string, bool) {
@@ -6848,8 +7200,13 @@ func resolveImportFile(file, importPath string, state *buildState) (string, bool
 }
 
 func resolveConfiguredImportFile(importPath string, state *buildState) (string, bool) {
-	if state == nil || state.config == nil || state.configFile == "" || importPath == "" {
+	if state == nil || state.configFile == "" || importPath == "" {
 		return "", false
+	}
+	if state.config == nil {
+		if err := state.ensureAPIClient(); err != nil {
+			return "", false
+		}
 	}
 
 	baseURL := "."

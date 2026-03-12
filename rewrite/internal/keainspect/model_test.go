@@ -702,7 +702,7 @@ func TestParseReducersWithSourceRecoversCollapsedLiteralReducerState(t *testing.
 			{Name: "username", TypeString: "(string | { setUsername: (_: any, { username }: { username: any; }) => any; })[]"},
 			{Name: "isLoading", TypeString: "(boolean | { setUsername: () => boolean; setRepositories: () => boolean; setFetchError: () => boolean; })[]"},
 		},
-	}, source, property)
+	}, source, property, "", nil)
 
 	for _, reducer := range []struct {
 		name string
@@ -970,7 +970,7 @@ func TestBuildParsedLogicsSynthesizesLoadersAndDefaults(t *testing.T) {
 		"loadSessionsFailure: 'load sessions failure (scenes.homepage.index.*)'",
 		"updateName: ((action: { type: 'update name (scenes.homepage.index.*)'; payload: { name: string; } }, previousState: any) => void | Promise<void>)[]",
 		"afterMount: () => void",
-		"someRandomFunction: (payload: { name: string; id?: number; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number; } }, previousState: any) => void | Promise<void>",
+		"someRandomFunction: (payload: { name: string; id?: number; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number; }; }, previousState: any) => void | Promise<void>",
 		"sessionsLoading: boolean",
 		"payload?: string",
 	} {
@@ -1436,6 +1436,183 @@ func TestBuildParsedLogicsRecoversRealisticPostHogKeyTypeEndToEnd(t *testing.T) 
 	}
 }
 
+func TestBuildParsedLogicsResolvesAliasedConnectedLogicEndToEnd(t *testing.T) {
+	tempDir := t.TempDir()
+	frontendDir := filepath.Join(tempDir, "frontend")
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "baseUrl": "frontend",`,
+		`    "paths": {`,
+		`      "~/*": ["src/*"]`,
+		`    }`,
+		`  },`,
+		`  "include": ["frontend/src/**/*"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	modelFile := filepath.Join(frontendDir, "src", "models", "propertyDefinitionsModel.ts")
+	if err := os.MkdirAll(filepath.Dir(modelFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	modelSource := strings.Join([]string{
+		"import { actions, kea, path, reducers } from 'kea'",
+		"",
+		"export type Option = {",
+		"    values?: string[]",
+		"}",
+		"",
+		"export const propertyDefinitionsModel = kea([",
+		"    path(['models', 'propertyDefinitionsModel']),",
+		"    actions({",
+		"        loadPropertyValues: (payload: { propertyKey: string }) => payload,",
+		"        setOptions: (options: Record<string, Option>) => ({ options }),",
+		"    }),",
+		"    reducers({",
+		"        options: [",
+		"            {} as Record<string, Option>,",
+		"            {",
+		"                setOptions: (_, { options }) => options,",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(modelFile, []byte(modelSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(frontendDir, "src", "lib", "components", "QuickFilters", "quickFilterFormLogic.ts")
+	if err := os.MkdirAll(filepath.Dir(logicFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	logicSource := strings.Join([]string{
+		"import { connect, kea, path } from 'kea'",
+		"",
+		"import { propertyDefinitionsModel } from '~/models/propertyDefinitionsModel'",
+		"",
+		"export const quickFilterFormLogic = kea([",
+		"    path(['lib', 'components', 'QuickFilters', 'quickFilterFormLogic']),",
+		"    connect(() => ({",
+		"        values: [propertyDefinitionsModel, ['options as propertyOptions']],",
+		"        actions: [propertyDefinitionsModel, ['loadPropertyValues']],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasAction(logic.Actions, "loadPropertyValues") {
+		t.Fatalf("expected aliased connected action to resolve, got %+v", logic.Actions)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "propertyOptions"); !ok || selector.Type != "Record<string, Option>" {
+		t.Fatalf("expected aliased connected selector type %q, got %+v", "Record<string, Option>", selector)
+	}
+	if !hasImport(logic.Imports, "../../../models/propertyDefinitionsModel", "Option") {
+		t.Fatalf("expected connected Option import from aliased local model, got %+v", logic.Imports)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"loadPropertyValues: (payload: { propertyKey: string; }) => void",
+		"propertyOptions: (state: any, props?: any) => Record<string, Option>",
+		"propertyOptions: Record<string, Option>",
+		"import type { Option } from '../../../models/propertyDefinitionsModel'",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversReducerStateFromHelperCallWithReducerOptions(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path, reducers } from 'kea'",
+		"",
+		"type FeatureFlagsSet = {",
+		"    [key: string]: boolean | string",
+		"}",
+		"",
+		"function getPersistedFeatureFlags(): FeatureFlagsSet {",
+		"    return {}",
+		"}",
+		"",
+		"export const featureFlagLogic = kea([",
+		"    path(['featureFlagLogic']),",
+		"    reducers({",
+		"        featureFlags: [",
+		"            getPersistedFeatureFlags(),",
+		"            { persist: true },",
+		"            {",
+		"                setFeatureFlags: (_, { variants }) => variants as FeatureFlagsSet,",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/featureFlagLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "featureFlagLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{
+								Name:       "featureFlags",
+								TypeString: "(FeatureFlagsSet | { setFeatureFlags: (_: any, { variants }: { variants: any; }) => FeatureFlagsSet; })[]",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	if reducer, ok := findParsedField(logics[0].Reducers, "featureFlags"); !ok || reducer.Type != "FeatureFlagsSet" {
+		t.Fatalf("expected helper-backed reducer state type %q, got %+v", "FeatureFlagsSet", logics[0].Reducers)
+	}
+}
+
 func TestBuildParsedLogicsRecoversLazyLoadersFromSource(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea } from 'kea'",
@@ -1497,6 +1674,154 @@ func TestBuildParsedLogicsRecoversLazyLoadersFromSource(t *testing.T) {
 	}
 	if !hasAction(logic.Actions, "loadItemFailure") {
 		t.Fatalf("expected loadItemFailure action to be synthesized, got %+v", logic.Actions)
+	}
+}
+
+func TestBuildParsedLogicsRecoversLazyLoaderActionWithJSXAndBreakpoint(t *testing.T) {
+	source := strings.Join([]string{
+		"import { BreakPointFunction, kea, path } from 'kea'",
+		"import { lazyLoaders } from 'kea-loaders'",
+		"",
+		"interface BillingType {",
+		"    id: string",
+		"}",
+		"",
+		"const Link = (_props: { to: string; children?: any }): any => null",
+		"",
+		"export const billingLogic = kea([",
+		"    path(['billingLogic']),",
+		"    lazyLoaders(() => ({",
+		"        billing: [null as BillingType | null, {",
+		"            deactivateProduct: async (key: string, breakpoint: BreakPointFunction) => {",
+		"                const message = {",
+		"                    link: (",
+		"                        <Link to=\"/\">",
+		"                            View invoices",
+		"                        </Link>",
+		"                    ),",
+		"                }",
+		"                await breakpoint(100)",
+		"                return null as BillingType | null",
+		"            },",
+		"        }],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/billingLogic.tsx",
+		Logics: []LogicReport{
+			{
+				Name:      "billingLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "lazyLoaders",
+						Members: []MemberReport{
+							{Name: "billing", TypeString: "any[]"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasReducer(logic.Reducers, "billing", "BillingType | null") {
+		t.Fatalf("expected billing reducer type to recover from source, got %+v", logic.Reducers)
+	}
+	if !hasReducer(logic.Reducers, "billingLoading", "boolean") {
+		t.Fatalf("expected billingLoading reducer to be synthesized, got %+v", logic.Reducers)
+	}
+	if action, ok := findParsedAction(logic.Actions, "deactivateProduct"); !ok || action.FunctionType != "(key: string) => Promise<BillingType | null>" {
+		t.Fatalf("expected deactivateProduct action signature without breakpoint helper, got %+v", action)
+	}
+	if action, ok := findParsedAction(logic.Actions, "deactivateProductSuccess"); !ok || action.FunctionType != "(billing: BillingType | null, payload?: string) => { billing: BillingType | null; payload?: string }" {
+		t.Fatalf("expected deactivateProductSuccess action signature to recover from source, got %+v", action)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC))
+	for _, unexpected := range []string{
+		"breakpoint: BreakPointFunction",
+		"breakpoint: BreakpointFunction",
+	} {
+		if strings.Contains(rendered, unexpected) {
+			t.Fatalf("expected emitted output to omit lazy loader helper parameter %q:\n%s", unexpected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsPreservesMultilineActionPayloadObjectTypes(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path, actions } from 'kea'",
+		"",
+		"type PropertyDefinitionType = 'event'",
+		"",
+		"export const propertyDefinitionsModel = kea([",
+		"    path(['models', 'propertyDefinitionsModel']),",
+		"    actions({",
+		"        loadPropertyValues: (payload: {",
+		"            endpoint: string | undefined",
+		"            type: PropertyDefinitionType",
+		"            newInput: string | undefined",
+		"            propertyKey: string",
+		"            eventNames?: string[]",
+		"            properties?: {",
+		"                key: string",
+		"                values: string | string[]",
+		"            }[]",
+		"            forceRefresh?: boolean",
+		"        }) => payload,",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/propertyDefinitionsModel.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "propertyDefinitionsModel",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{Name: "loadPropertyValues", TypeString: "(payload: any) => any"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "loadPropertyValues")
+	if !ok {
+		t.Fatalf("expected loadPropertyValues action, got %+v", logics[0].Actions)
+	}
+	expectedParameterType := "(payload: { endpoint: string | undefined; type: PropertyDefinitionType; newInput: string | undefined; propertyKey: string; eventNames?: string[]; properties?: { key: string; values: string | string[]; }[]; forceRefresh?: boolean; }) =>"
+	if !strings.HasPrefix(action.FunctionType, expectedParameterType) {
+		t.Fatalf("expected action function type prefix %q, got %q", expectedParameterType, action.FunctionType)
+	}
+	if strings.Contains(action.FunctionType, "undefined type:") {
+		t.Fatalf("expected multiline object members to stay separated, got %q", action.FunctionType)
 	}
 }
 
