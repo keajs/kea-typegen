@@ -1112,6 +1112,9 @@ func shouldOpenAngle(source string, index int) bool {
 	if prev < 0 {
 		return false
 	}
+	if index+1 >= len(source) || unicode.IsSpace(rune(source[index+1])) || strings.ContainsRune("=|&<>", rune(source[index+1])) {
+		return false
+	}
 	return isIdentifierPart(source[prev]) || strings.ContainsRune(")]>", rune(source[prev]))
 }
 
