@@ -195,15 +195,19 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.KeyType = preferredTypeText(section)
 		if property, hasProperty := lastSourceProperty(properties["key"]); hasProperty && (parsed.KeyType == "" || isAnyLikeType(parsed.KeyType)) {
 			expression := sourcePropertyText(source, property)
-			if !shouldKeepReportedAnyForBuilderKey(logicReport.InputKind, expression) {
+			keepReportedAny := shouldKeepReportedAnyForBuilderKey(logicReport.InputKind, expression)
+			if !keepReportedAny {
 				if probed := normalizeSourceTypeText(sourceCallbackReturnTypeFromTypeProbe(source, report.File, property, state)); probed != "" &&
 					!isAnyLikeType(probed) &&
 					!typeTextContainsStandaloneToken(probed, "any") &&
 					!typeTextContainsStandaloneToken(probed, "unknown") {
 					parsed.KeyType = probed
-				} else if inferred := sourceArrowReturnTypeText(source, expression); inferred != "" {
-					parsed.KeyType = inferred
-				} else if recovered := sourceKeyTypeFromSource(source, report.File, property, parsed.PropsType, state); recovered != "" {
+				}
+			}
+			if inferred := sourceArrowReturnTypeText(source, expression); inferred != "" {
+				parsed.KeyType = inferred
+			} else if !keepReportedAny {
+				if recovered := sourceKeyTypeFromSource(source, report.File, property, parsed.PropsType, state); recovered != "" {
 					parsed.KeyType = recovered
 				}
 			}
@@ -239,16 +243,16 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.Actions = mergeParsedActionsPreferExisting(parsed.Actions, loaderActions...)
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, loaderReducers...)
 	}
-	for index, section := range sections["selectors"] {
-		property := sourcePropertyAt(properties["selectors"], index)
-		parsed.Selectors = mergeParsedFields(parsed.Selectors, parseSelectorsWithSource(section, parsed, source, property, report.File, state)...)
-		parsed.InternalSelectorTypes = mergeParsedFunctions(parsed.InternalSelectorTypes, parseInternalSelectorTypesWithSource(section, parsed, source, property, report.File, state)...)
-	}
 	for _, property := range properties["connect"] {
 		parsed.Imports = mergeTypeImports(
 			parsed.Imports,
 			enrichConnectedSections(source, report.File, property, sections["listeners"], &parsed, state),
 		)
+	}
+	for index, section := range sections["selectors"] {
+		property := sourcePropertyAt(properties["selectors"], index)
+		parsed.Selectors = mergeParsedFields(parsed.Selectors, parseSelectorsWithSource(section, parsed, source, property, report.File, state)...)
+		parsed.InternalSelectorTypes = mergeParsedFunctions(parsed.InternalSelectorTypes, parseInternalSelectorTypesWithSource(section, parsed, source, property, report.File, state)...)
 	}
 	for _, section := range sections["sharedListeners"] {
 		parsed.SharedListeners = mergeParsedSharedListeners(parsed.SharedListeners, parseSharedListeners(section)...)
@@ -936,15 +940,20 @@ func sourceNewExpressionTypeText(expression string) string {
 	}
 
 	rest := strings.TrimSpace(text[next:])
+	typeArguments := ""
 	if strings.HasPrefix(rest, "<") {
 		end, err := findMatching(rest, 0, '<', '>')
 		if err != nil {
 			return ""
 		}
+		typeArguments = strings.TrimSpace(rest[:end+1])
 		rest = strings.TrimSpace(rest[end+1:])
 	}
 	if rest != "" && !strings.HasPrefix(rest, "(") {
 		return ""
+	}
+	if typeArguments != "" {
+		return normalizeSourceTypeText(qualified + typeArguments)
 	}
 	return qualified
 }
@@ -2172,13 +2181,23 @@ func parseSelectorsWithSource(
 		selectorType := ""
 		hasExplicitSourceReturn := false
 		parsedMemberReturnType := ""
+		rawParsedMemberReturnType := ""
 		preferredMemberReturnType := ""
 		if hasMember {
-			if returnType, ok := parseSelectorReturnType(member.TypeString); ok && !isAnyLikeType(returnType) {
-				parsedMemberReturnType = returnType
+			if returnType, ok := parseSelectorReturnType(member.TypeString); ok {
+				rawParsedMemberReturnType = returnType
+				if !isAnyLikeType(returnType) {
+					parsedMemberReturnType = returnType
+				}
 			}
 			preferredMemberReturnType = strings.TrimSpace(preferredMemberReturnTypeText(member))
+			if selectorTypeIsBareLiteral(preferredMemberReturnType) && isAnyLikeType(rawParsedMemberReturnType) {
+				preferredMemberReturnType = rawParsedMemberReturnType
+			} else if selectorTypeIsBareLiteral(preferredMemberReturnType) && selectorMemberHasLooseReportedReturn(member.TypeString) {
+				preferredMemberReturnType = "any"
+			}
 		}
+		reportedSelectorType := resolveReportedSelectorType(preferredMemberReturnType, parsedMemberReturnType)
 		if nested, ok := sourceMembers[name]; ok {
 			if explicitReturn := sourceSelectorReturnType(sourcePropertyText(source, nested)); explicitReturn != "" {
 				selectorType = explicitReturn
@@ -2190,37 +2209,53 @@ func parseSelectorsWithSource(
 				hasExplicitSourceReturn = true
 			}
 		}
-		if hasExplicitSourceReturn && selectorFunctionTypePreservesMoreOptionalUndefined(selectorType, preferredMemberReturnType) {
-			selectorType = preferredMemberReturnType
+		if hasExplicitSourceReturn && selectorFunctionTypePreservesMoreOptionalUndefined(selectorType, reportedSelectorType) {
+			selectorType = reportedSelectorType
 		}
 		if nested, ok := sourceMembers[name]; ok {
 			if probed := sourceSelectorReturnTypeFromTypeProbe(source, file, nested, state); selectorFunctionTypePreservesMoreOptionalUndefined(selectorType, probed) {
 				selectorType = normalizeRecoveredSelectorType(source, file, probed)
 			}
 		}
-		if selectorType == "" && hasMember {
-			if preferredMemberReturnType != "" && !strings.Contains(preferredMemberReturnType, "...") && !isAnyLikeType(preferredMemberReturnType) && !selectorReturnTypeConflicts(preferredMemberReturnType, parsedMemberReturnType) {
-				selectorType = preferredMemberReturnType
-			}
+		if selectorType == "" && hasMember && reportedSelectorType != "" && !selectorTypeLooksLessInformative(reportedSelectorType) {
+			selectorType = reportedSelectorType
 		}
 		if selectorType == "" && parsedMemberReturnType != "" {
 			selectorType = parsedMemberReturnType
 		}
 		if !hasExplicitSourceReturn && selectorTypeNeedsSourceRecovery(selectorType) && source != "" {
 			if nested, ok := sourceMembers[name]; ok {
-				if inferred := sourceSelectorInferredType(logic, source, file, sourcePropertyText(source, nested), state); inferred != "" {
-					selectorType = inferred
-				}
-				if selectorTypeNeedsSourceRecovery(selectorType) {
-					if probed := sourceSelectorReturnTypeFromTypeProbe(source, file, nested, state); probed != "" {
-						selectorType = normalizeRecoveredSelectorType(source, file, probed)
+				if expression := sourcePropertyText(source, nested); expression != "" {
+					if inferred := sourceSelectorInferredType(logic, source, file, expression, state); shouldRecoverSelectorTypeFromSource(logic, source, file, selectorType, inferred, expression, state) {
+						selectorType = inferred
+					}
+					if selectorTypeNeedsSourceRecovery(selectorType) {
+						if probed := sourceSelectorReturnTypeFromTypeProbe(source, file, nested, state); probed != "" {
+							normalized := normalizeRecoveredSelectorType(source, file, probed)
+							if shouldRecoverSelectorTypeFromSource(logic, source, file, selectorType, normalized, expression, state) {
+								selectorType = normalized
+							}
+						}
 					}
 				}
 			} else if entry, ok := entryByName[name]; ok {
-				if inferred := sourceSelectorInferredType(logic, source, file, entry.Value, state); inferred != "" {
+				if inferred := sourceSelectorInferredType(logic, source, file, entry.Value, state); shouldRecoverSelectorTypeFromSource(logic, source, file, selectorType, inferred, entry.Value, state) {
 					selectorType = inferred
 				}
 			}
+		}
+		if !hasExplicitSourceReturn &&
+			hasMember &&
+			reportedSelectorType != "" &&
+			selectorRecoveredLiteralShouldYieldToReported(selectorType, reportedSelectorType) {
+			selectorType = reportedSelectorType
+		}
+		if !hasExplicitSourceReturn &&
+			hasMember &&
+			reportedSelectorType != "" &&
+			!selectorTypeLooksLessInformative(reportedSelectorType) &&
+			shouldPreferReportedSelectorType(selectorType, reportedSelectorType) {
+			selectorType = reportedSelectorType
 		}
 		if selectorType == "" && hasMember {
 			if preferredMemberReturnType != "" && !strings.Contains(preferredMemberReturnType, "...") {
@@ -2312,6 +2347,9 @@ func parseInternalSelectorTypesWithSource(
 		if !ok || len(params) == 0 {
 			continue
 		}
+		if field, ok := findParsedField(logic.Selectors, name); ok && selectorPublicTypeSuppressesInternalHelper(field.Type) {
+			continue
+		}
 		if logic.InputKind == "builders" && internalSelectorFunctionTypeIsUninformative(functionType, params) {
 			continue
 		}
@@ -2320,26 +2358,285 @@ func parseInternalSelectorTypesWithSource(
 	return helpers
 }
 
+func shouldPreferReportedSelectorType(current, reported string) bool {
+	current = normalizeInferredTypeText(strings.TrimSpace(current))
+	reported = normalizeInferredTypeText(strings.TrimSpace(reported))
+	if current == "" || reported == "" || current == reported {
+		return false
+	}
+	return selectorTypeLooksLessInformative(current) && !selectorTypeLooksLessInformative(reported)
+}
+
+func selectorRecoveredLiteralShouldYieldToReported(current, reported string) bool {
+	current = normalizeInferredTypeText(strings.TrimSpace(current))
+	reported = normalizeInferredTypeText(strings.TrimSpace(reported))
+	if current == "" || reported == "" || current == reported {
+		return false
+	}
+	if !selectorTypeIsBareLiteral(current) {
+		return false
+	}
+	if isAnyLikeType(reported) || isLooselyTypedType(reported) {
+		return true
+	}
+	switch reported {
+	case "string", "number", "boolean":
+		return true
+	default:
+		return false
+	}
+}
+
+func selectorTypeIsBareLiteral(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	return text == "null" ||
+		text == "undefined" ||
+		isQuotedString(text) ||
+		isNumericLiteralType(text) ||
+		isBooleanLiteralType(text)
+}
+
+func selectorMemberHasLooseReportedReturn(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	return strings.Contains(text, "=> any") || strings.Contains(text, "=> unknown")
+}
+
+func shouldRecoverSelectorTypeFromSource(logic ParsedLogic, source, file, current, inferred, expression string, state *buildState) bool {
+	current = normalizeInferredTypeText(strings.TrimSpace(current))
+	inferred = normalizeInferredTypeText(strings.TrimSpace(inferred))
+	if inferred == "" {
+		return false
+	}
+	if !selectorTypeNeedsSourceRecovery(current) {
+		return true
+	}
+	if !isAnyLikeType(current) && !isLooselyTypedType(current) {
+		return true
+	}
+	if recoveredSelectorTypeLooksStrong(inferred) {
+		return true
+	}
+	if !selectorSourceUsesPropsDependency(expression) {
+		return true
+	}
+	return selectorPropsDependencyTypesLookConcrete(logic, source, file, expression, state)
+}
+
+func recoveredSelectorTypeLooksStrong(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	if text == "" || isAnyLikeType(text) || isLooselyTypedType(text) || isBroadPrimitiveSelectorType(text) {
+		return false
+	}
+	if _, ok := sourceIdentifierExpression(text); ok {
+		return false
+	}
+	return strings.Contains(text, "<") ||
+		strings.Contains(text, "{") ||
+		strings.Contains(text, "|") ||
+		strings.Contains(text, "[]") ||
+		isFunctionLikeTypeText(text)
+}
+
+func selectorSourceUsesPropsDependency(expression string) bool {
+	for _, dependency := range sourceSelectorDependencyElements(expression) {
+		info, ok := parseSourceArrowInfo(dependency)
+		if !ok || len(info.ParameterNames) < 2 {
+			continue
+		}
+		propsName := strings.TrimSpace(info.ParameterNames[1])
+		if propsName == "" {
+			continue
+		}
+		body := strings.TrimSpace(info.Body)
+		if info.BlockBody {
+			body = singleReturnExpression(body)
+		}
+		body = strings.TrimSpace(body)
+		if body == "" {
+			continue
+		}
+		if body == propsName ||
+			strings.Contains(body, propsName+".") ||
+			strings.Contains(body, propsName+"?.") ||
+			strings.Contains(body, propsName+"[") {
+			return true
+		}
+	}
+	return false
+}
+
+func selectorPropsDependencyTypesLookConcrete(logic ParsedLogic, source, file, expression string, state *buildState) bool {
+	dependencyTypes := sourceSelectorDependencyTypes(logic, source, file, expression, state)
+	if len(dependencyTypes) == 0 {
+		return false
+	}
+	for _, dependencyType := range dependencyTypes {
+		typeText := normalizeInferredTypeText(strings.TrimSpace(dependencyType))
+		if typeText == "" || isAnyLikeType(typeText) || isLooselyTypedType(typeText) {
+			return false
+		}
+		if _, ok := sourceIdentifierExpression(typeText); ok {
+			return false
+		}
+		if isBroadPrimitiveSelectorType(typeText) ||
+			selectorTypeIsLiteralUnionOfKind(typeText, "string") ||
+			selectorTypeIsLiteralUnionOfKind(typeText, "number") ||
+			selectorTypeIsLiteralUnionOfKind(typeText, "boolean") {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func shouldPreferInferredSelectorType(source, file, current, inferred string) bool {
+	current = normalizeInferredTypeText(strings.TrimSpace(current))
+	inferred = normalizeInferredTypeText(strings.TrimSpace(inferred))
+	if current == "" || inferred == "" || current == inferred {
+		return false
+	}
+	if expanded := expandImportedTypeAliasText(source, file, current); expanded != "" {
+		current = normalizeInferredTypeText(expanded)
+	} else if expanded := expandLocalSourceTypeText(source, current); expanded != "" {
+		current = normalizeInferredTypeText(expanded)
+	}
+	switch inferred {
+	case "string":
+		return selectorTypeIsLiteralUnionOfKind(current, "string")
+	case "number":
+		return selectorTypeIsLiteralUnionOfKind(current, "number")
+	case "boolean":
+		return selectorTypeIsLiteralUnionOfKind(current, "boolean")
+	default:
+		return false
+	}
+}
+
+func selectorTypeIsLiteralUnionOfKind(typeText, kind string) bool {
+	parts, err := splitTopLevelUnion(typeText)
+	if err != nil || len(parts) == 0 {
+		parts = []string{typeText}
+	}
+
+	sawLiteral := false
+	for _, part := range parts {
+		part = normalizeInferredTypeText(strings.TrimSpace(part))
+		switch kind {
+		case "string":
+			if !isQuotedString(part) {
+				return false
+			}
+		case "number":
+			if !isNumericLiteralType(part) {
+				return false
+			}
+		case "boolean":
+			if !isBooleanLiteralType(part) {
+				return false
+			}
+		default:
+			return false
+		}
+		sawLiteral = true
+	}
+	return sawLiteral
+}
+
+func selectorTypeLooksLessInformative(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	if strings.HasSuffix(text, "Constructor") {
+		return false
+	}
+	if selectorTypeNeedsSourceRecovery(text) {
+		return true
+	}
+	switch text {
+	case "Array", "Map", "Promise", "ReadonlyArray", "Set":
+		return true
+	}
+	return strings.Contains(text, "...") ||
+		strings.Contains(text, "Set<any>") ||
+		strings.Contains(text, "Set<unknown>") ||
+		strings.Contains(text, "Map<any") ||
+		strings.Contains(text, "Map<unknown") ||
+		strings.Contains(text, "Promise<any>") ||
+		strings.Contains(text, "Promise<unknown>") ||
+		strings.Contains(text, "Array<any>") ||
+		strings.Contains(text, "Array<unknown>") ||
+		strings.Contains(text, "ReadonlyArray<any>") ||
+		strings.Contains(text, "ReadonlyArray<unknown>")
+}
+
+func selectorPublicTypeSuppressesInternalHelper(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	return strings.HasSuffix(text, "Constructor")
+}
+
+func resolveReportedSelectorType(preferred, parsed string) string {
+	preferred = normalizeInferredTypeText(strings.TrimSpace(preferred))
+	parsed = normalizeInferredTypeText(strings.TrimSpace(parsed))
+
+	switch {
+	case preferred == "":
+		return parsed
+	case parsed == "":
+		return preferred
+	case !selectorReturnTypeConflicts(preferred, parsed):
+		return preferred
+	case selectorTypeLooksLessInformative(preferred) && !selectorTypeLooksLessInformative(parsed):
+		return parsed
+	case selectorTypeLooksLessInformative(parsed) && !selectorTypeLooksLessInformative(preferred):
+		return preferred
+	case selectorReportedTypeShouldYieldToParsed(preferred, parsed):
+		return parsed
+	default:
+		return preferred
+	}
+}
+
+func selectorReportedTypeShouldYieldToParsed(preferred, parsed string) bool {
+	if isFunctionLikeTypeText(parsed) && !isFunctionLikeTypeText(preferred) {
+		return true
+	}
+	return isBroadPrimitiveSelectorType(preferred) && !isBroadPrimitiveSelectorType(parsed)
+}
+
+func isBroadPrimitiveSelectorType(typeText string) bool {
+	switch normalizeInferredTypeText(strings.TrimSpace(typeText)) {
+	case "string", "number", "boolean":
+		return true
+	default:
+		return false
+	}
+}
+
 func internalSelectorFunctionTypeIsUninformative(functionType string, params []parsedParameter) bool {
 	_, returnType, ok := splitFunctionType(functionType)
 	if !ok {
 		return false
 	}
-	allParamsAnyLike := true
+	allParamsOpaque := true
 	allParamsGeneric := true
 	for _, param := range params {
-		if !isAnyLikeSelectorHelperType(param.Type) {
-			allParamsAnyLike = false
+		if !isOpaqueBuilderInternalHelperParameterType(param.Type) {
+			allParamsOpaque = false
 		}
 		name, ok := sourceParameterName(param.Text)
 		if !ok || !isGenericInternalHelperParameterName(name) {
 			allParamsGeneric = false
 		}
 	}
-	if isAnyLikeSelectorHelperType(returnType) && allParamsAnyLike {
+	if isAnyLikeSelectorHelperType(returnType) && allParamsOpaque {
 		return true
 	}
-	return allParamsAnyLike && allParamsGeneric
+	return allParamsOpaque && allParamsGeneric
+}
+
+func isOpaqueBuilderInternalHelperParameterType(typeText string) bool {
+	if isAnyLikeSelectorHelperType(typeText) {
+		return true
+	}
+	return isFunctionLikeTypeText(typeText)
 }
 
 func isAnyLikeSelectorHelperType(typeText string) bool {
@@ -2902,9 +3199,12 @@ func parameterDeclarationIsOptional(text string) bool {
 }
 
 func sourceParameterTypeHintsWithDefault(source, parameters, defaultType string) map[string]string {
+	return sourceParameterTypeHintsWithDefaults(source, parameters, []string{defaultType})
+}
+
+func sourceParameterTypeHintsWithDefaults(source, parameters string, defaultTypes []string) map[string]string {
 	hints := sourceParameterTypeHints(source, parameters)
-	defaultType = normalizeSourceTypeText(strings.TrimSpace(defaultType))
-	if defaultType == "" || isAnyLikeType(defaultType) {
+	if len(defaultTypes) == 0 {
 		return hints
 	}
 
@@ -2913,10 +3213,26 @@ func sourceParameterTypeHintsWithDefault(source, parameters, defaultType string)
 		return hints
 	}
 	parts, err := splitTopLevelList(text[1 : len(text)-1])
-	if err != nil || len(parts) != 1 {
+	if err != nil || len(parts) == 0 {
 		return hints
 	}
-	parameterText := strings.TrimSpace(parts[0])
+
+	for index, part := range parts {
+		if index >= len(defaultTypes) {
+			break
+		}
+		hints = mergeDefaultSourceParameterTypeHints(hints, source, part, defaultTypes[index])
+	}
+	return hints
+}
+
+func mergeDefaultSourceParameterTypeHints(hints map[string]string, source, parameterText, defaultType string) map[string]string {
+	defaultType = normalizeSourceTypeText(strings.TrimSpace(defaultType))
+	if defaultType == "" || isAnyLikeType(defaultType) {
+		return hints
+	}
+
+	parameterText = strings.TrimSpace(parameterText)
 	if parameterText == "" {
 		return hints
 	}
@@ -3091,6 +3407,9 @@ func sourceExpressionTypeTextWithHints(source, expression string, hints map[stri
 	if objectType := sourceObjectLiteralTypeTextWithHints(source, text, hints); objectType != "" {
 		return objectType
 	}
+	if conditionalType := sourceConditionalExpressionTypeTextWithHints(source, text, hints); conditionalType != "" {
+		return conditionalType
+	}
 	if logicalType := sourceLogicalExpressionTypeTextWithHints(source, text, hints); logicalType != "" {
 		return logicalType
 	}
@@ -3125,11 +3444,26 @@ func sourceExpressionTypeTextWithContext(source, file, expression string, hints 
 	if objectType := sourceObjectLiteralTypeTextWithHints(source, text, hints); objectType != "" {
 		return objectType
 	}
+	if conditionalType := sourceConditionalExpressionTypeTextWithContext(source, file, text, hints, state); conditionalType != "" {
+		return conditionalType
+	}
 	if logicalType := sourceLogicalExpressionTypeTextWithHints(source, text, hints); logicalType != "" {
 		return logicalType
 	}
 	if memberType := sourceMemberAccessTypeTextWithHints(source, text, hints); memberType != "" {
 		return memberType
+	}
+	if asserted := sourceAssertedType(text); asserted != "" {
+		return normalizeSourceTypeText(asserted)
+	}
+	if arrayType := sourceArrayLiteralTypeText(source, text); arrayType != "" {
+		return arrayType
+	}
+	if literalType := sourceLiteralTypeText(text); literalType != "" {
+		return literalType
+	}
+	if newType := sourceNewExpressionTypeText(text); newType != "" {
+		return newType
 	}
 	if identifier, ok := sourceIdentifierExpression(text); ok {
 		if hinted := strings.TrimSpace(hints[identifier]); hinted != "" {
@@ -3356,6 +3690,28 @@ func isLikelyAPIDefaultImportPath(importPath string) bool {
 	return strings.HasSuffix(importPath, "/lib/api")
 }
 
+func sourceConditionalExpressionTypeTextWithHints(source, expression string, hints map[string]string) string {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	questionIndex, colonIndex, ok := findTopLevelConditional(text)
+	if !ok {
+		return ""
+	}
+	trueType := sourceExpressionTypeTextWithHints(source, strings.TrimSpace(text[questionIndex+1:colonIndex]), hints)
+	falseType := sourceExpressionTypeTextWithHints(source, strings.TrimSpace(text[colonIndex+1:]), hints)
+	return mergeConditionalOperandTypes(trueType, falseType)
+}
+
+func sourceConditionalExpressionTypeTextWithContext(source, file, expression string, hints map[string]string, state *buildState) string {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	questionIndex, colonIndex, ok := findTopLevelConditional(text)
+	if !ok {
+		return ""
+	}
+	trueType := sourceExpressionTypeTextWithContext(source, file, strings.TrimSpace(text[questionIndex+1:colonIndex]), hints, state)
+	falseType := sourceExpressionTypeTextWithContext(source, file, strings.TrimSpace(text[colonIndex+1:]), hints, state)
+	return mergeConditionalOperandTypes(trueType, falseType)
+}
+
 func sourceLogicalExpressionTypeTextWithHints(source, expression string, hints map[string]string) string {
 	text := strings.TrimSpace(unwrapWrappedExpression(expression))
 	if text == "" {
@@ -3388,6 +3744,9 @@ func mergeLogicalOperandTypes(left, right, operator string) string {
 
 	switch {
 	case left == "":
+		if sourceFallbackLiteralShouldDefer(right) {
+			return ""
+		}
 		return right
 	case right == "":
 		return left
@@ -3396,17 +3755,202 @@ func mergeLogicalOperandTypes(left, right, operator string) string {
 	}
 
 	if right == "string" || isQuotedString(right) {
-		if left == "string" || strings.Contains(left, "string") {
-			return "string"
+		if normalizedUnionContainsType(left, "string") {
+			return mergeNormalizedTypeUnion(left, "string")
 		}
 	}
 	if right == "number" || isNumericLiteralType(right) {
-		if left == "number" || strings.Contains(left, "number") {
-			return "number"
+		if normalizedUnionContainsType(left, "number") {
+			return mergeNormalizedTypeUnion(left, "number")
 		}
 	}
 
-	return normalizeSourceTypeText(left + " | " + right)
+	return mergeNormalizedTypeUnion(left, right)
+}
+
+func mergeConditionalOperandTypes(trueType, falseType string) string {
+	trueType = normalizeSourceTypeText(strings.TrimSpace(trueType))
+	falseType = normalizeSourceTypeText(strings.TrimSpace(falseType))
+
+	switch {
+	case trueType == "" && falseType == "":
+		return ""
+	case trueType == "":
+		if sourceFallbackLiteralShouldDefer(falseType) {
+			return ""
+		}
+		return falseType
+	case falseType == "":
+		if sourceFallbackLiteralShouldDefer(trueType) {
+			return ""
+		}
+		return trueType
+	case trueType == falseType:
+		return trueType
+	default:
+		return mergeNormalizedTypeUnion(trueType, falseType)
+	}
+}
+
+func sourceFallbackLiteralShouldDefer(typeText string) bool {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" {
+		return false
+	}
+	return text == "null" ||
+		text == "undefined" ||
+		isQuotedString(text) ||
+		isNumericLiteralType(text) ||
+		isBooleanLiteralType(text)
+}
+
+func findTopLevelConditional(text string) (int, int, bool) {
+	parenDepth := 0
+	bracketDepth := 0
+	braceDepth := 0
+	angleDepth := 0
+	questionIndex := -1
+	conditionalDepth := 0
+
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\'':
+			end, err := skipQuoted(text, i, '\'')
+			if err != nil {
+				return -1, -1, false
+			}
+			i = end
+		case '"':
+			end, err := skipQuoted(text, i, '"')
+			if err != nil {
+				return -1, -1, false
+			}
+			i = end
+		case '`':
+			end, err := skipTemplate(text, i)
+			if err != nil {
+				return -1, -1, false
+			}
+			i = end
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '{':
+			braceDepth++
+		case '}':
+			if braceDepth > 0 {
+				braceDepth--
+			}
+		case '<':
+			if shouldOpenAngle(text, i) {
+				angleDepth++
+			}
+		case '>':
+			if angleDepth > 0 {
+				angleDepth--
+			}
+		case '?':
+			if parenDepth != 0 || bracketDepth != 0 || braceDepth != 0 || angleDepth != 0 {
+				continue
+			}
+			if i+1 < len(text) && (text[i+1] == '.' || text[i+1] == '?') {
+				continue
+			}
+			if questionIndex == -1 {
+				questionIndex = i
+			}
+			conditionalDepth++
+		case ':':
+			if parenDepth != 0 || bracketDepth != 0 || braceDepth != 0 || angleDepth != 0 || questionIndex == -1 {
+				continue
+			}
+			conditionalDepth--
+			if conditionalDepth == 0 {
+				return questionIndex, i, true
+			}
+		}
+	}
+
+	return -1, -1, false
+}
+
+func normalizedUnionContainsType(typeText, target string) bool {
+	parts, err := splitTopLevelUnion(typeText)
+	if err != nil || len(parts) == 0 {
+		return normalizeSourceTypeText(strings.TrimSpace(typeText)) == target
+	}
+	for _, part := range parts {
+		if normalizeSourceTypeText(strings.TrimSpace(part)) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeNormalizedTypeUnion(left, right string) string {
+	parts := make([]string, 0, 4)
+	seen := map[string]bool{}
+	appendParts := func(text string) {
+		unionParts, err := splitTopLevelUnion(text)
+		if err != nil || len(unionParts) == 0 {
+			unionParts = []string{text}
+		}
+		for _, part := range unionParts {
+			part = normalizeSourceTypeText(strings.TrimSpace(part))
+			if part == "" || seen[part] {
+				continue
+			}
+			seen[part] = true
+			parts = append(parts, part)
+		}
+	}
+
+	appendParts(left)
+	appendParts(right)
+	if len(parts) == 0 {
+		return ""
+	}
+
+	hasString := false
+	hasNumber := false
+	hasBoolean := false
+	for _, part := range parts {
+		switch part {
+		case "string":
+			hasString = true
+		case "number":
+			hasNumber = true
+		case "boolean":
+			hasBoolean = true
+		}
+	}
+
+	filtered := make([]string, 0, len(parts))
+	for _, part := range parts {
+		switch {
+		case hasString && isQuotedString(part):
+			continue
+		case hasNumber && isNumericLiteralType(part):
+			continue
+		case hasBoolean && isBooleanLiteralType(part):
+			continue
+		default:
+			filtered = append(filtered, part)
+		}
+	}
+	if len(filtered) == 0 {
+		filtered = parts
+	}
+	return normalizeSourceTypeText(strings.Join(filtered, " | "))
 }
 
 func sourceMemberAccessTypeTextWithHints(source, expression string, hints map[string]string) string {
@@ -3713,7 +4257,7 @@ func parseSourceArrowSignature(expression string) (string, string, bool) {
 		return "", "", false
 	}
 	if head[0] != '(' {
-		return normalizeSourceTypeTextWithOptions("(" + head + ")", false), "", true
+		return normalizeSourceTypeTextWithOptions("("+head+")", false), "", true
 	}
 	end, err := findMatching(head, 0, '(', ')')
 	if err != nil {
@@ -4078,7 +4622,8 @@ func sourceSelectorDependencyTypesFromElement(logic ParsedLogic, source, file, e
 		if info.BlockBody {
 			body = singleReturnExpression(body)
 		}
-		if dependencyTypes := sourceDependencyTypesFromReturnedArray(logic, source, file, body, state); len(dependencyTypes) > 0 {
+		hints := sourceSelectorInputParameterHints(logic, source, info.Parameters)
+		if dependencyTypes := sourceDependencyTypesFromReturnedArray(logic, source, file, body, hints, state); len(dependencyTypes) > 0 {
 			return dependencyTypes
 		}
 		if dependencyType := resolveSelectorDependencyType(logic, source, file, body, state); dependencyType != "" {
@@ -4087,12 +4632,12 @@ func sourceSelectorDependencyTypesFromElement(logic ParsedLogic, source, file, e
 		if returnType := sourceArrowReturnTypeText(source, body); returnType != "" {
 			return []string{returnType}
 		}
-		if returnType := sourceExpressionTypeText(source, body); returnType != "" {
+		if returnType := sourceExpressionTypeTextWithContext(source, file, body, hints, state); returnType != "" {
 			return []string{normalizeInferredTypeText(returnType)}
 		}
 	}
 
-	if dependencyTypes := sourceDependencyTypesFromReturnedArray(logic, source, file, expression, state); len(dependencyTypes) > 0 {
+	if dependencyTypes := sourceDependencyTypesFromReturnedArray(logic, source, file, expression, nil, state); len(dependencyTypes) > 0 {
 		return dependencyTypes
 	}
 	if dependencyType := resolveSelectorDependencyType(logic, source, file, expression, state); dependencyType != "" {
@@ -4104,7 +4649,32 @@ func sourceSelectorDependencyTypesFromElement(logic ParsedLogic, source, file, e
 	return nil
 }
 
-func sourceDependencyTypesFromReturnedArray(logic ParsedLogic, source, file, expression string, state *buildState) []string {
+func sourceSelectorInputParameterHints(logic ParsedLogic, source, parameters string) map[string]string {
+	defaults := []string{selectorInputStateType(logic), logic.PropsType}
+	return sourceParameterTypeHintsWithDefaults(source, parameters, defaults)
+}
+
+func selectorInputStateType(logic ParsedLogic) string {
+	fields := mergeParsedFields(logic.Reducers, logic.Selectors...)
+	if len(fields) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		fieldType := normalizeSourceTypeText(strings.TrimSpace(field.Type))
+		if field.Name == "" || fieldType == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", field.Name, fieldType))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "{ " + strings.Join(parts, "; ") + "; }"
+}
+
+func sourceDependencyTypesFromReturnedArray(logic ParsedLogic, source, file, expression string, hints map[string]string, state *buildState) []string {
 	arrayStart, arrayEnd, ok, err := FindInspectableArrayLiteral(expression, 0, len(expression))
 	if err != nil || !ok {
 		return nil
@@ -4128,7 +4698,7 @@ func sourceDependencyTypesFromReturnedArray(logic ParsedLogic, source, file, exp
 			dependencyTypes = append(dependencyTypes, returnType)
 			continue
 		}
-		if returnType := sourceExpressionTypeText(source, part); returnType != "" {
+		if returnType := sourceExpressionTypeTextWithContext(source, file, part, hints, state); returnType != "" {
 			dependencyTypes = append(dependencyTypes, normalizeInferredTypeText(returnType))
 		}
 	}
@@ -4684,6 +5254,9 @@ func normalizeTypeLiteralBody(text string) (string, bool) {
 		if entry == "" {
 			continue
 		}
+		if typeLiteralEntryLooksLikeBindingPattern(entry) {
+			return "", false
+		}
 		if name, value, ok := splitTopLevelTypeMember(entry); ok {
 			parts = append(parts, strings.TrimSpace(name)+": "+normalizeSourceTypeText(value))
 			continue
@@ -4694,6 +5267,26 @@ func normalizeTypeLiteralBody(text string) (string, bool) {
 		return "", true
 	}
 	return strings.Join(parts, "; ") + ";", true
+}
+
+func typeLiteralEntryLooksLikeBindingPattern(entry string) bool {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return false
+	}
+	if _, _, ok := splitTopLevelTypeMember(entry); ok {
+		return false
+	}
+	if _, ok := sourceIdentifierExpression(entry); ok {
+		return true
+	}
+	if strings.Contains(entry, "=>") || strings.Contains(entry, "(") {
+		return false
+	}
+	if strings.HasPrefix(entry, "{") || strings.HasPrefix(entry, "[") || strings.HasPrefix(entry, "...") {
+		return true
+	}
+	return strings.Contains(entry, ",") || findTopLevelDelimiter(entry, '=') != -1
 }
 
 func splitTopLevelTypeMember(entry string) (string, string, bool) {
@@ -6961,6 +7554,8 @@ func selectorTypeNeedsSourceRecovery(typeText string) bool {
 	case text == "{}" || text == "{ }":
 		return true
 	case strings.HasPrefix(text, "typeof "):
+		return true
+	case strings.HasSuffix(text, "Constructor"):
 		return true
 	default:
 		return false

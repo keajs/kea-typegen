@@ -314,6 +314,54 @@ function canonicalStringLiteral(text) {
     return JSON.stringify(text)
 }
 
+function normalizeImportModulePath(sourceFile, moduleSpecifier) {
+    if (!moduleSpecifier) {
+        return ''
+    }
+    if (moduleSpecifier.startsWith('.')) {
+        return path.resolve(path.dirname(sourceFile.fileName), moduleSpecifier).replace(/\\/g, '/')
+    }
+    return moduleSpecifier
+}
+
+function importedNameMatchesImportType(sourceFile, localName, importPath) {
+    if (!localName || !importPath) {
+        return false
+    }
+
+    for (const statement of sourceFile.statements) {
+        if (!ts.isImportDeclaration(statement) || !statement.importClause || !statement.moduleSpecifier) {
+            continue
+        }
+
+        const normalizedModule = normalizeImportModulePath(sourceFile, statement.moduleSpecifier.text)
+        if (normalizedModule !== importPath) {
+            continue
+        }
+
+        const clause = statement.importClause
+        if (clause.name && clause.name.text === localName) {
+            return true
+        }
+        if (!clause.namedBindings) {
+            continue
+        }
+        if (ts.isNamespaceImport(clause.namedBindings)) {
+            if (clause.namedBindings.name.text === localName) {
+                return true
+            }
+            continue
+        }
+        for (const element of clause.namedBindings.elements) {
+            if (element.name.text === localName) {
+                return true
+            }
+        }
+    }
+
+    return false
+}
+
 function needsParensForArray(elementType) {
     return (
         ts.isUnionTypeNode(elementType) ||
@@ -393,6 +441,17 @@ function canonicalType(node, sourceFile) {
             : ts.isStringLiteralLike(node.argument)
               ? canonicalStringLiteral(node.argument.text)
               : printNode(sourceFile, node.argument)
+        if (
+            ts.isLiteralTypeNode(node.argument) &&
+            ts.isStringLiteralLike(node.argument.literal) &&
+            node.qualifier &&
+            ts.isIdentifier(node.qualifier)
+        ) {
+            const normalizedImportPath = normalizeImportModulePath(sourceFile, node.argument.literal.text)
+            if (importedNameMatchesImportType(sourceFile, node.qualifier.text, normalizedImportPath)) {
+                return `${node.qualifier.text}${canonicalTypeArguments(node.typeArguments, sourceFile)}`
+            }
+        }
         return `import(${argument})${qualifier}${canonicalTypeArguments(node.typeArguments, sourceFile)}`
     }
     if (ts.isIndexedAccessTypeNode(node)) {
@@ -568,7 +627,7 @@ function compareOutputs(tsDir, goDir) {
             summary.exactMatches += 1
         }
 
-        if (normalizeGeneratedFile(tsText, file) === normalizeGeneratedFile(goText, file)) {
+        if (normalizeGeneratedFile(tsText, tsPath) === normalizeGeneratedFile(goText, goPath)) {
             summary.semanticMatches += 1
         } else {
             summary.semanticDiffs.push(file)

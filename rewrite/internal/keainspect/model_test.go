@@ -1313,10 +1313,10 @@ func TestBuildParsedLogicsPreservesOptionalUndefinedInSelectorFunctionReturnType
 						Name: "selectors",
 						Members: []MemberReport{
 							{
-								Name:                "hasAvailableFeature",
-								TypeString:          "(((s: any) => AvailableFeature[]) | ((availableFeatures: AvailableFeature[]) => any))[]",
+								Name:                  "hasAvailableFeature",
+								TypeString:            "(((s: any) => AvailableFeature[]) | ((availableFeatures: AvailableFeature[]) => any))[]",
 								PrintedReturnTypeNode: "(feature: AvailableFeature, currentUsage?: number | undefined) => boolean",
-								ReturnTypeString:    "(feature: AvailableFeature, currentUsage?: number | undefined) => boolean",
+								ReturnTypeString:      "(feature: AvailableFeature, currentUsage?: number | undefined) => boolean",
 							},
 						},
 					},
@@ -1869,6 +1869,376 @@ func TestBuildParsedLogicsKeepsReportedAnyForUntypedBuilderKeyCallbacks(t *testi
 	}
 	if logic.KeyType != "any" {
 		t.Fatalf("expected key type %q, got %q", "any", logic.KeyType)
+	}
+}
+
+func TestMergeLogicalOperandTypesKeepsNonStringUnionMembers(t *testing.T) {
+	got := mergeLogicalOperandTypes("string | number | null", "'new'", "||")
+	if got != "string | number" {
+		t.Fatalf("expected merged logical type %q, got %q", "string | number", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextSkipsBareLiteralLogicalFallbackWhenLeftIsUnknown(t *testing.T) {
+	got := sourceExpressionTypeTextWithContext(
+		"type ProjectType = { id: number }",
+		"",
+		"currentProject?.id || null",
+		map[string]string{"currentProject": "ProjectType | null"},
+		nil,
+	)
+	if got != "" {
+		t.Fatalf("expected unresolved logical fallback to defer, got %q", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextMergesConditionalLiteralBranches(t *testing.T) {
+	got := sourceExpressionTypeTextWithContext("", "", "someCondition ? 'project' : null", nil, nil)
+	if got != "'project' | null" {
+		t.Fatalf("expected conditional branches to merge, got %q", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextSkipsBareLiteralConditionalFallbackWhenOtherBranchIsUnknown(t *testing.T) {
+	got := sourceExpressionTypeTextWithContext(
+		"",
+		"",
+		"querySource ? getBreakdown(querySource) : null",
+		nil,
+		nil,
+	)
+	if got != "" {
+		t.Fatalf("expected unresolved conditional fallback to defer, got %q", got)
+	}
+}
+
+func TestParseSourceArrowSignaturePreservesDestructuredParameterPattern(t *testing.T) {
+	parameters, returnType, ok := parseSourceArrowSignature(
+		"({ search }: { search?: string }) => ({ search })",
+	)
+	if !ok {
+		t.Fatalf("expected parseSourceArrowSignature to parse arrow function")
+	}
+	if parameters != "({ search }: { search?: string; })" {
+		t.Fatalf("expected destructured parameters to stay comma-safe, got %q", parameters)
+	}
+	if returnType != "" {
+		t.Fatalf("expected no explicit return type, got %q", returnType)
+	}
+}
+
+func TestParseSourceArrowInfoPreservesDestructuredParameterPattern(t *testing.T) {
+	info, ok := parseSourceArrowInfo(
+		"({ source, config }: { source: ExternalDataSource; config: Partial<ExternalDataSourceRevenueAnalyticsConfig> }) => null",
+	)
+	if !ok {
+		t.Fatalf("expected parseSourceArrowInfo to parse arrow function")
+	}
+	if info.Parameters != "({ source, config }: { source: ExternalDataSource; config: Partial<ExternalDataSourceRevenueAnalyticsConfig>; })" {
+		t.Fatalf("expected destructured parameters to stay comma-safe, got %q", info.Parameters)
+	}
+}
+
+func TestBuildParsedLogicsPrefersReportedSelectorConstructorAndSkipsOpaqueHelper(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type FeatureFlagsResult = { results: { key: string }[] }",
+		"type ExperimentsResult = { results: { feature_flag_key: string }[] }",
+		"",
+		"export const variantsPanelLogic = kea({",
+		"    defaults: {",
+		"        featureFlags: {} as FeatureFlagsResult,",
+		"        experiments: {} as ExperimentsResult,",
+		"    },",
+		"    selectors: {",
+		"        unavailableFeatureFlagKeys: [",
+		"            (s) => [s.featureFlags, s.experiments],",
+		"            (featureFlags, experiments) => {",
+		"                return new Set([",
+		"                    ...featureFlags.results.map((flag) => flag.key),",
+		"                    ...experiments.results.map((experiment) => experiment.feature_flag_key),",
+		"                ])",
+		"            },",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/variantsPanelLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "variantsPanelLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "defaults",
+						Members: []MemberReport{
+							{Name: "featureFlags", TypeString: "FeatureFlagsResult"},
+							{Name: "experiments", TypeString: "ExperimentsResult"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "unavailableFeatureFlagKeys",
+								TypeString:       "[(s: Record<string, Selector>) => [Selector, Selector], (featureFlags: any, experiments: any) => Set<any>]",
+								ReturnTypeString: "SetConstructor",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	selector, ok := findParsedField(logic.Selectors, "unavailableFeatureFlagKeys")
+	if !ok {
+		t.Fatalf("expected unavailableFeatureFlagKeys selector, got %+v", logic.Selectors)
+	}
+	if selector.Type != "SetConstructor" {
+		t.Fatalf("expected selector type %q, got %q", "SetConstructor", selector.Type)
+	}
+	if _, ok := findParsedFunction(logic.InternalSelectorTypes, "unavailableFeatureFlagKeys"); ok {
+		t.Fatalf("expected opaque selector helper to be skipped, got %+v", logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsKeepsExplicitGenericNewMapSelectorType(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type GroupTypeIndex = number",
+		"type GroupType = { group_type_index: GroupTypeIndex; name: string }",
+		"",
+		"export const groupsModel = kea({",
+		"    defaults: {",
+		"        groupTypesRaw: [] as GroupType[],",
+		"    },",
+		"    selectors: {",
+		"        groupTypes: [",
+		"            (s) => [s.groupTypesRaw],",
+		"            (groupTypesRaw) =>",
+		"                new Map<GroupTypeIndex, GroupType>(",
+		"                    (groupTypesRaw ?? []).map((groupType) => [groupType.group_type_index, groupType])",
+		"                ),",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/groupsModel.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "groupsModel",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "defaults",
+						Members: []MemberReport{
+							{Name: "groupTypesRaw", TypeString: "GroupType[]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "groupTypes",
+								TypeString:       "[(s: Record<string, Selector>) => GroupType[], (groupTypesRaw: any) => MapConstructor]",
+								ReturnTypeString: "MapConstructor",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	selector, ok := findParsedField(logic.Selectors, "groupTypes")
+	if !ok {
+		t.Fatalf("expected groupTypes selector, got %+v", logic.Selectors)
+	}
+	if selector.Type != "Map<GroupTypeIndex, GroupType>" {
+		t.Fatalf("expected selector type %q, got %q", "Map<GroupTypeIndex, GroupType>", selector.Type)
+	}
+}
+
+func TestBuildParsedLogicsLetsReportedAnyWinOverBareLiteralSourceRecovery(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type ProjectType = { id: number }",
+		"",
+		"export const projectLogic = kea({",
+		"    defaults: {",
+		"        currentProject: null as ProjectType | null,",
+		"    },",
+		"    selectors: {",
+		"        currentProjectId: [",
+		"            (s) => [s.currentProject],",
+		"            (currentProject) => currentProject?.id || null,",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/projectLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "projectLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "defaults",
+						Members: []MemberReport{
+							{Name: "currentProject", TypeString: "ProjectType | null"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "currentProjectId",
+								TypeString:       "[(s: Record<string, Selector>) => ProjectType | null, (currentProject: any) => any]",
+								ReturnTypeString: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	selector, ok := findParsedField(logic.Selectors, "currentProjectId")
+	if !ok {
+		t.Fatalf("expected currentProjectId selector, got %+v", logic.Selectors)
+	}
+	if selector.Type != "any" {
+		t.Fatalf("expected selector type %q, got %q", "any", selector.Type)
+	}
+}
+
+func TestBuildParsedLogicsKeepsReportedAnyForPropsBackedIdentityAndStringMethodSelectors(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte("export type APIScopeObject = 'project' | 'feature_flag'\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("failed writing imported type fixture: %v", err)
+	}
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"import type { APIScopeObject } from './types'",
+		"type AccessControlLogicProps = { resource: APIScopeObject }",
+		"",
+		"export const accessControlLogic = kea({",
+		"    props: {} as AccessControlLogicProps,",
+		"    selectors: {",
+		"        resource: [",
+		"            (_, p) => [p.resource],",
+		"            (resource) => resource,",
+		"        ],",
+		"        humanReadableResource: [",
+		"            (_, p) => [p.resource],",
+		"            (resource) => resource.replace(/_/g, ' '),",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       filepath.Join(tempDir, "accessControlLogic.ts"),
+		Logics: []LogicReport{
+			{
+				Name:      "accessControlLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "any",
+						PrintedTypeNode:     "any",
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "resource",
+								TypeString:       "[(s: Record<string, Selector>) => any, (resource: any) => any]",
+								ReturnTypeString: "any",
+							},
+							{
+								Name:             "humanReadableResource",
+								TypeString:       "[(s: Record<string, Selector>) => any, (resource: any) => any]",
+								ReturnTypeString: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	resource, ok := findParsedField(logic.Selectors, "resource")
+	if !ok {
+		t.Fatalf("expected resource selector, got %+v", logic.Selectors)
+	}
+	if resource.Type != "any" {
+		t.Fatalf("expected selector type %q, got %q", "any", resource.Type)
+	}
+
+	selector, ok := findParsedField(logic.Selectors, "humanReadableResource")
+	if !ok {
+		t.Fatalf("expected humanReadableResource selector, got %+v", logic.Selectors)
+	}
+	if selector.Type != "any" {
+		t.Fatalf("expected selector type %q, got %q", "any", selector.Type)
 	}
 }
 
@@ -4015,6 +4385,50 @@ func TestBuildParsedLogicsPrefersSymbolBackedConnectedValueTypes(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestBuildParsedLogicsPosthogBuilderPropsKeySampleRecoversKeyAndHelpers(t *testing.T) {
+	report := inspectSampleReport(t, "posthogBuilderPropsKeyLogic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if logic.KeyType != "string" {
+		t.Fatalf("expected key type %q, got %q", "string", logic.KeyType)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "endpoint"); !ok || !strings.Contains(helper.FunctionType, "resource:") || !strings.Contains(helper.FunctionType, "resourceId: string") || !strings.Contains(helper.FunctionType, "'project' | 'feature_flag'") && !strings.Contains(helper.FunctionType, "'feature_flag' | 'project'") {
+		t.Fatalf("expected endpoint helper to recover builder props types, got %+v", logic.InternalSelectorTypes)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "humanReadableResource"); !ok || !strings.Contains(helper.FunctionType, "resource:") || !strings.Contains(helper.FunctionType, "'project' | 'feature_flag'") && !strings.Contains(helper.FunctionType, "'feature_flag' | 'project'") {
+		t.Fatalf("expected humanReadableResource helper to recover builder props type, got %+v", logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsPosthogMapConnectSampleRecoversConnectedSelectorHelper(t *testing.T) {
+	report := inspectSampleReport(t, "posthogMapConnectLogic.ts")
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	helper, ok := findParsedFunction(logic.InternalSelectorTypes, "groupNames")
+	if !ok {
+		t.Fatalf("expected groupNames helper, got %+v", logic.InternalSelectorTypes)
+	}
+	if !strings.Contains(helper.FunctionType, "Map<") || !strings.Contains(helper.FunctionType, "GroupType") || !strings.HasSuffix(helper.FunctionType, ") => string[]") {
+		t.Fatalf("expected groupNames helper to preserve connected Map type, got %q", helper.FunctionType)
 	}
 }
 

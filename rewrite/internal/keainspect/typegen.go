@@ -90,6 +90,16 @@ type runSummary struct {
 	FilesToModify int
 }
 
+type typegenTransition struct {
+	Existing string
+	Next     string
+}
+
+type typegenStabilityTracker struct {
+	transitions  map[string]typegenTransition
+	stableBodies map[string]string
+}
+
 type parsedFile struct {
 	File         string
 	Source       string
@@ -142,6 +152,87 @@ type textEdit struct {
 	Start       int
 	End         int
 	Replacement string
+}
+
+func newTypegenStabilityTracker() *typegenStabilityTracker {
+	return &typegenStabilityTracker{
+		transitions:  map[string]typegenTransition{},
+		stableBodies: map[string]string{},
+	}
+}
+
+func (t *typegenStabilityTracker) preferredBody(fileName, existing, next string) (string, bool) {
+	if t == nil {
+		return "", false
+	}
+
+	existingBody := stripFirstLine(existing)
+	nextBody := stripFirstLine(next)
+	if existingBody == nextBody {
+		return existingBody, true
+	}
+
+	if stable, ok := t.stableBodies[fileName]; ok {
+		switch {
+		case existingBody == stable:
+			if nextBody != stable {
+				return existingBody, true
+			}
+		case nextBody == stable:
+			return nextBody, true
+		default:
+			delete(t.stableBodies, fileName)
+		}
+	}
+
+	if transition, ok := t.transitions[fileName]; ok && transition.Existing == nextBody && transition.Next == existingBody {
+		chosen := preferMoreInformativeTypegenBody(existingBody, nextBody)
+		t.stableBodies[fileName] = chosen
+		return chosen, true
+	}
+
+	t.transitions[fileName] = typegenTransition{Existing: existingBody, Next: nextBody}
+	return nextBody, false
+}
+
+func preferMoreInformativeTypegenBody(existing, next string) string {
+	if typegenInformationScore(next) > typegenInformationScore(existing) {
+		return next
+	}
+	return existing
+}
+
+func typegenInformationScore(body string) int {
+	text := body
+	score := 0
+	score -= countStandaloneTokenOccurrences(text, "any") * 4
+	score -= countStandaloneTokenOccurrences(text, "unknown") * 4
+	score -= strings.Count(text, "__keaTypeGenInternalSelectorTypes") * 3
+	score += countStandaloneTokenOccurrences(text, "true")
+	score += countStandaloneTokenOccurrences(text, "false")
+	score += strings.Count(text, " | ")
+	return score
+}
+
+func countStandaloneTokenOccurrences(text, token string) int {
+	if text == "" || token == "" || len(token) > len(text) {
+		return 0
+	}
+	count := 0
+	for index := 0; index+len(token) <= len(text); index++ {
+		if text[index:index+len(token)] != token {
+			continue
+		}
+		if index > 0 && isIdentifierPart(text[index-1]) {
+			continue
+		}
+		if index+len(token) < len(text) && isIdentifierPart(text[index+len(token)]) {
+			continue
+		}
+		count++
+		index += len(token) - 1
+	}
+	return count
 }
 
 func ResolveAppOptions(options AppOptions, setFlags map[string]bool, cwd string) (AppOptions, error) {
@@ -365,7 +456,7 @@ func RunTypegen(ctx context.Context, options AppOptions) error {
 
 func runTypegenRounds(ctx context.Context, options AppOptions) (runSummary, error) {
 	if !options.Write {
-		return processProjectOnce(ctx, options)
+		return processProjectOnce(ctx, options, nil)
 	}
 
 	candidateFiles, err := candidateSourceFiles(options)
@@ -379,8 +470,9 @@ func runTypegenRounds(ctx context.Context, options AppOptions) (runSummary, erro
 	}
 
 	var summary runSummary
+	tracker := newTypegenStabilityTracker()
 	for round := 1; ; round++ {
-		summary, err = processProjectOnce(ctx, options)
+		summary, err = processProjectOnce(ctx, options, tracker)
 		if err != nil {
 			return summary, err
 		}
@@ -394,7 +486,7 @@ func runTypegenRounds(ctx context.Context, options AppOptions) (runSummary, erro
 	}
 }
 
-func processProjectOnce(ctx context.Context, options AppOptions) (runSummary, error) {
+func processProjectOnce(ctx context.Context, options AppOptions, tracker *typegenStabilityTracker) (runSummary, error) {
 	_ = ctx
 
 	state := &buildState{
@@ -426,7 +518,7 @@ func processProjectOnce(ctx context.Context, options AppOptions) (runSummary, er
 		}
 	}
 
-	return writeTypegenFiles(files, state.compilerTypes(), state, options)
+	return writeTypegenFiles(files, state.compilerTypes(), state, options, tracker)
 }
 
 func collectParsedFiles(options AppOptions, state *buildState) ([]parsedFile, error) {
@@ -470,7 +562,7 @@ func collectParsedFiles(options AppOptions, state *buildState) ([]parsedFile, er
 	return parsedFiles, nil
 }
 
-func writeTypegenFiles(files []parsedFile, compilerTypes []string, state *buildState, options AppOptions) (runSummary, error) {
+func writeTypegenFiles(files []parsedFile, compilerTypes []string, state *buildState, options AppOptions, tracker *typegenStabilityTracker) (runSummary, error) {
 	ignoredPrefixes := ignoredImportPrefixes(options, compilerTypes)
 	summary := runSummary{}
 	generatedAt := time.Now().UTC()
@@ -490,20 +582,27 @@ func writeTypegenFiles(files []parsedFile, compilerTypes []string, state *buildS
 		})
 
 		existing, _ := os.ReadFile(file.TypeFile)
-		if len(existing) == 0 || !sameTypegenBody(string(existing), output) {
-			summary.FilesToWrite++
-			if options.Write {
-				if err := os.MkdirAll(filepath.Dir(file.TypeFile), 0o755); err != nil {
-					return summary, err
+		existingText := string(existing)
+		if len(existing) == 0 || !sameTypegenBody(existingText, output) {
+			if preferredBody, handled := tracker.preferredBody(file.TypeFile, existingText, output); handled && preferredBody == stripFirstLine(existingText) {
+				if options.Verbose {
+					options.Log(fmt.Sprintf("↩️ Keeping stable output: %s", relativeToWorkingDir(options, file.TypeFile)))
 				}
-				if err := os.WriteFile(file.TypeFile, []byte(output), 0o644); err != nil {
-					return summary, err
-				}
-				cacheWrittenFile(file.TypeFile, options)
-				summary.WrittenFiles++
-				options.Log(fmt.Sprintf("🔥 Writing: %s", relativeToWorkingDir(options, file.TypeFile)))
 			} else {
-				options.Log(fmt.Sprintf("❌ Will not write: %s", relativeToWorkingDir(options, file.TypeFile)))
+				summary.FilesToWrite++
+				if options.Write {
+					if err := os.MkdirAll(filepath.Dir(file.TypeFile), 0o755); err != nil {
+						return summary, err
+					}
+					if err := os.WriteFile(file.TypeFile, []byte(output), 0o644); err != nil {
+						return summary, err
+					}
+					cacheWrittenFile(file.TypeFile, options)
+					summary.WrittenFiles++
+					options.Log(fmt.Sprintf("🔥 Writing: %s", relativeToWorkingDir(options, file.TypeFile)))
+				} else {
+					options.Log(fmt.Sprintf("❌ Will not write: %s", relativeToWorkingDir(options, file.TypeFile)))
+				}
 			}
 		} else if options.Verbose {
 			options.Log(fmt.Sprintf("🤷 Unchanged: %s", relativeToWorkingDir(options, file.TypeFile)))
