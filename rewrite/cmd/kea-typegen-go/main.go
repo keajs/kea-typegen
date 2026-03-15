@@ -44,6 +44,13 @@ func main() {
 		return
 	}
 
+	if len(os.Args) > 1 && isAuxCommand(os.Args[1]) {
+		if err := runAuxCommand(ctx, os.Args[1], os.Args[2:]); err != nil {
+			fail(err)
+		}
+		return
+	}
+
 	if len(os.Args) > 1 && isTypegenCommand(os.Args[1]) {
 		if err := runTypegenCommand(ctx, os.Args[1], os.Args[2:]); err != nil {
 			fail(err)
@@ -74,6 +81,15 @@ func isTypegenCommand(argument string) bool {
 	}
 }
 
+func isAuxCommand(argument string) bool {
+	switch argument {
+	case "probe-api":
+		return true
+	default:
+		return false
+	}
+}
+
 func printTypegenUsage(output io.Writer) {
 	lines := []string{
 		"kea-typegen-go <command>",
@@ -82,6 +98,7 @@ func printTypegenUsage(output io.Writer) {
 		"  kea-typegen-go check  - check what should be done",
 		"  kea-typegen-go write  - write logicType.ts files",
 		"  kea-typegen-go watch  - watch for changes and write logicType.ts files",
+		"  kea-typegen-go probe-api - probe hidden tsgo API methods",
 		"",
 		"Options:",
 		"  -c, --config               Path to tsconfig.json (otherwise auto-detected)",
@@ -106,6 +123,15 @@ func printTypegenUsage(output io.Writer) {
 	}
 	for _, line := range lines {
 		fmt.Fprintln(output, line)
+	}
+}
+
+func runAuxCommand(ctx context.Context, command string, args []string) error {
+	switch command {
+	case "probe-api":
+		return runProbeAPICommand(ctx, args)
+	default:
+		return fmt.Errorf("unknown command %q", command)
 	}
 }
 

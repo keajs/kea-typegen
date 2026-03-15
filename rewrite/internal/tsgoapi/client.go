@@ -389,6 +389,14 @@ func (c *Client) GetReturnTypeOfSignature(ctx context.Context, snapshot, project
 	return response, nil
 }
 
+func (c *Client) CallRaw(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	var response json.RawMessage
+	if err := c.call(ctx, method, params, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func PickProject(projects []ProjectResponse, configFile string) *ProjectResponse {
 	for _, project := range projects {
 		if project.ConfigFileName == configFile {

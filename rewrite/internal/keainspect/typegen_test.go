@@ -12,6 +12,24 @@ import (
 	"kea-typegen/rewrite/internal/tsgoapi"
 )
 
+func normalizeTypegenAssertionText(text string) string {
+	normalized := strings.ReplaceAll(text, `"`, `'`)
+	normalized = strings.ReplaceAll(normalized, ";", "")
+	normalized = strings.Join(strings.Fields(normalized), "")
+	for _, replacement := range [][2]string{
+		{",}", "}"},
+		{",)", ")"},
+		{",]", "]"},
+	} {
+		normalized = strings.ReplaceAll(normalized, replacement[0], replacement[1])
+	}
+	return normalized
+}
+
+func typegenAssertionContains(text, expected string) bool {
+	return strings.Contains(normalizeTypegenAssertionText(text), normalizeTypegenAssertionText(expected))
+}
+
 func TestResolveAppOptionsIncludesKeaConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	rootPath := filepath.Join(tempDir, "frontend", "src")
@@ -246,7 +264,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"__keaTypeGenInternalSelectorTypes: {",
 		"sbla: (arg: S6) => Partial<Record<string, S7>>",
 	} {
-		if !strings.Contains(autoImportTypegen, expected) {
+		if !typegenAssertionContains(autoImportTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, autoImportTypegen)
 		}
 	}
@@ -266,7 +284,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"__keaTypeGenInternalReducerActions: {",
 		"'set username (githubLogic)': (username: string) => {",
 	} {
-		if !strings.Contains(logicTypegen, expected) {
+		if !typegenAssertionContains(logicTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, logicTypegen)
 		}
 	}
@@ -289,14 +307,14 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"initialValuesForForm: (selectedAction: ActionType) => ActionForm",
 		"selectedEditedAction: (selectedAction: ActionType, initialValuesForForm: ActionForm, form: FormInstance, editingFields: AntdFieldData[], inspectingElement: number, counter: number) => ActionForm",
 	} {
-		if !strings.Contains(complexTypegen, expected) {
+		if !typegenAssertionContains(complexTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, complexTypegen)
 		}
 	}
-	if strings.Contains(complexTypegen, "selectedActionId: string") {
+	if typegenAssertionContains(complexTypegen, "selectedActionId: string") {
 		t.Fatalf("expected reduced write round output to avoid widened selectedActionId: string:\n%s", complexTypegen)
 	}
-	if strings.Contains(complexTypegen, "... 24 more ...") {
+	if typegenAssertionContains(complexTypegen, "... 24 more ...") {
 		t.Fatalf("expected reduced write round output to keep complex selector object types fully expanded:\n%s", complexTypegen)
 	}
 
@@ -305,7 +323,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"loadItSuccess: (misc: { id: number; name: void; pinned: boolean; }, payload?: any) => void",
 		"payload: { misc: { id: number; name: void; pinned: boolean; }; payload?: any }",
 	} {
-		if !strings.Contains(loadersTypegen, expected) {
+		if !typegenAssertionContains(loadersTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, loadersTypegen)
 		}
 	}
@@ -317,11 +335,11 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"hashParams: Record<string, any>",
 		"searchParams: Record<string, any>",
 	} {
-		if !strings.Contains(routerConnectTypegen, expected) {
+		if !typegenAssertionContains(routerConnectTypegen, expected) {
 			t.Fatalf("expected clean write output to contain %q:\n%s", expected, routerConnectTypegen)
 		}
 	}
-	if strings.Contains(routerConnectTypegen, "[x: string]: any") {
+	if typegenAssertionContains(routerConnectTypegen, "[x: string]: any") {
 		t.Fatalf("expected clean write output to avoid generic router payload fallback:\n%s", routerConnectTypegen)
 	}
 
@@ -331,7 +349,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"'set repositories (githubLogic)': (repositories: Repository[]) => {",
 		"repositories: Repository[]",
 	} {
-		if !strings.Contains(githubNamespaceConnectTypegen, expected) {
+		if !typegenAssertionContains(githubNamespaceConnectTypegen, expected) {
 			t.Fatalf("expected clean write output to contain %q:\n%s", expected, githubNamespaceConnectTypegen)
 		}
 	}
@@ -344,7 +362,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"default?: Record<string, any>",
 		"submit?: (form: { name: string; age: number; }) => void",
 	} {
-		if !strings.Contains(pluginTypegen, expected) {
+		if !typegenAssertionContains(pluginTypegen, expected) {
 			t.Fatalf("expected clean write output to contain %q:\n%s", expected, pluginTypegen)
 		}
 	}
@@ -352,7 +370,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"inlineAction: () => void",
 		"inlineReducer: { asd: boolean }",
 	} {
-		if strings.Contains(pluginTypegen, unexpected) {
+		if typegenAssertionContains(pluginTypegen, unexpected) {
 			t.Fatalf("expected clean write output to omit %q:\n%s", unexpected, pluginTypegen)
 		}
 	}
@@ -363,7 +381,7 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"form: Record<string, any>",
 		"__keaTypeGenInternalExtraInput: {",
 	} {
-		if strings.Contains(typedFormTypegen, unexpected) {
+		if typegenAssertionContains(typedFormTypegen, unexpected) {
 			t.Fatalf("expected clean write output to defer typedForm builder heuristics and omit %q:\n%s", unexpected, typedFormTypegen)
 		}
 	}
@@ -1078,5 +1096,44 @@ func TestTypegenStabilityTrackerKeepsMoreInformativeCycleOutput(t *testing.T) {
 	}
 	if chosen, handled := tracker.preferredBody(fileName, better, worse); !handled || chosen != stripFirstLine(better) {
 		t.Fatalf("expected stabilized output to remain preferred, got handled=%v chosen=%q", handled, chosen)
+	}
+}
+
+func TestTypegenStabilityTrackerAllowsNarrowerInternalSelectorHelperParameters(t *testing.T) {
+	tracker := newTypegenStabilityTracker()
+	fileName := "/tmp/complexLogicType.ts"
+
+	broader := strings.Join([]string{
+		"// Generated by kea-typegen on Thu, 12 Mar 2026 12:00:00 UTC. DO NOT EDIT THIS FILE MANUALLY.",
+		"",
+		"export interface complexLogicType {",
+		"    __keaTypeGenInternalSelectorTypes: {",
+		"        selectedAction: (selectedActionId: number | 'new' | null, newActionForElement: HTMLElement | null) => ActionType | null",
+		"        initialValuesForForm: (selectedAction: ActionType | null) => ActionForm",
+		"    }",
+		"}",
+		"",
+	}, "\n")
+	narrower := strings.Join([]string{
+		"// Generated by kea-typegen on Thu, 12 Mar 2026 12:00:01 UTC. DO NOT EDIT THIS FILE MANUALLY.",
+		"",
+		"export interface complexLogicType {",
+		"    __keaTypeGenInternalSelectorTypes: {",
+		"        selectedAction: (selectedActionId: number | 'new', newActionForElement: HTMLElement) => ActionType | null",
+		"        initialValuesForForm: (selectedAction: ActionType) => ActionForm",
+		"    }",
+		"}",
+		"",
+	}, "\n")
+
+	if typegenInformationScore(stripFirstLine(narrower)) <= typegenInformationScore(stripFirstLine(broader)) {
+		t.Fatalf("expected narrower helper parameters to score higher")
+	}
+
+	if chosen, handled := tracker.preferredBody(fileName, "", broader); handled || chosen != stripFirstLine(broader) {
+		t.Fatalf("expected initial bootstrap transition to record without stabilization, got handled=%v chosen=%q", handled, chosen)
+	}
+	if chosen, handled := tracker.preferredBody(fileName, broader, narrower); handled || chosen != stripFirstLine(narrower) {
+		t.Fatalf("expected narrower helper output to be written on the next round, got handled=%v chosen=%q", handled, chosen)
 	}
 }

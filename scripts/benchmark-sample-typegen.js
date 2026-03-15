@@ -651,7 +651,7 @@ function main() {
     const samplesSource = options.samples || path.join(repoRoot, 'samples')
     const workspaceRoot = fs.mkdtempSync(path.join(repoRoot, '.benchmark-work-'))
     const jsCLI = path.join(repoRoot, 'bin', 'kea-typegen-js')
-    const goCLI = path.join(repoRoot, 'bin', 'kea-typegen-go')
+    const goCLI = path.join(repoRoot, 'rewrite', 'bin', 'kea-typegen-go')
     const benchmarkPaths = []
     const cleanupTargets = new Set([workspaceRoot])
     let cleaned = false

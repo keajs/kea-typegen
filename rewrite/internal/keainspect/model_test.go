@@ -270,6 +270,60 @@ func TestBuildParsedLogicsInternalSelectorHelpersMatchTupleShapedSelectorInputs(
 			expectedHelpers: []string{"sortedRepositories"},
 		},
 		{
+			name: "skips selectors whose reported tuple hints only describe projector returns",
+			source: strings.Join([]string{
+				"import { kea, reducers, selectors } from 'kea'",
+				"",
+				"type Dayjs = { value: string }",
+				"type TimelineResult = { from: Dayjs; to: Dayjs }",
+				"",
+				"export const propertiesTimelineLogic = kea([",
+				"    reducers({",
+				"        result: [null as TimelineResult | null, {}],",
+				"        timezone: ['UTC' as string, {}],",
+				"    }),",
+				"    selectors({",
+				"        dateRange: [",
+				"            (s) => [s.result, s.timezone],",
+				"            (result: TimelineResult | null, timezone: string): [Dayjs, Dayjs] | null => {",
+				"                return result ? [result.from, result.to] : null",
+				"            },",
+				"        ],",
+				"    }),",
+				"])",
+			}, "\n"),
+			report: &Report{
+				ProjectDir: "/tmp",
+				File:       "/tmp/propertiesTimelineLogic.ts",
+				Logics: []LogicReport{
+					{
+						Name:      "propertiesTimelineLogic",
+						InputKind: "builders",
+						Sections: []SectionReport{
+							{
+								Name: "reducers",
+								Members: []MemberReport{
+									{Name: "result", TypeString: "[TimelineResult | null, {}]"},
+									{Name: "timezone", TypeString: "[string, {}]"},
+								},
+							},
+							{
+								Name: "selectors",
+								Members: []MemberReport{
+									{
+										Name:             "dateRange",
+										TypeString:       "(((s: any) => any[]) | ((result: TimelineResult | null, timezone: string) => [Dayjs, Dayjs] | null))[]",
+										ReturnTypeString: "Dayjs",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedHelpers: nil,
+		},
+		{
 			name: "keeps truncated tuple-shaped selector inputs during write rounds",
 			source: strings.Join([]string{
 				"import { kea, reducers, selectors } from 'kea'",
@@ -402,6 +456,157 @@ func TestBuildParsedLogicsSkipsUninformativeBuilderInternalSelectorHelpers(t *te
 	logic := logics[0]
 	if len(logic.InternalSelectorTypes) != 0 {
 		t.Fatalf("expected no internal selector helpers, got %+v", logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsInternalSelectorHelpersPreferReportedNullableMemberTypes(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type DiagramNode = { id: string; data?: { config?: Record<string, any> } }",
+		"",
+		"export const appNodeLogic = kea([",
+		"    reducers({",
+		"        nodes: [[] as DiagramNode[], {}],",
+		"        nodeId: [null as string | null, {}],",
+		"    }),",
+		"    selectors({",
+		"        node: [",
+		"            (s) => [s.nodes, s.nodeId],",
+		"            (nodes, nodeId) => nodes.find((node) => node.id === nodeId) ?? null,",
+		"        ],",
+		"        nodeConfig: [",
+		"            (s) => [s.node],",
+		"            (node): Record<string, any> => node?.data?.config ?? {},",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/appNodeLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "appNodeLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "nodes", TypeString: "[DiagramNode[], {}]"},
+							{Name: "nodeId", TypeString: "[string | null, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "node",
+								TypeString:       "[(selectors: { nodes: (state: any, props?: any) => DiagramNode[]; nodeId: (state: any, props?: any) => string | null; }) => [(state: any, props?: any) => DiagramNode[], (state: any, props?: any) => string | null], (nodes: DiagramNode[], nodeId: string | null) => DiagramNode | null]",
+								ReturnTypeString: "null",
+							},
+							{
+								Name:             "nodeConfig",
+								TypeString:       "[(selectors: { node: (state: any, props?: any) => DiagramNode | null; }) => [(state: any, props?: any) => DiagramNode | null], (node: DiagramNode | null) => Record<string, any>]",
+								ReturnTypeString: "Record<string, any>",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "node"); !ok || helper.FunctionType != "(nodes: DiagramNode[], nodeId: string | null) => DiagramNode | null" {
+		t.Fatalf("expected node helper type %q, got %+v", "(nodes: DiagramNode[], nodeId: string | null) => DiagramNode | null", logic.InternalSelectorTypes)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "nodeConfig"); !ok || helper.FunctionType != "(node: DiagramNode | null) => Record<string, any>" {
+		t.Fatalf("expected nodeConfig helper type %q, got %+v", "(node: DiagramNode | null) => Record<string, any>", logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsPreservesFunctionReturningSelectorTypes(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type Theme = { id: string }",
+		"type Dataset = { id: string }",
+		"type ColorToken = string",
+		"",
+		"export const trendsPaletteLogic = kea([",
+		"    reducers({",
+		"        theme: [null as Theme | null, {}],",
+		"    }),",
+		"    selectors({",
+		"        getColorToken: [",
+		"            (s) => [s.theme],",
+		"            (theme) => {",
+		"                return (dataset: Dataset): [Theme | null, ColorToken | null] => {",
+		"                    return theme ? [theme, dataset.id] : [null, null]",
+		"                }",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/trendsPaletteLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "trendsPaletteLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "theme", TypeString: "[Theme | null, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "getColorToken",
+								TypeString:       "(((s: any) => any[]) | ((theme: any) => (dataset: Dataset) => [...]))[]",
+								ReturnTypeString: "Dataset",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	selector, ok := findParsedField(logic.Selectors, "getColorToken")
+	if !ok {
+		t.Fatalf("expected getColorToken selector, got %+v", logic.Selectors)
+	}
+	if selector.Type != "((dataset: Dataset) => [Theme | null, ColorToken | null])" {
+		t.Fatalf("expected function-returning selector type to be preserved, got %+v", selector)
+	}
+	if _, ok := findParsedFunction(logic.InternalSelectorTypes, "getColorToken"); ok {
+		t.Fatalf("expected function-returning selector helper to be omitted, got %+v", logic.InternalSelectorTypes)
 	}
 }
 
@@ -593,6 +798,79 @@ func TestBuildParsedLogicsResolvesDefaultImportedConnectTargets(t *testing.T) {
 	}
 }
 
+func TestBuildParsedLogicsConnectedActionsIgnoreLoaderReturnImports(t *testing.T) {
+	tempDir := t.TempDir()
+	targetFile := filepath.Join(tempDir, "organizationLogic.ts")
+	if err := os.WriteFile(targetFile, []byte("export default null\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile targetFile: %v", err)
+	}
+
+	sourceFile := filepath.Join(tempDir, "consumerLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import organization from './organizationLogic'",
+		"",
+		"export const consumerLogic = kea({",
+		"    connect: {",
+		"        actions: [organization, ['loadCurrentOrganization']],",
+		"    },",
+		"})",
+		"",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       sourceFile,
+		Logics: []LogicReport{
+			{
+				Name:      "consumerLogic",
+				InputKind: "object",
+			},
+		},
+	}
+
+	state := &buildState{
+		binaryPath: "tsgo",
+		projectDir: tempDir,
+		configFile: filepath.Join(tempDir, "tsconfig.json"),
+		parsedByFile: map[string][]ParsedLogic{
+			filepath.Clean(targetFile): {
+				{
+					Name: "organizationLogic",
+					Actions: []ParsedAction{
+						{
+							Name:         "loadCurrentOrganization",
+							FunctionType: "() => Promise<OrganizationType | null>",
+							PayloadType:  "any",
+						},
+					},
+					Imports: []TypeImport{
+						{Path: "./types", Names: []string{"OrganizationType"}},
+					},
+				},
+			},
+		},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+
+	logics, err := buildParsedLogicsFromSource(report, source, state)
+	if err != nil {
+		t.Fatalf("buildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if !hasAction(logic.Actions, "loadCurrentOrganization") {
+		t.Fatalf("expected connected action for loadCurrentOrganization, got %+v", logic.Actions)
+	}
+	if hasImport(logic.Imports, "./types", "OrganizationType") {
+		t.Fatalf("expected connected loader action import to ignore OrganizationType return type, got %+v", logic.Imports)
+	}
+}
+
 func TestBuildStateInspectFileSkipsAPIForFilesWithoutLogics(t *testing.T) {
 	tempDir := t.TempDir()
 	sourceFile := filepath.Join(tempDir, "plain.ts")
@@ -623,6 +901,85 @@ func TestBuildStateInspectFileSkipsAPIForFilesWithoutLogics(t *testing.T) {
 	}
 	if report.Snapshot != "" || report.Config != nil {
 		t.Fatalf("expected no tsgo-backed metadata for no-logic file, got %+v", report)
+	}
+}
+
+func TestBuildStateLoadParsedFileReturnsCachedEntryWithoutConfiguredAPI(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "logic.ts")
+	logicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"export const logic = kea([",
+		"    path(['logic']),",
+		"    actions({",
+		"        setName: (name: string) => ({ name }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	state := &buildState{
+		binaryPath:    tsgoapi.PreferredBinary(root),
+		projectDir:    tempDir,
+		configFile:    tsconfigPath,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+
+	entry, err := state.loadParsedFile(logicFile)
+	if err != nil {
+		t.Fatalf("loadParsedFile returned error: %v", err)
+	}
+	if entry.Source != logicSource {
+		t.Fatalf("expected cached source to match original source")
+	}
+	if len(entry.SourceLogics) != 1 || len(entry.Logics) != 1 {
+		t.Fatalf("expected one cached source logic and one parsed logic, got %+v", entry)
+	}
+
+	if state.apiClient != nil {
+		client := state.apiClient
+		defer func() {
+			_ = client.Close()
+		}()
+		state.apiClient = nil
+	}
+	state.binaryPath = ""
+	state.projectDir = ""
+	state.configFile = ""
+
+	cached, err := state.loadParsedFile(logicFile)
+	if err != nil {
+		t.Fatalf("expected cached parsed file to load without configured API, got %v", err)
+	}
+	if cached.Source != logicSource {
+		t.Fatalf("expected cached source %q, got %q", logicSource, cached.Source)
+	}
+	if len(cached.SourceLogics) != 1 || len(cached.Logics) != 1 {
+		t.Fatalf("expected cached parsed file to keep its source and parsed logics, got %+v", cached)
 	}
 }
 
@@ -824,6 +1181,11 @@ func TestParseSelectorReturnTypeHandlesWriteRoundFunctionArrays(t *testing.T) {
 			typeText: "(((selectors: any) => Repository[][]) | ((repositories: Repository[]) => Repository[]))[]",
 			expected: "Repository[]",
 		},
+		{
+			name:     "keeps props passthrough selector return scalar",
+			typeText: "((value: any) => any)[]",
+			expected: "any",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			returnType, ok := parseSelectorReturnType(tc.typeText)
@@ -862,6 +1224,16 @@ func TestParseReducerStateTypeWidensBooleanLiteralState(t *testing.T) {
 	}
 	if stateType != "boolean" {
 		t.Fatalf("expected reducer state type %q, got %q", "boolean", stateType)
+	}
+}
+
+func TestParseReducerStateTypeRecoversCollapsedTupleArrayUnion(t *testing.T) {
+	stateType, ok := parseReducerStateType("(boolean | { syncDarkModePreference: (_: any, { darkModePreference }: { darkModePreference: any; }) => any; })[]")
+	if !ok {
+		t.Fatalf("expected collapsed reducer tuple array to parse")
+	}
+	if stateType != "boolean" {
+		t.Fatalf("expected collapsed reducer state type %q, got %q", "boolean", stateType)
 	}
 }
 
@@ -919,6 +1291,76 @@ func TestParseLoadersWithSourceRecoversCollapsedTupleLoaderMembers(t *testing.T)
 		if !hasReducer(reducers, reducer.name, reducer.typ) {
 			t.Fatalf("expected reducer %s: %s, got %+v", reducer.name, reducer.typ, reducers)
 		}
+	}
+}
+
+func TestParseLoadersWithSourceRecoversDefaultTypeFromExplicitLoaderReturns(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type UserProductListItem = { product_path: string }",
+		"const getAppContext = () => ({ custom_products: undefined as UserProductListItem[] | undefined })",
+		"",
+		"export const customProductsLogic = kea({",
+		"    loaders: {",
+		"        customProducts: [",
+		"            getAppContext()?.custom_products ?? [],",
+		"            {",
+		"                loadCustomProducts: async (): Promise<UserProductListItem[]> => {",
+		"                    return []",
+		"                },",
+		"                seed: async (): Promise<UserProductListItem[]> => {",
+		"                    return []",
+		"                },",
+		"            },",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	property := mustFindLogicProperty(t, logics[0], "loaders")
+	actions, reducers := parseLoadersWithSource(SectionReport{
+		Name: "loaders",
+		Members: []MemberReport{
+			{Name: "customProducts", TypeString: "any[]"},
+		},
+	}, source, property, "", nil)
+
+	if !hasReducer(reducers, "customProducts", "UserProductListItem[]") {
+		t.Fatalf("expected customProducts reducer type UserProductListItem[], got %+v", reducers)
+	}
+	if action, ok := findParsedAction(actions, "loadCustomProductsSuccess"); !ok || !strings.Contains(action.PayloadType, "UserProductListItem[]") {
+		t.Fatalf("expected loadCustomProductsSuccess payload to keep UserProductListItem[], got %+v", actions)
+	}
+}
+
+func TestPreferredLoaderReturnTypeWithDefaultHintPrefersRecoveredDefaultAlias(t *testing.T) {
+	source := strings.Join([]string{
+		"type FileSystemEntry = { id: string }",
+		"type SearchResults = { searchTerm: string; results: FileSystemEntry[]; hasMore: boolean; lastCount: number }",
+	}, "\n")
+
+	got := preferredLoaderReturnTypeWithDefaultHint(
+		"{ results: any[]; searchTerm: any; }",
+		"SearchResults",
+		source,
+		"",
+		nil,
+	)
+	if got != "SearchResults" {
+		t.Fatalf("expected SearchResults fallback alias, got %q", got)
+	}
+}
+
+func TestPreferredLoaderReturnTypeWithDefaultHintFallsBackToDefaultArray(t *testing.T) {
+	got := preferredLoaderReturnTypeWithDefaultHint("string", "FileSystemEntry[]", "", "", nil)
+	if got != "FileSystemEntry[]" {
+		t.Fatalf("expected array default fallback, got %q", got)
 	}
 }
 
@@ -1262,6 +1704,125 @@ func TestParseSelectorsWithSourceCanonicalizesImportedComputedStringKeys(t *test
 	}
 }
 
+func TestBuildParsedLogicsFromSourceIgnoresSectionShapedPropsSelectorReturns(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, props, selectors } from 'kea'",
+		"",
+		"type LogicProps = {",
+		"    filter?: any",
+		"    value?: any",
+		"}",
+		"",
+		"export const logic = kea([",
+		"    props({} as LogicProps),",
+		"    selectors({",
+		"        selectedItemMeta: [() => [(_, props) => props.filter], (filter) => filter],",
+		"        value: [() => [(_, props) => props.value], (value) => value],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	sectionType := "{ selectedItemMeta: ((filter: any) => any)[]; value: ((value: any) => any)[]; }"
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/logic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "logic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "LogicProps",
+						PrintedTypeNode:     "LogicProps",
+					},
+					{
+						Name:                "selectors",
+						EffectiveTypeString: sectionType,
+						PrintedTypeNode:     sectionType,
+						Members: []MemberReport{
+							{
+								Name:             "selectedItemMeta",
+								TypeString:       "((filter: any) => any)[]",
+								ReturnTypeString: sectionType,
+							},
+							{
+								Name:       "value",
+								TypeString: "((value: any) => any)[]",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	selectedItemMeta, ok := findParsedField(logics[0].Selectors, "selectedItemMeta")
+	if !ok {
+		t.Fatalf("expected selectedItemMeta selector, got %+v", logics[0].Selectors)
+	}
+	if selectedItemMeta.Type != "any" {
+		t.Fatalf("expected selectedItemMeta selector type any, got %+v", selectedItemMeta)
+	}
+
+	value, ok := findParsedField(logics[0].Selectors, "value")
+	if !ok {
+		t.Fatalf("expected value selector, got %+v", logics[0].Selectors)
+	}
+	if value.Type != "any" {
+		t.Fatalf("expected value selector type any, got %+v", value)
+	}
+}
+
+func TestParseSelectorsWithSourceRecoversObjectSelectorStringReturnFromLooseReport(t *testing.T) {
+	source := mustReadFile(t, filepath.Join(repoRoot(t), "samples", "logic.ts"))
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	property := mustFindLogicProperty(t, logics[0], "selectors")
+	selectors := parseSelectorsWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{
+					Name:             "capitalizedName",
+					TypeString:       "((name: any, number: any) => any)[]",
+					ReturnTypeString: "any",
+				},
+			},
+		},
+		ParsedLogic{
+			Reducers: []ParsedField{
+				{Name: "name", Type: "string"},
+				{Name: "number", Type: "number"},
+			},
+		},
+		source,
+		property,
+		filepath.Join(repoRoot(t), "samples", "logic.ts"),
+		nil,
+	)
+
+	capitalizedName, ok := findParsedField(selectors, "capitalizedName")
+	if !ok {
+		t.Fatalf("expected capitalizedName selector, got %+v", selectors)
+	}
+	if capitalizedName.Type != "string" {
+		t.Fatalf("expected capitalizedName selector type string, got %+v", capitalizedName)
+	}
+}
+
 func TestPreferredMemberReturnTypeTextPreservesOptionalUndefinedInPrintedFunctionTypes(t *testing.T) {
 	member := MemberReport{
 		PrintedReturnTypeNode: "(feature: AvailableFeature, currentUsage?: number | undefined) => boolean",
@@ -1398,7 +1959,6 @@ func TestBuildParsedLogicsRecoversOptionalUndefinedInSelectorFunctionReturnTypes
 	if err != nil {
 		t.Fatalf("InspectFile returned error: %v", err)
 	}
-
 	logics, err := BuildParsedLogics(report)
 	if err != nil {
 		t.Fatalf("BuildParsedLogics returned error: %v", err)
@@ -1413,6 +1973,280 @@ func TestBuildParsedLogicsRecoversOptionalUndefinedInSelectorFunctionReturnTypes
 	}
 	if !strings.Contains(selector.Type, "currentUsage?: number | undefined") {
 		t.Fatalf("expected hasAvailableFeature selector type to preserve optional undefined, got %q", selector.Type)
+	}
+}
+
+func TestBuildParsedLogicsPrefersReportedSelectorFunctionReturnOverLiteralSourceFallback(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "featureLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path, reducers, selectors } from 'kea'",
+		"",
+		"type AvailableFeature = 'flag'",
+		"type AvailableProductFeature = { key: AvailableFeature; limit?: number }",
+		"",
+		"export const featureLogic = kea([",
+		"    path(['featureLogic']),",
+		"    reducers({",
+		"        availableProductFeatures: [[] as AvailableProductFeature[], {}],",
+		"    }),",
+		"    selectors({",
+		"        hasAvailableFeature: [",
+		"            (s) => [s.availableProductFeatures],",
+		"            (availableProductFeatures) => {",
+		"                return (feature: AvailableFeature, currentUsage?: number) => {",
+		"                    if (availableProductFeatures && availableProductFeatures.length > 0) {",
+		"                        const availableFeature = availableProductFeatures.find((obj) => obj.key === feature)",
+		"                        return availableFeature",
+		"                            ? currentUsage",
+		"                                ? availableFeature?.limit",
+		"                                    ? availableFeature?.limit > currentUsage",
+		"                                    : true",
+		"                                : true",
+		"                            : false",
+		"                    }",
+		"                    return false",
+		"                }",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	selector, ok := findParsedField(logics[0].Selectors, "hasAvailableFeature")
+	if !ok {
+		t.Fatalf("expected hasAvailableFeature selector, got %+v", logics[0].Selectors)
+	}
+	if strings.Contains(selector.Type, "=> false") {
+		t.Fatalf("expected hasAvailableFeature selector type to avoid literal false fallback, got %q", selector.Type)
+	}
+	if !strings.Contains(selector.Type, "=> boolean") {
+		t.Fatalf("expected hasAvailableFeature selector type to preserve reported boolean return, got %q", selector.Type)
+	}
+}
+
+func TestBuildParsedLogicsPrefersReportedConnectedSelectorFunctionReturnOverLiteralSourceFallback(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	featureLogicFile := filepath.Join(tempDir, "featureLogic.ts")
+	featureLogicSource := strings.Join([]string{
+		"import { kea, path, reducers, selectors } from 'kea'",
+		"",
+		"type AvailableFeature = 'flag'",
+		"type AvailableProductFeature = { key: AvailableFeature; limit?: number }",
+		"",
+		"export const featureLogic = kea([",
+		"    path(['featureLogic']),",
+		"    reducers({",
+		"        availableProductFeatures: [[] as AvailableProductFeature[], {}],",
+		"    }),",
+		"    selectors({",
+		"        hasAvailableFeature: [",
+		"            (s) => [s.availableProductFeatures],",
+		"            (availableProductFeatures) => {",
+		"                return (feature: AvailableFeature, currentUsage?: number) => {",
+		"                    if (availableProductFeatures && availableProductFeatures.length > 0) {",
+		"                        const availableFeature = availableProductFeatures.find((obj) => obj.key === feature)",
+		"                        return availableFeature",
+		"                            ? currentUsage",
+		"                                ? availableFeature?.limit",
+		"                                    ? availableFeature?.limit > currentUsage",
+		"                                    : true",
+		"                                : true",
+		"                            : false",
+		"                    }",
+		"                    return false",
+		"                }",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(featureLogicFile, []byte(featureLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	consumerLogicFile := filepath.Join(tempDir, "consumerLogic.ts")
+	consumerLogicSource := strings.Join([]string{
+		"import { connect, kea, path } from 'kea'",
+		"import { featureLogic } from './featureLogic'",
+		"",
+		"export const consumerLogic = kea([",
+		"    path(['consumerLogic']),",
+		"    connect(() => ({",
+		"        values: [featureLogic, ['hasAvailableFeature']],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(consumerLogicFile, []byte(consumerLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       consumerLogicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	selector, ok := findParsedField(logics[0].Selectors, "hasAvailableFeature")
+	if !ok {
+		t.Fatalf("expected connected hasAvailableFeature selector, got %+v", logics[0].Selectors)
+	}
+	if strings.Contains(selector.Type, "=> false") {
+		t.Fatalf("expected connected hasAvailableFeature selector type to avoid literal false fallback, got %q", selector.Type)
+	}
+	if !strings.Contains(selector.Type, "=> boolean") {
+		t.Fatalf("expected connected hasAvailableFeature selector type to preserve reported boolean return, got %q", selector.Type)
+	}
+}
+
+func TestSelectorRecoveredLiteralFunctionShouldYieldToReported(t *testing.T) {
+	current := "(feature: AvailableFeature, currentUsage?: number | undefined) => false"
+	reported := "(feature: AvailableFeature, currentUsage?: number) => boolean"
+
+	if !selectorRecoveredLiteralShouldYieldToReported(current, reported) {
+		t.Fatalf("expected literal-driven selector function return to yield to reported type")
+	}
+}
+
+func TestBuildParsedLogicsKeepsPropsPassthroughSelectorAsAny(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "logic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, props, selectors } from 'kea'",
+		"",
+		"type LogicProps = {",
+		"    filter?: any",
+		"    showNumericalPropsOnly?: boolean",
+		"    value?: any",
+		"}",
+		"",
+		"export const logic = kea([",
+		"    props({} as LogicProps),",
+		"    selectors({",
+		"        selectedItemMeta: [() => [(_, props) => props.filter], (filter) => filter],",
+		"        showNumericalPropsOnly: [",
+		"            () => [(_, props) => props.showNumericalPropsOnly],",
+		"            (showNumericalPropsOnly) => showNumericalPropsOnly ?? false,",
+		"        ],",
+		"        value: [() => [(_, props) => props.value], (value) => value],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	value, ok := findParsedField(logics[0].Selectors, "value")
+	if !ok {
+		t.Fatalf("expected value selector, got %+v", logics[0].Selectors)
+	}
+	if value.Type != "any" {
+		t.Fatalf("expected value selector type any, got %+v", value)
 	}
 }
 
@@ -1512,6 +2346,147 @@ func TestBuildParsedLogicsSynthesizesLoadersAndDefaults(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestSourceLoaderMemberTypeFromExpressionWidensSpreadUpdaterReturns(t *testing.T) {
+	source := strings.Join([]string{
+		"type RoleType = {",
+		"    id: string",
+		"    members: string[]",
+		"    name: string",
+		"}",
+		"",
+		"const roles = [",
+		"    [] as RoleType[],",
+		"    {",
+		"        addMembersToRole: async ({ role, members }: { role: RoleType; members: string[] }) => {",
+		"            if (!values.roles) {",
+		"                return []",
+		"            }",
+		"            role.members = [...role.members, ...members]",
+		"            return [...values.roles]",
+		"        },",
+		"        removeMemberFromRole: async ({ role, roleMemberId }: { role: RoleType; roleMemberId: string }) => {",
+		"            if (!values.roles) {",
+		"                return []",
+		"            }",
+		"            role.members = role.members.filter((member) => member !== roleMemberId)",
+		"            return [...values.roles]",
+		"        },",
+		"        deleteRole: async ({ roleId }: { roleId: string }) => {",
+		"            return values.roles?.filter((role) => role.id !== roleId) || []",
+		"        },",
+		"    },",
+		"]",
+	}, "\n")
+
+	expression := strings.Join([]string{
+		"[",
+		"    [] as RoleType[],",
+		"    {",
+		"        addMembersToRole: async ({ role, members }: { role: RoleType; members: string[] }) => {",
+		"            if (!values.roles) {",
+		"                return []",
+		"            }",
+		"            role.members = [...role.members, ...members]",
+		"            return [...values.roles]",
+		"        },",
+		"        removeMemberFromRole: async ({ role, roleMemberId }: { role: RoleType; roleMemberId: string }) => {",
+		"            if (!values.roles) {",
+		"                return []",
+		"            }",
+		"            role.members = role.members.filter((member) => member !== roleMemberId)",
+		"            return [...values.roles]",
+		"        },",
+		"        deleteRole: async ({ roleId }: { roleId: string }) => {",
+		"            return values.roles?.filter((role) => role.id !== roleId) || []",
+		"        },",
+		"    },",
+		"]",
+	}, "\n")
+
+	defaultType, properties, ok := sourceLoaderMemberTypeFromExpression(source, expression)
+	if !ok {
+		t.Fatalf("expected loader member expression to parse")
+	}
+	if defaultType != "RoleType[]" {
+		t.Fatalf("expected loader default type %q, got %q", "RoleType[]", defaultType)
+	}
+	if properties["addMembersToRole"] != "({ role, members }: { role: RoleType; members: string[]; }) => Promise<any[]>" {
+		t.Fatalf("expected widened addMembersToRole property, got %#v", properties["addMembersToRole"])
+	}
+	if properties["removeMemberFromRole"] != "({ role, roleMemberId }: { role: RoleType; roleMemberId: string; }) => Promise<any[]>" {
+		t.Fatalf("expected widened removeMemberFromRole property, got %#v", properties["removeMemberFromRole"])
+	}
+	if properties["deleteRole"] != "({ roleId }: { roleId: string; }) => Promise<RoleType[]>" {
+		t.Fatalf("expected typed deleteRole property, got %#v", properties["deleteRole"])
+	}
+}
+
+func TestSourceLoaderMemberTypeFromPropertyRecoversBuilderLoaderMembers(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, loaders } from 'kea'",
+		"",
+		"type RoleType = {",
+		"    id: string",
+		"    members: string[]",
+		"    name: string",
+		"}",
+		"",
+		"export const roleLogic = kea([",
+		"    loaders(({ values }) => ({",
+		"        roles: [",
+		"            [] as RoleType[],",
+		"            {",
+		"                addMembersToRole: async ({ role, members }: { role: RoleType; members: string[] }) => {",
+		"                    if (!values.roles) {",
+		"                        return []",
+		"                    }",
+		"                    role.members = [...role.members, ...members]",
+		"                    return [...values.roles]",
+		"                },",
+		"                removeMemberFromRole: async ({ role, roleMemberId }: { role: RoleType; roleMemberId: string }) => {",
+		"                    if (!values.roles) {",
+		"                        return []",
+		"                    }",
+		"                    role.members = role.members.filter((member) => member !== roleMemberId)",
+		"                    return [...values.roles]",
+		"                },",
+		"                deleteRole: async ({ roleId }: { roleId: string }) => {",
+		"                    return values.roles?.filter((role) => role.id !== roleId) || []",
+		"                },",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	loadersProperty := mustFindLogicProperty(t, logics[0], "loaders")
+	rolesProperty, ok := sectionSourceProperties(source, loadersProperty)["roles"]
+	if !ok {
+		t.Fatalf("expected roles loader property inside loaders section")
+	}
+
+	defaultType, properties, ok := sourceLoaderMemberTypeFromProperty(source, rolesProperty, "", nil)
+	if !ok {
+		t.Fatalf("expected builder loader property to parse")
+	}
+	if defaultType != "RoleType[]" {
+		t.Fatalf("expected loader default type %q, got %q", "RoleType[]", defaultType)
+	}
+	if properties["addMembersToRole"] != "({ role, members }: { role: RoleType; members: string[]; }) => Promise<any[]>" {
+		t.Fatalf("expected widened addMembersToRole property, got %#v", properties["addMembersToRole"])
+	}
+	if properties["removeMemberFromRole"] != "({ role, roleMemberId }: { role: RoleType; roleMemberId: string; }) => Promise<any[]>" {
+		t.Fatalf("expected widened removeMemberFromRole property, got %#v", properties["removeMemberFromRole"])
+	}
+	if properties["deleteRole"] != "({ roleId }: { roleId: string; }) => Promise<RoleType[]>" {
+		t.Fatalf("expected typed deleteRole property, got %#v", properties["deleteRole"])
 	}
 }
 
@@ -1703,7 +2678,7 @@ func TestBuildParsedLogicsRefinesLoaderSuccessListenerPayloadsAfterActionRecover
 
 func TestBuildParsedLogicsWidensLiteralLoaderSuccessTypesToReducerState(t *testing.T) {
 	source := strings.Join([]string{
-		"import { kea, path } from 'kea'",
+		"import { actions, kea, path } from 'kea'",
 		"import { loaders } from 'kea-loaders'",
 		"",
 		"export const counterLogic = kea([",
@@ -1872,6 +2847,475 @@ func TestBuildParsedLogicsKeepsReportedAnyForUntypedBuilderKeyCallbacks(t *testi
 	}
 }
 
+func TestBuildParsedLogicsRecoversUntypedBuilderKeyFromTypeProbeWhenTypegenImportIsMissing(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "demoLogic.ts")
+	source := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"import type { demoLogicType } from './demoLogicType'",
+		"",
+		"export interface DemoLogicProps {",
+		"    id: number",
+		"}",
+		"",
+		"export const demoLogic = kea<demoLogicType>([",
+		"    path(['demoLogic']),",
+		"    props({} as DemoLogicProps),",
+		"    key((props) => props.id),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if logic.PropsType != "DemoLogicProps" {
+		t.Fatalf("expected props type %q, got %q", "DemoLogicProps", logic.PropsType)
+	}
+	if logic.KeyType != "number" {
+		t.Fatalf("expected key type %q, got %q", "number", logic.KeyType)
+	}
+}
+
+func TestSourceKeyTypeFromPropsHandlesFrameOSStyleBuilderScaffolding(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, afterMount, BuiltLogic, connect, kea, key, listeners, path, props, reducers, selectors } from 'kea'",
+		"import equal from 'fast-deep-equal'",
+		"import { AppNodeData, Area, Panel, PanelWithMetadata } from '../../../types'",
+		"",
+		"import type { panelsLogicType } from './panelsLogicType'",
+		"import { frameLogic } from '../frameLogic'",
+		"import { actionToUrl, router, urlToAction } from 'kea-router'",
+		"import { subscriptions } from 'kea-subscriptions'",
+		"import { isFrameControlMode } from '../../../utils/frameControlMode'",
+		"import { isInFrameAdminMode } from '../../../utils/frameAdmin'",
+		"",
+		"export interface PanelsLogicProps {",
+		"  frameId: number",
+		"}",
+		"",
+		"export interface AnyBuiltLogic extends BuiltLogic {}",
+		"",
+		"const DEFAULT_LAYOUT: Record<Area, PanelWithMetadata[]> = {",
+		"  [Area.TopLeft]: [{ panel: Panel.Scenes, active: false, hidden: false }],",
+		"}",
+		"",
+		"function panelsEqual(panel1: PanelWithMetadata, panel2: PanelWithMetadata) {",
+		"  return panel1.panel === panel2.panel && panel1.key === panel2.key",
+		"}",
+		"",
+		"export const panelsLogic = kea<panelsLogicType>([",
+		"  path(['src', 'scenes', 'frame', 'panelsLogic']),",
+		"  props({} as PanelsLogicProps),",
+		"  key((props) => props.frameId),",
+		"  connect((props: PanelsLogicProps) => ({",
+		"    values: [frameLogic(props), ['defaultScene', 'frame', 'frameForm']],",
+		"    actions: [frameLogic(props), ['closeScenePanels']],",
+		"  })),",
+		"  actions({",
+		"    setPanels: (panels: Record<Area, PanelWithMetadata[]>) => ({ panels }),",
+		"  }),",
+		"])",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 source logic, got %d", len(logics))
+	}
+
+	keyProperty := mustFindLogicProperty(t, logics[0], "key")
+	if got := sourceKeyTypeFromProps(source, keyProperty, "PanelsLogicProps"); got != "number" {
+		t.Fatalf("expected direct source key type %q, got %q", "number", got)
+	}
+}
+
+func TestBuildParsedLogicsRecoversFrameOSScheduleSelectorAndKeyTypesWithoutExistingTypegenFiles(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "jsx": "react-jsx",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts", "**/*.tsx"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	srcDir := filepath.Join(tempDir, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	typesPath := filepath.Join(srcDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface ScheduledEvent {",
+		"  id: string",
+		"  hour: number",
+		"  minute: number",
+		"  weekday: number",
+		"  event: string",
+		"  payload: { sceneId?: string | null; state?: Record<string, any> }",
+		"}",
+		"",
+		"export interface FrameSchedule {",
+		"  events: ScheduledEvent[]",
+		"  disabled?: boolean",
+		"}",
+		"",
+		"export interface FrameScene {",
+		"  id: string",
+		"  name?: string",
+		"  fields?: StateField[]",
+		"}",
+		"",
+		"export interface StateField {",
+		"  name: string",
+		"}",
+		"",
+		"export interface FrameType {",
+		"  schedule?: FrameSchedule",
+		"  scenes?: FrameScene[]",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesPath, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	frameLogicDir := filepath.Join(tempDir, "src", "scenes", "frame")
+	if err := os.MkdirAll(frameLogicDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	frameLogicPath := filepath.Join(frameLogicDir, "frameLogic.ts")
+	frameLogicSource := strings.Join([]string{
+		"import { actions, kea, key, path, props, selectors } from 'kea'",
+		"import type { FrameType } from '../../types'",
+		"",
+		"import type { frameLogicType } from './frameLogicType'",
+		"",
+		"export interface FrameLogicProps {",
+		"  frameId: number",
+		"}",
+		"",
+		"export const frameLogic = kea<frameLogicType>([",
+		"  path(['src', 'scenes', 'frame', 'frameLogic']),",
+		"  props({} as FrameLogicProps),",
+		"  key((props: FrameLogicProps) => props.frameId),",
+		"  actions({",
+		"    setFrameFormValues: (values: Partial<FrameType>) => ({ values }),",
+		"  }),",
+		"  selectors({",
+		"    frame: [() => [], (): FrameType => ({ schedule: { events: [] }, scenes: [] })],",
+		"    frameForm: [() => [], (): Partial<FrameType> => ({})],",
+		"  }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(frameLogicPath, []byte(frameLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	scheduleDir := filepath.Join(tempDir, "src", "scenes", "frame", "panels", "Schedule")
+	if err := os.MkdirAll(scheduleDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	scheduleLogicPath := filepath.Join(scheduleDir, "scheduleLogic.tsx")
+	scheduleLogicSource := strings.Join([]string{
+		"import { actions, connect, kea, key, listeners, path, props, reducers, selectors } from 'kea'",
+		"",
+		"import type { scheduleLogicType } from './scheduleLogicType'",
+		"import { FrameScene, FrameSchedule, ScheduledEvent, StateField } from '../../../../types'",
+		"import { frameLogic } from '../../frameLogic'",
+		"",
+		"export interface ScheduleLogicProps {",
+		"  frameId: number",
+		"}",
+		"",
+		"export const scheduleLogic = kea<scheduleLogicType>([",
+		"  path(['src', 'scenes', 'frame', 'panels', 'Schedule', 'scheduleLogic']),",
+		"  props({} as ScheduleLogicProps),",
+		"  key((props) => props.frameId),",
+		"  connect(({ frameId }: ScheduleLogicProps) => ({",
+		"    values: [frameLogic({ frameId }), ['frame', 'frameForm']],",
+		"    actions: [frameLogic({ frameId }), ['setFrameFormValues']],",
+		"  })),",
+		"  actions({",
+		"    addEvent: () => ({ event: newScheduledEvent() }),",
+		"    editEvent: (id: string) => ({ id }),",
+		"    closeEvent: (id: string) => ({ id }),",
+		"    deleteEvent: (id: string) => ({ id }),",
+		"    toggleDescription: (id: string) => ({ id }),",
+		"    setSort: (sort: string) => ({ sort }),",
+		"  }),",
+		"  reducers({",
+		"    editingEvents: [",
+		"      {} as Record<string, boolean>,",
+		"      {",
+		"        addEvent: (state, { event }) => ({ ...state, [event.id]: true }),",
+		"        editEvent: (state, { id }) => ({ ...state, [id]: true }),",
+		"        closeEvent: (state, { id }) => {",
+		"          const { [id]: _, ...rest } = state",
+		"          return rest",
+		"        },",
+		"        deleteEvent: (state, { id }) => {",
+		"          const { [id]: _, ...rest } = state",
+		"          return rest",
+		"        },",
+		"      },",
+		"    ],",
+		"    expandedDescriptions: [",
+		"      {} as Record<string, boolean>,",
+		"      {",
+		"        toggleDescription: (state, { id }) => ({ ...state, [id]: !state[id] }),",
+		"      },",
+		"    ],",
+		"    sort: [",
+		"      'hour' as string,",
+		"      {",
+		"        setSort: (_, { sort }) => sort,",
+		"      },",
+		"    ],",
+		"  }),",
+		"  selectors({",
+		"    schedule: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame.schedule],",
+		"    events: [(s) => [s.schedule], (schedule) => schedule?.events ?? []],",
+		"    disabled: [(s) => [s.schedule], (schedule) => schedule?.disabled ?? false],",
+		"    scenes: [(s) => [s.frame, s.frameForm], (frame, frameForm) => frameForm.scenes ?? frame.scenes],",
+		"    sceneNames: [",
+		"      (s) => [s.scenes],",
+		"      (scenes): Record<string, string> =>",
+		"        (scenes ?? []).reduce((acc, scene) => {",
+		"          acc[scene.id] = scene.name || 'Unnamed Scene'",
+		"          return acc",
+		"        }, {} as Record<string, string>),",
+		"    ],",
+		"    scenesAsOptions: [",
+		"      (s) => [s.scenes],",
+		"      (scenes): { label: string; value: string }[] =>",
+		"        [{ label: '- Select Scene -', value: '' }].concat(",
+		"          (scenes ?? [])",
+		"            .map((scene) => ({",
+		"              label: scene.name || 'Unnamed Scene',",
+		"              value: scene.id || '',",
+		"            }))",
+		"            .sort((a, b) => a.label.localeCompare(b.label))",
+		"        ),",
+		"    ],",
+		"    fieldsForScene: [",
+		"      (s) => [s.frame, s.frameForm],",
+		"      (frame, frameForm): Record<string, StateField[]> =>",
+		"        (frameForm?.scenes ?? frame.scenes ?? []).reduce((acc, scene) => {",
+		"          acc[scene.id] = scene.fields ?? []",
+		"          return acc",
+		"        }, {} as Record<string, StateField[]>),",
+		"    ],",
+		"    sortedEvents: [",
+		"      (s) => [s.events, s.sort, s.sceneNames],",
+		"      (events, sort, sceneNames) => {",
+		"        if (sort === 'day') {",
+		"          return events.sort((a, b) => a.weekday - b.weekday)",
+		"        } else if (sort === 'hour') {",
+		"          return events.sort((a, b) => (a.hour === b.hour ? a.minute - b.minute : a.hour - b.hour))",
+		"        } else if (sort === 'scene') {",
+		"          return events.sort((a, b) =>",
+		"            (sceneNames[a.payload.sceneId ?? ''] || a.payload.sceneId || '').localeCompare(",
+		"              sceneNames[b.payload.sceneId ?? ''] || b.payload.sceneId || ''",
+		"            )",
+		"          )",
+		"        }",
+		"        return events",
+		"      },",
+		"    ],",
+		"  }),",
+		"  listeners(({ actions, values }) => ({",
+		"    addEvent: ({ event }) => {",
+		"      actions.setFrameFormValues({ ...values.frameForm, schedule: { events: [...values.events, event] } })",
+		"    },",
+		"    deleteEvent: ({ id }) => {",
+		"      actions.setFrameFormValues({",
+		"        ...values.frameForm,",
+		"        schedule: { events: values.events.filter((event) => event.id !== id) },",
+		"      })",
+		"    },",
+		"  })),",
+		"])",
+		"",
+		"function newScheduledEvent(): ScheduledEvent {",
+		"  return {",
+		"    id: 'evt-1',",
+		"    hour: 23,",
+		"    minute: 59,",
+		"    weekday: 0,",
+		"    event: 'setCurrentScene',",
+		"    payload: { sceneId: '', state: {} },",
+		"  }",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(scheduleLogicPath, []byte(scheduleLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	state := &buildState{projectDir: tempDir, configFile: tsconfigPath}
+	if expanded := expandImportedTypeAliasTextWithContext(scheduleLogicSource, scheduleLogicPath, "FrameType", state); expanded == "" {
+		t.Fatalf("expected sibling exported type expansion for %q", "FrameType")
+	}
+	if inferred := sourceExpressionTypeTextWithContext(
+		scheduleLogicSource,
+		scheduleLogicPath,
+		"schedule?.events ?? []",
+		map[string]string{"schedule": "FrameSchedule | undefined"},
+		state,
+	); inferred != "ScheduledEvent[]" {
+		t.Fatalf("expected direct nullish array fallback type %q, got %q", "ScheduledEvent[]", inferred)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       scheduleLogicPath,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if logic.KeyType != "number" {
+		t.Fatalf("expected key type %q, got %q", "number", logic.KeyType)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "schedule"); !ok || selector.Type != "FrameSchedule | undefined" {
+		t.Fatalf("expected schedule selector type %q, got %+v", "FrameSchedule | undefined", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "events"); !ok || selector.Type != "ScheduledEvent[]" {
+		t.Fatalf("expected events selector type %q, got %+v", "ScheduledEvent[]", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "sortedEvents"); !ok || selector.Type != "ScheduledEvent[]" {
+		t.Fatalf("expected sortedEvents selector type %q, got %+v", "ScheduledEvent[]", logic.Selectors)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "events"); !ok || helper.FunctionType != "(schedule: FrameSchedule | undefined) => ScheduledEvent[]" {
+		t.Fatalf("expected events helper type %q, got %+v", "(schedule: FrameSchedule | undefined) => ScheduledEvent[]", logic.InternalSelectorTypes)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "sortedEvents"); !ok || helper.FunctionType != "(events: ScheduledEvent[], sort: string, sceneNames: Record<string, string>) => ScheduledEvent[]" {
+		t.Fatalf("expected sortedEvents helper type %q, got %+v", "(events: ScheduledEvent[], sort: string, sceneNames: Record<string, string>) => ScheduledEvent[]", logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsRecoversTemplateLiteralKeyFromMalformedReportedType(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"",
+		"type StepProps = {",
+		"    node?: { id?: string; templateId?: string }",
+		"}",
+		"",
+		"export const stepLogic = kea([",
+		"    path(['stepLogic']),",
+		"    props({} as StepProps),",
+		"    key(({ node }: StepProps) => `${node?.id}_${node?.templateId}`),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/stepLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "stepLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "StepProps",
+						PrintedTypeNode:     "StepProps",
+					},
+					{
+						Name:                "key",
+						EffectiveTypeString: "`${ node?.id; }_${ node?.templateId; }`",
+						PrintedTypeNode:     "`${ node?.id; }_${ node?.templateId; }`",
+					},
+				},
+			},
+		},
+	}
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	keyProperty := mustFindLogicProperty(t, sourceLogics[0], "key")
+	if got := sourceArrowReturnTypeText(source, sourcePropertyText(source, keyProperty)); got != "string" {
+		t.Fatalf("expected template literal key source return type %q, got %q", "string", got)
+	}
+	if got := sourceKeyTypeFromSource(source, "", keyProperty, "StepProps", nil); got != "string" {
+		t.Fatalf("expected template literal key source type %q, got %q", "string", got)
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	if logics[0].KeyType != "string" {
+		t.Fatalf("expected recovered template literal key type %q, got %q", "string", logics[0].KeyType)
+	}
+}
+
 func TestMergeLogicalOperandTypesKeepsNonStringUnionMembers(t *testing.T) {
 	got := mergeLogicalOperandTypes("string | number | null", "'new'", "||")
 	if got != "string | number" {
@@ -1879,7 +3323,99 @@ func TestMergeLogicalOperandTypesKeepsNonStringUnionMembers(t *testing.T) {
 	}
 }
 
-func TestSourceExpressionTypeTextWithContextSkipsBareLiteralLogicalFallbackWhenLeftIsUnknown(t *testing.T) {
+func TestMergeLogicalOperandTypesDropsNullFallbackWhenLeftIsAlreadyConcrete(t *testing.T) {
+	got := mergeLogicalOperandTypes("FrameType", "null", "||")
+	if got != "FrameType" {
+		t.Fatalf("expected merged logical type %q, got %q", "FrameType", got)
+	}
+}
+
+func TestMergeLogicalOperandTypesPreservesOptionalObjectMemberForNullishCoalescing(t *testing.T) {
+	got := mergeLogicalOperandTypes("FrameSchedule | undefined", "FrameSchedule | undefined", "??")
+	if got != "FrameSchedule | undefined" {
+		t.Fatalf("expected merged logical type %q, got %q", "FrameSchedule | undefined", got)
+	}
+}
+
+func TestMergeLogicalOperandTypesPreservesConcreteArrayAcrossEmptyNullishFallback(t *testing.T) {
+	got := mergeLogicalOperandTypes("ScheduledEvent[] | undefined", "any[]", "??")
+	if got != "ScheduledEvent[]" {
+		t.Fatalf("expected merged logical type %q, got %q", "ScheduledEvent[]", got)
+	}
+}
+
+func TestRefineSelectorTypesFromInternalHelpersPrefersHelperReturnOverLeakedDependencyType(t *testing.T) {
+	refined := refineSelectorTypesFromInternalHelpers(
+		[]ParsedField{
+			{Name: "frame", Type: "Record<number, FrameType>"},
+			{Name: "defaultScene", Type: "FrameScene[]"},
+		},
+		[]ParsedFunction{
+			{Name: "frame", FunctionType: "(frames: Record<number, FrameType>, frameId: number) => FrameType"},
+			{Name: "defaultScene", FunctionType: "(frame: FrameType, frameForm: Partial<FrameType>) => string"},
+		},
+		false,
+	)
+	if len(refined) != 2 || refined[0].Type != "FrameType" || refined[1].Type != "string" {
+		t.Fatalf("expected helper refinement to recover leaked selector returns, got %+v", refined)
+	}
+}
+
+func TestShouldPreferParsedConnectedFieldWhenSymbolSideIsOnlyLiteralFallback(t *testing.T) {
+	if !shouldPreferParsedConnectedField("null", "FrameType") {
+		t.Fatalf("expected parsed connected field to beat literal null fallback")
+	}
+	if !shouldPreferParsedConnectedField("'rpios'", "'buildroot' | 'nixos' | 'rpios'") {
+		t.Fatalf("expected parsed connected field to beat literal string fallback")
+	}
+	if !shouldPreferParsedConnectedField("false", "boolean") {
+		t.Fatalf("expected parsed connected field to beat literal boolean fallback")
+	}
+}
+
+func TestShouldPreferExistingParsedSelectorTypeForReportOnlyLiteralFallbacks(t *testing.T) {
+	if !shouldPreferExistingParsedSelectorType("string", "null") {
+		t.Fatalf("expected existing parsed selector type to beat report-only null fallback")
+	}
+	if !shouldPreferExistingParsedSelectorType("FrameType", "any") {
+		t.Fatalf("expected existing parsed selector type to beat report-only any fallback")
+	}
+	if shouldPreferExistingParsedSelectorType("null", "string") {
+		t.Fatalf("expected concrete report type to replace literal existing fallback")
+	}
+}
+
+func TestSelectorLiteralNullishShouldYieldToInternalHelper(t *testing.T) {
+	if !selectorLiteralNullishShouldYieldToInternalHelper("null", "string") {
+		t.Fatalf("expected literal null selector fallback to yield to internal helper string return")
+	}
+	if !selectorLiteralNullishShouldYieldToInternalHelper("undefined", "number") {
+		t.Fatalf("expected literal undefined selector fallback to yield to internal helper number return")
+	}
+	if selectorLiteralNullishShouldYieldToInternalHelper("string | null", "string") {
+		t.Fatalf("did not expect mixed selector type to yield to internal helper")
+	}
+	if selectorLiteralNullishShouldYieldToInternalHelper("null", "string | null") {
+		t.Fatalf("did not expect nullish helper return to win over null fallback")
+	}
+}
+
+func TestSelectorOpaqueCurrentShouldYieldToInternalHelper(t *testing.T) {
+	if !selectorOpaqueCurrentShouldYieldToInternalHelper("any", "string") {
+		t.Fatalf("expected opaque selector current type to yield to concrete helper string return")
+	}
+	if !selectorOpaqueCurrentShouldYieldToInternalHelper("unknown", "number") {
+		t.Fatalf("expected opaque selector current type to yield to concrete helper number return")
+	}
+	if selectorOpaqueCurrentShouldYieldToInternalHelper("any", "FrameType") {
+		t.Fatalf("did not expect opaque selector current type to yield to non-primitive helper return")
+	}
+	if selectorOpaqueCurrentShouldYieldToInternalHelper("string", "number") {
+		t.Fatalf("did not expect concrete selector current type to yield in opaque-current helper check")
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextRecoversOptionalMemberLogicalFallbackFromUnionHint(t *testing.T) {
 	got := sourceExpressionTypeTextWithContext(
 		"type ProjectType = { id: number }",
 		"",
@@ -1887,8 +3423,35 @@ func TestSourceExpressionTypeTextWithContextSkipsBareLiteralLogicalFallbackWhenL
 		map[string]string{"currentProject": "ProjectType | null"},
 		nil,
 	)
-	if got != "" {
-		t.Fatalf("expected unresolved logical fallback to defer, got %q", got)
+	if got != "number | null" {
+		t.Fatalf("expected recovered logical fallback type %q, got %q", "number | null", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextRecoversArrayFindFallbackAndSomeReturns(t *testing.T) {
+	source := strings.Join([]string{
+		"type FrameScene = { id: string; default?: boolean }",
+		"type ChangeDetail = { requiresFullDeploy: boolean }",
+	}, "\n")
+
+	if got := sourceExpressionTypeTextWithContext(
+		source,
+		"",
+		"(allScenes.find((scene) => scene.id === 'default' || scene.default) || allScenes[0])?.id ?? null",
+		map[string]string{"allScenes": "FrameScene[]"},
+		nil,
+	); got != "string" {
+		t.Fatalf("expected array find fallback type %q, got %q", "string", got)
+	}
+
+	if got := sourceExpressionTypeTextWithContext(
+		source,
+		"",
+		"undeployedChangeDetails.some((change) => change.requiresFullDeploy)",
+		map[string]string{"undeployedChangeDetails": "ChangeDetail[]"},
+		nil,
+	); got != "boolean" {
+		t.Fatalf("expected array some return type %q, got %q", "boolean", got)
 	}
 }
 
@@ -1939,7 +3502,7 @@ func TestParseSourceArrowInfoPreservesDestructuredParameterPattern(t *testing.T)
 	}
 }
 
-func TestBuildParsedLogicsPrefersReportedSelectorConstructorAndSkipsOpaqueHelper(t *testing.T) {
+func TestBuildParsedLogicsRecoversSelectorConstructorTypeAndHelper(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea } from 'kea'",
 		"",
@@ -2008,11 +3571,17 @@ func TestBuildParsedLogicsPrefersReportedSelectorConstructorAndSkipsOpaqueHelper
 	if !ok {
 		t.Fatalf("expected unavailableFeatureFlagKeys selector, got %+v", logic.Selectors)
 	}
-	if selector.Type != "SetConstructor" {
-		t.Fatalf("expected selector type %q, got %q", "SetConstructor", selector.Type)
+	if !strings.HasPrefix(selector.Type, "Set<") {
+		t.Fatalf("expected selector type to recover from constructor fallback, got %q", selector.Type)
 	}
-	if _, ok := findParsedFunction(logic.InternalSelectorTypes, "unavailableFeatureFlagKeys"); ok {
-		t.Fatalf("expected opaque selector helper to be skipped, got %+v", logic.InternalSelectorTypes)
+	helper, ok := findParsedFunction(logic.InternalSelectorTypes, "unavailableFeatureFlagKeys")
+	if !ok {
+		t.Fatalf("expected unavailableFeatureFlagKeys helper, got %+v", logic.InternalSelectorTypes)
+	}
+	if !strings.Contains(helper.FunctionType, "featureFlags: FeatureFlagsResult") ||
+		!strings.Contains(helper.FunctionType, "experiments: ExperimentsResult") ||
+		!strings.Contains(helper.FunctionType, ") => Set<") {
+		t.Fatalf("expected recovered helper function type, got %q", helper.FunctionType)
 	}
 }
 
@@ -2086,7 +3655,7 @@ func TestBuildParsedLogicsKeepsExplicitGenericNewMapSelectorType(t *testing.T) {
 	}
 }
 
-func TestBuildParsedLogicsLetsReportedAnyWinOverBareLiteralSourceRecovery(t *testing.T) {
+func TestBuildParsedLogicsRecoversOptionalMemberFallbackSelectorType(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea } from 'kea'",
 		"",
@@ -2147,8 +3716,682 @@ func TestBuildParsedLogicsLetsReportedAnyWinOverBareLiteralSourceRecovery(t *tes
 	if !ok {
 		t.Fatalf("expected currentProjectId selector, got %+v", logic.Selectors)
 	}
+	if selector.Type != "number | null" {
+		t.Fatalf("expected selector type %q, got %q", "number | null", selector.Type)
+	}
+}
+
+func TestBuildParsedLogicsKeepsReportedAnyForImportedOptionalMemberFallbackSelectorType(t *testing.T) {
+	tempDir := t.TempDir()
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	if err := os.WriteFile(
+		typesFile,
+		[]byte("export interface ProjectType {\n    id: string\n}\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "projectLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"import type { ProjectType } from './types'",
+		"",
+		"export const projectLogic = kea({",
+		"    defaults: {",
+		"        currentProject: null as ProjectType | null,",
+		"    },",
+		"    selectors: {",
+		"        currentProjectId: [",
+		"            (s) => [s.currentProject],",
+		"            (currentProject) => currentProject?.id ?? null,",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       logicFile,
+		Logics: []LogicReport{
+			{
+				Name:      "projectLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "defaults",
+						Members: []MemberReport{
+							{Name: "currentProject", TypeString: "ProjectType | null"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "currentProjectId",
+								TypeString:       "[(s: Record<string, Selector>) => ProjectType | null, (currentProject: any) => any]",
+								ReturnTypeString: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	selector, ok := findParsedField(logics[0].Selectors, "currentProjectId")
+	if !ok {
+		t.Fatalf("expected currentProjectId selector, got %+v", logics[0].Selectors)
+	}
 	if selector.Type != "any" {
-		t.Fatalf("expected selector type %q, got %q", "any", selector.Type)
+		t.Fatalf("expected selector type %q, got %+v", "any", selector)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedSelectorChainsAcrossSameSectionDependencies(t *testing.T) {
+	tempDir := t.TempDir()
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	if err := os.WriteFile(
+		typesFile,
+		[]byte(strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    id: number",
+			"    mode: 'buildroot' | 'nixos' | 'rpios'",
+			"    scenes: FrameScene[]",
+			"    last_successful_deploy: Record<string, any> | null",
+			"}",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "frameLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"import type { FrameType } from './types'",
+		"",
+		"interface FrameLogicProps {",
+		"    frameId: number",
+		"}",
+		"",
+		"export const frameLogic = kea({",
+		"    props: {} as FrameLogicProps,",
+		"    defaults: {",
+		"        frames: {} as Record<number, FrameType>,",
+		"        frameForm: {} as Partial<FrameType>,",
+		"    },",
+		"    selectors: {",
+		"        frameId: [",
+		"            () => [(_, props) => props.frameId],",
+		"            (frameId) => frameId,",
+		"        ],",
+		"        frame: [",
+		"            (s) => [s.frames, s.frameId],",
+		"            (frames, frameId) => frames[frameId] || null,",
+		"        ],",
+		"        mode: [",
+		"            (s) => [s.frame, s.frameForm],",
+		"            (frame, frameForm) => frameForm?.mode || frame?.mode || 'rpios',",
+		"        ],",
+		"        lastDeploy: [",
+		"            (s) => [s.frame],",
+		"            (frame) => frame?.last_successful_deploy ?? null,",
+		"        ],",
+		"        defaultScene: [",
+		"            (s) => [s.frame, s.frameForm],",
+		"            (frame, frameForm) => {",
+		"                const allScenes = frameForm?.scenes ?? frame?.scenes ?? []",
+		"                return allScenes[0]?.id ?? null",
+		"            },",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       logicFile,
+		Logics: []LogicReport{
+			{
+				Name:      "frameLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "FrameLogicProps",
+					},
+					{
+						Name: "defaults",
+						Members: []MemberReport{
+							{Name: "frames", TypeString: "Record<number, FrameType>"},
+							{Name: "frameForm", TypeString: "Partial<FrameType>"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{Name: "frameId", TypeString: "[() => [(_: any, props: any) => any], (frameId: any) => any]", ReturnTypeString: "any"},
+							{Name: "frame", TypeString: "[(s: { frames: (state: any, props?: any) => Record<number, FrameType>; frameId: (state: any, props?: any) => any; }) => [Record<number, FrameType>, any], (frames: any, frameId: any) => any]", ReturnTypeString: "any"},
+							{Name: "mode", TypeString: "[(s: { frame: (state: any, props?: any) => any; frameForm: (state: any, props?: any) => Partial<FrameType>; }) => [any, Partial<FrameType>], (frame: any, frameForm: any) => any]", ReturnTypeString: "any"},
+							{Name: "lastDeploy", TypeString: "[(s: { frame: (state: any, props?: any) => any; }) => [any], (frame: any) => any]", ReturnTypeString: "any"},
+							{Name: "defaultScene", TypeString: "[(s: { frame: (state: any, props?: any) => any; frameForm: (state: any, props?: any) => Partial<FrameType>; }) => [any, Partial<FrameType>], (frame: any, frameForm: any) => any]", ReturnTypeString: "any"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "frame"); !ok || selector.Type != "FrameType" {
+		t.Fatalf("expected frame selector type %q, got %+v", "FrameType", selector)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "mode"); !ok || selector.Type != "'buildroot' | 'nixos' | 'rpios'" {
+		t.Fatalf("expected mode selector type %q, got %+v", "'buildroot' | 'nixos' | 'rpios'", selector)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "lastDeploy"); !ok || selector.Type != "Record<string, any> | null" {
+		t.Fatalf("expected lastDeploy selector type %q, got %+v", "Record<string, any> | null", selector)
+	}
+	defaultSceneSelector, ok := findParsedField(logic.Selectors, "defaultScene")
+	if !ok {
+		t.Fatalf("expected defaultScene selector, got %+v", logic.Selectors)
+	}
+	if defaultSceneSelector.Type != "string" {
+		t.Fatalf("expected defaultScene selector type %q, got %+v", "string", defaultSceneSelector)
+	}
+}
+
+func TestBuildParsedLogicsFromSourceRecoversFrameOSStyleSelectorTypes(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type FrameScene = {",
+		"    id: string",
+		"    name: string",
+		"}",
+		"",
+		"export const scenesLogic = kea([",
+		"    reducers({",
+		"        scenes: [[] as FrameScene[], {}],",
+		"        search: ['', {}],",
+		"        activeSceneId: [null as string | null, {}],",
+		"        uploadedScenes: [[] as FrameScene[], {}],",
+		"        aiSceneRequestId: [null as string | null, {}],",
+		"        aiSceneLogsByRequestId: [",
+		"            {} as Record<string, { message: string; status?: string; stage?: string; timestamp: string }[]>,",
+		"            {},",
+		"        ],",
+		"    }),",
+		"    selectors({",
+		"        filteredScenes: [",
+		"            (s) => [s.scenes, s.search],",
+		"            (scenes, search) => {",
+		"                const searchPieces = search",
+		"                    .toLowerCase()",
+		"                    .split(' ')",
+		"                    .filter((s) => s)",
+		"                if (searchPieces.length === 0) {",
+		"                    return scenes",
+		"                }",
+		"                return scenes.filter((scene) => searchPieces.every((piece) => scene.name.toLowerCase().includes(piece)))",
+		"            },",
+		"        ],",
+		"        sceneTitles: [",
+		"            (s) => [s.scenes],",
+		"            (scenes) => Object.fromEntries(scenes.map((scene) => [scene.id, scene.name])),",
+		"        ],",
+		"        linkedActiveSceneId: [",
+		"            (s) => [s.activeSceneId, s.scenes],",
+		"            (activeSceneId, scenes) => {",
+		"                if (!activeSceneId) {",
+		"                    return null",
+		"                }",
+		"                if (!activeSceneId.startsWith('uploaded/')) {",
+		"                    return activeSceneId",
+		"                }",
+		"                const candidateId = activeSceneId.slice('uploaded/'.length)",
+		"                return scenes.some((scene) => scene.id === candidateId) ? candidateId : activeSceneId",
+		"            },",
+		"        ],",
+		"        activeUploadedScene: [",
+		"            (s) => [s.activeSceneId, s.uploadedScenes],",
+		"            (activeSceneId, uploadedScenes) =>",
+		"                activeSceneId ? uploadedScenes.find((scene) => `uploaded/${scene.id}` === activeSceneId) ?? null : null,",
+		"        ],",
+		"        missingActiveMatchesSearch: [",
+		"            (s) => [s.search, s.activeSceneId, s.activeUploadedScene],",
+		"            (search, activeSceneId, activeUploadedScene) => {",
+		"                if (!activeSceneId) {",
+		"                    return false",
+		"                }",
+		"                const searchPieces = search",
+		"                    .toLowerCase()",
+		"                    .split(' ')",
+		"                    .filter((s) => s)",
+		"                if (searchPieces.length === 0) {",
+		"                    return true",
+		"                }",
+		"                const sceneName = activeUploadedScene?.name?.toLowerCase() ?? ''",
+		"                if (!sceneName) {",
+		"                    return false",
+		"                }",
+		"                return searchPieces.every((piece) => sceneName.includes(piece))",
+		"            },",
+		"        ],",
+		"        aiSceneLastLog: [",
+		"            (s) => [s.aiSceneRequestId, s.aiSceneLogsByRequestId],",
+		"            (requestId, logsByRequestId) => {",
+		"                if (!requestId) {",
+		"                    return null",
+		"                }",
+		"                const logs = logsByRequestId[requestId] ?? []",
+		"                return logs.length ? logs[logs.length - 1] : null",
+		"            },",
+		"        ],",
+		"        aiSceneLogs: [",
+		"            (s) => [s.aiSceneRequestId, s.aiSceneLogsByRequestId],",
+		"            (requestId, logsByRequestId) =>",
+		"                requestId",
+		"                    ? [...(logsByRequestId[requestId] ?? [])].toSorted(",
+		"                          (left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime()",
+		"                      )",
+		"                    : [],",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/scenesLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "scenesLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "scenes", TypeString: "[FrameScene[], {}]"},
+							{Name: "search", TypeString: "[string, {}]"},
+							{Name: "activeSceneId", TypeString: "[string | null, {}]"},
+							{Name: "uploadedScenes", TypeString: "[FrameScene[], {}]"},
+							{Name: "aiSceneRequestId", TypeString: "[string | null, {}]"},
+							{Name: "aiSceneLogsByRequestId", TypeString: "[Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{Name: "filteredScenes", TypeString: "(((s: any) => any[]) | ((scenes: FrameScene[], search: string) => string))[]", ReturnTypeString: "string"},
+							{Name: "sceneTitles", TypeString: "(((s: any) => any[]) | ((scenes: FrameScene[]) => ObjectConstructor))[]", ReturnTypeString: "ObjectConstructor"},
+							{Name: "linkedActiveSceneId", TypeString: "(((s: any) => any[]) | ((activeSceneId: string, scenes: FrameScene[]) => string))[]", ReturnTypeString: "string"},
+							{Name: "activeUploadedScene", TypeString: "(((s: any) => any[]) | ((activeSceneId: string, uploadedScenes: FrameScene[]) => null))[]", ReturnTypeString: "null"},
+							{Name: "missingActiveMatchesSearch", TypeString: "(((s: any) => any[]) | ((search: string, activeSceneId: string, activeUploadedScene: FrameScene) => any))[]", ReturnTypeString: "any"},
+							{Name: "aiSceneLastLog", TypeString: "(((s: any) => any[]) | ((requestId: string, logsByRequestId: Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>) => null))[]", ReturnTypeString: "null"},
+							{Name: "aiSceneLogs", TypeString: "(((s: any) => any[]) | ((requestId: string, logsByRequestId: Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>) => string))[]", ReturnTypeString: "string"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	for _, expected := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "filteredScenes", typ: "FrameScene[]"},
+		{name: "sceneTitles", typ: "Record<string, string>"},
+		{name: "linkedActiveSceneId", typ: "null | string"},
+		{name: "activeUploadedScene", typ: "FrameScene | null"},
+		{name: "missingActiveMatchesSearch", typ: "boolean"},
+		{name: "aiSceneLastLog", typ: "null | { message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; }"},
+		{name: "aiSceneLogs", typ: "{ message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; }[]"},
+	} {
+		if selector, ok := findParsedField(logic.Selectors, expected.name); !ok || selector.Type != expected.typ {
+			t.Fatalf("expected selector %s: %s, got %+v", expected.name, expected.typ, logic.Selectors)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversConnectedSelectorTypesWithoutExistingTypegenFiles(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface FrameScene {",
+		"    id: string",
+		"    default?: boolean",
+		"}",
+		"",
+		"export interface FrameType {",
+		"    scenes?: FrameScene[]",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	frameLogicFile := filepath.Join(tempDir, "frameLogic.ts")
+	frameLogicSource := strings.Join([]string{
+		"import { kea, key, path, props, selectors } from 'kea'",
+		"import type { frameLogicType } from './frameLogicType'",
+		"import type { FrameType } from './types'",
+		"",
+		"export interface FrameLogicProps {",
+		"    frameId: number",
+		"}",
+		"",
+		"export const frameLogic = kea<frameLogicType>([",
+		"    path(['frameLogic']),",
+		"    props({} as FrameLogicProps),",
+		"    key((props) => props.frameId),",
+		"    selectors(() => ({",
+		"        frameId: [() => [(_, props) => props.frameId], (frameId) => frameId],",
+		"        frame: [() => [], (): FrameType => ({ scenes: [{ id: 'default' }] })],",
+		"        frameForm: [() => [], (): Partial<FrameType> => ({})],",
+		"        defaultScene: [",
+		"            (s) => [s.frame, s.frameForm],",
+		"            (frame, frameForm) => {",
+		"                const allScenes = frameForm?.scenes ?? frame?.scenes ?? []",
+		"                return (allScenes.find((scene) => scene.id === 'default' || scene.default) || allScenes[0])?.id ?? null",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(frameLogicFile, []byte(frameLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	panelsLogicFile := filepath.Join(tempDir, "panelsLogic.ts")
+	panelsLogicSource := strings.Join([]string{
+		"import { connect, kea, key, path, props } from 'kea'",
+		"import type { panelsLogicType } from './panelsLogicType'",
+		"import { frameLogic } from './frameLogic'",
+		"",
+		"export interface PanelsLogicProps {",
+		"    frameId: number",
+		"}",
+		"",
+		"export const panelsLogic = kea<panelsLogicType>([",
+		"    path(['panelsLogic']),",
+		"    props({} as PanelsLogicProps),",
+		"    key((props) => props.frameId),",
+		"    connect((props: PanelsLogicProps) => ({",
+		"        values: [frameLogic(props), ['defaultScene', 'frame', 'frameForm']],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(panelsLogicFile, []byte(panelsLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       panelsLogicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if logic.KeyType != "number" {
+		t.Fatalf("expected key type %q, got %q", "number", logic.KeyType)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "defaultScene"); !ok || selector.Type != "string" {
+		t.Fatalf("expected connected defaultScene selector type %q, got %+v", "string", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "frame"); !ok || selector.Type != "FrameType" {
+		t.Fatalf("expected connected frame selector type %q, got %+v", "FrameType", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "frameForm"); !ok || selector.Type != "Partial<FrameType>" {
+		t.Fatalf("expected connected frameForm selector type %q, got %+v", "Partial<FrameType>", logic.Selectors)
+	}
+}
+
+func TestBuildParsedLogicsKeepsReportedAnyForAliasedImportedOptionalMemberFallbackSelectorType(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "baseUrl": ".",`,
+		`    "paths": {`,
+		`      "~/*": ["*"]`,
+		`    },`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte("export interface ProjectType {\n    id: string\n}\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "projectLogic.ts")
+	source := strings.Join([]string{
+		"import { kea, path, selectors } from 'kea'",
+		"",
+		"import type { ProjectType } from '~/types'",
+		"",
+		"export const projectLogic = kea([",
+		"    path(['projectLogic']),",
+		"    selectors({",
+		"        currentProjectId: [",
+		"            () => [null as ProjectType | null],",
+		"            (currentProject) => currentProject?.id || null,",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	selector, ok := findParsedField(logics[0].Selectors, "currentProjectId")
+	if !ok {
+		t.Fatalf("expected currentProjectId selector, got %+v", logics[0].Selectors)
+	}
+	if selector.Type != "any" {
+		t.Fatalf("expected selector type %q, got %+v", "any", selector)
+	}
+}
+
+func TestBuildParsedLogicsKeepsReportedAnyForAliasedLoaderBackedOptionalMemberFallbackSelectorType(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "baseUrl": ".",`,
+		`    "paths": {`,
+		`      "~/*": ["*"]`,
+		`    },`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte(strings.Join([]string{
+			"export interface ProjectBasicType {",
+			"    id: number",
+			"}",
+			"",
+			"export interface ProjectType extends ProjectBasicType {",
+			"    created_at: string",
+			"}",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "projectLogic.ts")
+	source := strings.Join([]string{
+		"import { kea, path, selectors } from 'kea'",
+		"import { loaders } from 'kea-loaders'",
+		"",
+		"import type { ProjectType } from '~/types'",
+		"",
+		"export const projectLogic = kea([",
+		"    path(['projectLogic']),",
+		"    loaders(() => ({",
+		"        currentProject: [",
+		"            null as ProjectType | null,",
+		"            {",
+		"                loadCurrentProject: async () => null,",
+		"            },",
+		"        ],",
+		"    })),",
+		"    selectors({",
+		"        currentProjectId: [",
+		"            (s) => [s.currentProject],",
+		"            (currentProject) => currentProject?.id || null,",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	selector, ok := findParsedField(logics[0].Selectors, "currentProjectId")
+	if !ok {
+		t.Fatalf("expected currentProjectId selector, got %+v", logics[0].Selectors)
+	}
+	if selector.Type != "any" {
+		t.Fatalf("expected selector type %q, got %+v", "any", selector)
 	}
 }
 
@@ -2240,6 +4483,96 @@ func TestBuildParsedLogicsKeepsReportedAnyForPropsBackedIdentityAndStringMethodS
 	if selector.Type != "any" {
 		t.Fatalf("expected selector type %q, got %q", "any", selector.Type)
 	}
+}
+
+func TestBuildParsedLogicsKeepsReportedAnyForBuilderPropsBackedImportedAliasSelectors(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte("export type APIScopeObject = 'project' | 'feature_flag'\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("failed writing imported type fixture: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "accessControlLogic.ts")
+	source := strings.Join([]string{
+		"import { kea, props, selectors } from 'kea'",
+		"",
+		"import type { APIScopeObject } from './types'",
+		"type AccessControlLogicProps = { resource: APIScopeObject }",
+		"",
+		"export const accessControlLogic = kea([",
+		"    props({} as AccessControlLogicProps),",
+		"    selectors({",
+		"        resource: [",
+		"            (_, p) => [p.resource],",
+		"            (resource) => resource,",
+		"        ],",
+		"        humanReadableResource: [",
+		"            (_, p) => [p.resource],",
+		"            (resource) => resource.replace(/_/g, ' '),",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	resource, ok := findParsedField(logics[0].Selectors, "resource")
+	if !ok {
+		t.Fatalf("expected resource selector, got %+v", logics[0].Selectors)
+	}
+	if resource.Type != "any" {
+		t.Fatalf("expected resource selector type %q, got %+v", "any", resource)
+	}
+
+	humanReadableResource, ok := findParsedField(logics[0].Selectors, "humanReadableResource")
+	if !ok {
+		t.Fatalf("expected humanReadableResource selector, got %+v", logics[0].Selectors)
+	}
+	if humanReadableResource.Type != "any" {
+		t.Fatalf("expected humanReadableResource selector type %q, got %+v", "any", humanReadableResource)
+	}
+
 }
 
 func TestSourceMemberPathTypeTextHandlesMultilineInterfaceCallbacks(t *testing.T) {
@@ -2579,7 +4912,6 @@ func TestBuildParsedLogicsRecoversRealisticPostHogKeyTypeEndToEnd(t *testing.T) 
 	if err != nil {
 		t.Fatalf("InspectFile returned error: %v", err)
 	}
-
 	logics, err := BuildParsedLogics(report)
 	if err != nil {
 		t.Fatalf("BuildParsedLogics returned error: %v", err)
@@ -3228,6 +5560,286 @@ func TestMergePreferredActionPayloadTypePreservesOptionalMembers(t *testing.T) {
 	}
 }
 
+func TestMergeParsedActionsPreferLoaderRecoveryPreservesReportedConcreteAnyArrays(t *testing.T) {
+	current := ParsedAction{
+		Name:         "addMembersToRoleSuccess",
+		FunctionType: "(roles: any[], payload?: { members: string[]; role: RoleType; }) => { roles: any[]; payload?: { members: string[]; role: RoleType; } }",
+		PayloadType:  "{ roles: any[]; payload?: { members: string[]; role: RoleType; } }",
+	}
+	candidate := ParsedAction{
+		Name:         "addMembersToRoleSuccess",
+		FunctionType: "(roles: RoleType[], payload?: { members: string[]; role: RoleType; }) => { roles: RoleType[]; payload?: { members: string[]; role: RoleType; } }",
+		PayloadType:  "{ roles: RoleType[]; payload?: { members: string[]; role: RoleType; } }",
+	}
+
+	merged := mergeParsedActionsPreferLoaderRecovery([]ParsedAction{current}, candidate)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 merged action, got %+v", merged)
+	}
+	if merged[0].FunctionType != current.FunctionType || merged[0].PayloadType != current.PayloadType {
+		t.Fatalf("expected reported loader action to win when source only specializes any arrays, got %+v", merged[0])
+	}
+}
+
+func TestMergeSourceLoaderPropertyTypePreservesReportedAnyArrayReturns(t *testing.T) {
+	current := "({ role, members }: { members: any; role: any; }) => Promise<any[]>"
+	source := "({ role, members }: { role: RoleType; members: string[]; }) => Promise<RoleType[]>"
+
+	merged := mergeSourceLoaderPropertyType(current, source)
+	expected := "({ role, members }: { role: RoleType; members: string[]; }) => Promise<any[]>"
+	if merged != expected {
+		t.Fatalf("expected merged loader property type %q, got %q", expected, merged)
+	}
+}
+
+func TestBuildParsedLogicsFromSourcePreservesReportedAnyArrayLoaderSuccesses(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, loaders, path } from 'kea'",
+		"",
+		"type RoleType = {",
+		"    id: string",
+		"    members: string[]",
+		"}",
+		"",
+		"export const roleLogic = kea([",
+		"    path(['roleLogic']),",
+		"    loaders(({ values }) => ({",
+		"        roles: [",
+		"            [] as RoleType[],",
+		"            {",
+		"                loadRoles: async () => {",
+		"                    return values.roles || []",
+		"                },",
+		"                addMembersToRole: async ({ role, members }: { role: RoleType; members: string[] }) => {",
+		"                    if (!values.roles) {",
+		"                        return []",
+		"                    }",
+		"                    role.members = [...role.members, ...members]",
+		"                    return [...values.roles]",
+		"                },",
+		"                deleteRole: async ({ roleId }: { roleId: string }) => {",
+		"                    return values.roles?.filter((role) => role.id !== roleId) || []",
+		"                },",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/roleLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "roleLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "loaders",
+						Members: []MemberReport{
+							{
+								Name:       "roles",
+								TypeString: "(RoleType[] | { loadRoles: () => Promise<any>; addMembersToRole: ({ role, members }: { members: any; role: any; }) => Promise<any[]>; deleteRole: ({ roleId }: { roleId: string; }) => Promise<RoleType[]>; })[]",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	addMembersToRole, ok := findParsedAction(logics[0].Actions, "addMembersToRole")
+	if !ok {
+		t.Fatalf("expected addMembersToRole action, got %+v", logics[0].Actions)
+	}
+	if addMembersToRole.PayloadType != "{ role: RoleType; members: string[]; }" {
+		t.Fatalf("expected refined addMembersToRole payload, got %+v", addMembersToRole)
+	}
+
+	addMembersToRoleSuccess, ok := findParsedAction(logics[0].Actions, "addMembersToRoleSuccess")
+	if !ok {
+		t.Fatalf("expected addMembersToRoleSuccess action, got %+v", logics[0].Actions)
+	}
+	expectedAnyArraySuccess := "{ roles: any[]; payload?: { role: RoleType; members: string[]; } }"
+	if addMembersToRoleSuccess.PayloadType != expectedAnyArraySuccess {
+		t.Fatalf("expected addMembersToRoleSuccess payload %q, got %+v", expectedAnyArraySuccess, addMembersToRoleSuccess)
+	}
+
+	deleteRoleSuccess, ok := findParsedAction(logics[0].Actions, "deleteRoleSuccess")
+	if !ok {
+		t.Fatalf("expected deleteRoleSuccess action, got %+v", logics[0].Actions)
+	}
+	expectedTypedSuccess := "{ roles: RoleType[]; payload?: { roleId: string; } }"
+	if deleteRoleSuccess.PayloadType != expectedTypedSuccess {
+		t.Fatalf("expected deleteRoleSuccess payload %q, got %+v", expectedTypedSuccess, deleteRoleSuccess)
+	}
+}
+
+func TestBuildParsedLogicsFromSourcePrefersSpreadAnyArrayLoaderSuccessesOverTypedReportedArrays(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, loaders, path } from 'kea'",
+		"",
+		"type HogFlow = {",
+		"    id: string",
+		"    name: string",
+		"}",
+		"",
+		"export const workflowsLogic = kea([",
+		"    path(['workflowsLogic']),",
+		"    loaders(({ values }) => ({",
+		"        workflows: [",
+		"            [] as HogFlow[],",
+		"            {",
+		"                duplicateWorkflow: async (workflow: HogFlow) => {",
+		"                    const duplicatedWorkflow = { ...workflow, id: 'copy' }",
+		"                    return [duplicatedWorkflow, ...values.workflows]",
+		"                },",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/workflowsLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "workflowsLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "loaders",
+						Members: []MemberReport{
+							{
+								Name:       "workflows",
+								TypeString: "(HogFlow[] | { duplicateWorkflow: (workflow: HogFlow) => Promise<HogFlow[]>; })[]",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	duplicateWorkflowSuccess, ok := findParsedAction(logics[0].Actions, "duplicateWorkflowSuccess")
+	if !ok {
+		t.Fatalf("expected duplicateWorkflowSuccess action, got %+v", logics[0].Actions)
+	}
+	expectedSuccess := "{ workflows: any[]; payload?: HogFlow }"
+	if duplicateWorkflowSuccess.PayloadType != expectedSuccess {
+		t.Fatalf("expected duplicateWorkflowSuccess payload %q, got %+v", expectedSuccess, duplicateWorkflowSuccess)
+	}
+}
+
+func TestRefineSourceLoaderFunctionTypeWidensSpreadCopiesToAnyArrays(t *testing.T) {
+	functionType := "({ role, members }: { role: RoleType; members: string[]; }) => Promise<RoleType[]>"
+	expression := strings.Join([]string{
+		"async ({ role, members }: { role: RoleType; members: string[] }) => {",
+		"    if (!values.roles) {",
+		"        return []",
+		"    }",
+		"    role.members = [...role.members, ...members]",
+		"    return [...values.roles]",
+		"}",
+	}, "\n")
+
+	refined := refineSourceLoaderFunctionType(functionType, expression, "RoleType[]")
+	expected := "({ role, members }: { role: RoleType; members: string[]; }) => Promise<any[]>"
+	if refined != expected {
+		t.Fatalf("expected refined loader function type %q, got %q", expected, refined)
+	}
+}
+
+func TestRefineSourceLoaderFunctionTypeWidensPrependedSpreadCopiesToAnyArrays(t *testing.T) {
+	functionType := "(workflow: HogFlow) => Promise<HogFlow[]>"
+	expression := strings.Join([]string{
+		"async (workflow: HogFlow) => {",
+		"    const duplicatedWorkflow = { ...workflow, id: 'copy' }",
+		"    return [duplicatedWorkflow, ...values.workflows]",
+		"}",
+	}, "\n")
+
+	refined := refineSourceLoaderFunctionType(functionType, expression, "HogFlow[]")
+	expected := "(workflow: HogFlow) => Promise<any[]>"
+	if refined != expected {
+		t.Fatalf("expected refined loader function type %q, got %q", expected, refined)
+	}
+}
+
+func TestBuildParsedLogicsFromSourcePrefersRecoveredPrimitiveShorthandPayloadMembers(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"type RoleType = {",
+		"    id: string",
+		"}",
+		"",
+		"export const demoLogic = kea([",
+		"    path(['demoLogic']),",
+		"    actions({",
+		"        deleteRole: (roleId: RoleType['id']) => ({ roleId }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/demoLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "demoLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{Name: "deleteRole", TypeString: "(roleId: string) => { roleId: RoleType; }"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "deleteRole")
+	if !ok {
+		t.Fatalf("expected deleteRole action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ roleId: string; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected recovered deleteRole payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(roleId: RoleType['id']) => { roleId: string; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected recovered deleteRole function type %q, got %+v", expectedFunctionType, action)
+	}
+}
+
 func TestPreferredLoaderSuccessTypeFallsBackToDefaultForUnusableInferredTypes(t *testing.T) {
 	defaultType := "{ system_status_ok: boolean; async_migrations_ok: boolean; }"
 
@@ -3246,6 +5858,11 @@ func TestPreferredLoaderSuccessTypeFallsBackToDefaultForUnusableInferredTypes(t 
 			returnType: `Promise<"api/instance_settings">`,
 			expected:   defaultType,
 		},
+		{
+			name:       "broad primitive string",
+			returnType: "Promise<string>",
+			expected:   defaultType,
+		},
 	}
 
 	for _, tc := range cases {
@@ -3258,6 +5875,61 @@ func TestPreferredLoaderSuccessTypeFallsBackToDefaultForUnusableInferredTypes(t 
 				t.Fatalf("expected loader success type %q, got %q", tc.expected, actual)
 			}
 		})
+	}
+}
+
+func TestBuildParsedLogicsFallsBackToLoaderDefaultTypeForBroadPrimitiveReturn(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path } from 'kea'",
+		"import { loaders } from 'kea-loaders'",
+		"",
+		"type DebugResponse = {",
+		"    queries: string[]",
+		"}",
+		"",
+		"export const debugLogic = kea([",
+		"    path(['debugLogic']),",
+		"    loaders(() => ({",
+		"        debugResponse: [",
+		"            {} as DebugResponse,",
+		"            {",
+		"                loadDebugResponse: async (): Promise<string> => 'api/debug_ch_queries',",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/debugLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "debugLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "loaders",
+						Members: []MemberReport{
+							{Name: "debugResponse", TypeString: "any[]"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if action, ok := findParsedAction(logic.Actions, "loadDebugResponseSuccess"); !ok || action.FunctionType != "(debugResponse: DebugResponse, payload?: any) => { debugResponse: DebugResponse; payload?: any }" {
+		t.Fatalf("expected loadDebugResponseSuccess to fall back to the loader default type, got %+v", action)
 	}
 }
 
@@ -3321,8 +5993,8 @@ func TestBuildParsedLogicsRecoversTypedIdentifierActionPayloads(t *testing.T) {
 	if updateMembers.PayloadType != expectedMembersPayload {
 		t.Fatalf("expected updateAccessControlMembers payload %q, got %q", expectedMembersPayload, updateMembers.PayloadType)
 	}
-	if !strings.Contains(updateMembers.FunctionType, "(accessControls: { member: string; level: AccessControlLevel | null; }[]) =>") {
-		t.Fatalf("expected updateAccessControlMembers function type to collapse indexed access to string, got %q", updateMembers.FunctionType)
+	if !strings.Contains(updateMembers.FunctionType, "(accessControls: { member: OrganizationMemberType['id']; level: AccessControlLevel | null; }[]) =>") {
+		t.Fatalf("expected updateAccessControlMembers function type to preserve indexed access parameter type, got %q", updateMembers.FunctionType)
 	}
 
 	saveGroupedRules, ok := findParsedAction(logics[0].Actions, "saveGroupedRules")
@@ -3335,6 +6007,1229 @@ func TestBuildParsedLogicsRecoversTypedIdentifierActionPayloads(t *testing.T) {
 	}
 	if !strings.Contains(saveGroupedRules.FunctionType, expectedSaveGroupedRulesPayload) {
 		t.Fatalf("expected saveGroupedRules function type to contain %q, got %q", expectedSaveGroupedRulesPayload, saveGroupedRules.FunctionType)
+	}
+}
+
+func TestRefineActionFunctionTypeRecoversLowQualityParameterTypesFromPayload(t *testing.T) {
+	functionType := "(experimentId: ExperimentIdType, metric: any, teamId: number | null | undefined, queryId: string | null, context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; ... 4 more ...; status_code: number | null; }) => { context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; metric_kind: string; error_type: 'timeout' | 'out_of_memory' | 'server_error' | 'network_error' | 'unknown'; error_code: string | null; error_message: string | null; status_code: number | null; }; experimentId: ExperimentIdType; metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery; queryId: string | null; teamId: number | null | undefined; }"
+	payloadType := "{ context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; metric_kind: string; error_type: 'timeout' | 'out_of_memory' | 'server_error' | 'network_error' | 'unknown'; error_code: string | null; error_message: string | null; status_code: number | null; }; experimentId: ExperimentIdType; metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery; queryId: string | null; teamId: number | null | undefined; }"
+
+	refined := refineActionFunctionType(functionType, payloadType)
+	if strings.Contains(refined, "metric: any") {
+		t.Fatalf("expected refined function type to replace metric: any, got %q", refined)
+	}
+	if strings.Contains(refined, "... 4 more ...") {
+		t.Fatalf("expected refined function type to remove summarized object placeholder, got %q", refined)
+	}
+	if !strings.Contains(refined, "metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery") {
+		t.Fatalf("expected refined function type to recover metric parameter type, got %q", refined)
+	}
+	if !strings.Contains(refined, "context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; metric_kind: string; error_type: 'timeout' | 'out_of_memory' | 'server_error' | 'network_error' | 'unknown'; error_code: string | null; error_message: string | null; status_code: number | null; }") {
+		t.Fatalf("expected refined function type to expand context parameter type, got %q", refined)
+	}
+}
+
+func TestRefineActionFunctionTypeKeepsSpecificParameterTypesWhenPayloadDiffers(t *testing.T) {
+	functionType := "({ experimentId, holdoutId }: { experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType['id']; }) => { experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType; }"
+	payloadType := "{ experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType; }"
+
+	refined := refineActionFunctionType(functionType, payloadType)
+	if refined != functionType {
+		t.Fatalf("expected specific parameter types to stay unchanged, got %q", refined)
+	}
+}
+
+func TestParameterTypeNeedsSourceRecoveryIgnoresQuotedUnknownLiteral(t *testing.T) {
+	typeText := "{ error_type: 'timeout' | 'out_of_memory' | 'server_error' | 'network_error' | 'unknown'; }"
+	if parameterTypeNeedsSourceRecovery(typeText) {
+		t.Fatalf("expected quoted string literal 'unknown' to not mark parameter type as unresolved, got %q", typeText)
+	}
+}
+
+func TestBuildParsedLogicsKeepsExplicitUnknownActionParameters(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"type SubstitutionChoice = { resourceId: string }",
+		"",
+		"export const demoLogic = kea([",
+		"    path(['demoLogic']),",
+		"    actions({",
+		"        setDestinationTeamId: (teamId: unknown) => ({ teamId: teamId as number | null }),",
+		"        setSubstitutionChoice: (resourceKey: string, choice: unknown) => ({",
+		"            resourceKey,",
+		"            choice: choice as SubstitutionChoice,",
+		"        }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/demoLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "demoLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{Name: "setDestinationTeamId", TypeString: "(teamId: unknown) => { teamId: number | null; }", ReturnTypeString: "{ teamId: number | null; }"},
+							{Name: "setSubstitutionChoice", TypeString: "(resourceKey: string, choice: unknown) => { resourceKey: string; choice: SubstitutionChoice; }", ReturnTypeString: "{ resourceKey: string; choice: SubstitutionChoice; }"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	setDestinationTeamID, ok := findParsedAction(logics[0].Actions, "setDestinationTeamId")
+	if !ok {
+		t.Fatalf("expected setDestinationTeamId action, got %+v", logics[0].Actions)
+	}
+	if !strings.Contains(setDestinationTeamID.FunctionType, "(teamId: unknown) =>") {
+		t.Fatalf("expected explicit unknown teamId parameter to be preserved, got %q", setDestinationTeamID.FunctionType)
+	}
+
+	setSubstitutionChoice, ok := findParsedAction(logics[0].Actions, "setSubstitutionChoice")
+	if !ok {
+		t.Fatalf("expected setSubstitutionChoice action, got %+v", logics[0].Actions)
+	}
+	if !strings.Contains(setSubstitutionChoice.FunctionType, "(resourceKey: string, choice: unknown) =>") {
+		t.Fatalf("expected explicit unknown choice parameter to be preserved, got %q", setSubstitutionChoice.FunctionType)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedIndexedAccessActionPayloads(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "baseUrl": "frontend",`,
+		`    "paths": {`,
+		`      "~/*": ["src/*"]`,
+		`    },`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "frontend", "src", "types.ts")
+	if err := os.MkdirAll(filepath.Dir(typesFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	typesSource := strings.Join([]string{
+		"export type AccessControlLevel = 'none' | 'viewer'",
+		"export interface BaseMemberType {",
+		"    id: string",
+		"}",
+		"export interface OrganizationMemberType extends BaseMemberType {",
+		"    level: AccessControlLevel",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "frontend", "src", "accessLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import { AccessControlLevel, OrganizationMemberType } from '~/types'",
+		"",
+		"export const accessLogic = kea([",
+		"    path(['accessLogic']),",
+		"    actions({",
+		"        updateAccessControlMembers: (",
+		"            accessControls: {",
+		"                member: OrganizationMemberType['id']",
+		"                level: AccessControlLevel | null",
+		"            }[]",
+		"        ) => ({ accessControls }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "updateAccessControlMembers")
+	if !ok {
+		t.Fatalf("expected updateAccessControlMembers action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ accessControls: { member: string; level: AccessControlLevel | null; }[]; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected imported indexed access payload %q, got %+v", expectedPayload, action)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedIndexedAccessPayloadsForShorthandActions(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface RoleType {",
+		"    id: string",
+		"    name: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "roleAccessLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import { RoleType } from './types'",
+		"",
+		"export const roleAccessLogic = kea([",
+		"    path(['roleAccessLogic']),",
+		"    actions({",
+		"        deleteRole: (roleId: RoleType['id']) => ({ roleId }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "deleteRole")
+	if !ok {
+		t.Fatalf("expected deleteRole action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ roleId: string; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected deleteRole payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(roleId: string) => { roleId: string; }"
+	expectedFunctionType = "(roleId: RoleType['id']) => { roleId: string; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected deleteRole function type %q, got %+v", expectedFunctionType, action)
+	}
+}
+
+func TestConnectedActionFunctionParametersLookMoreSpecificForIndexedAccess(t *testing.T) {
+	current := "(accessControls: { member: string; level: AccessControlLevel | null; }[]) => void"
+	candidate := "(accessControls: { member: OrganizationMemberType['id']; level: AccessControlLevel | null; }[]) => { accessControls: { member: string; level: AccessControlLevel | null; }[]; }"
+
+	if !connectedActionFunctionParametersLookMoreSpecific(current, candidate) {
+		t.Fatalf("expected candidate connected action parameters to be preferred")
+	}
+	if connectedActionFunctionParametersLookMoreSpecific(candidate, current) {
+		t.Fatalf("expected current connected action parameters to not beat the indexed-access candidate")
+	}
+}
+
+func TestBuildParsedLogicsConnectedActionsKeepIndexedAccessParameterTypes(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export type AccessControlLevel = 'none' | 'viewer'",
+		"export interface OrganizationMemberType {",
+		"    id: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	accessLogicFile := filepath.Join(tempDir, "accessLogic.ts")
+	accessLogicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import { AccessControlLevel, OrganizationMemberType } from './types'",
+		"",
+		"export const accessLogic = kea([",
+		"    path(['accessLogic']),",
+		"    actions({",
+		"        updateAccessControlMembers: (",
+		"            accessControls: {",
+		"                member: OrganizationMemberType['id']",
+		"                level: AccessControlLevel | null",
+		"            }[]",
+		"        ) => ({ accessControls }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(accessLogicFile, []byte(accessLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	consumerLogicFile := filepath.Join(tempDir, "consumerLogic.ts")
+	consumerLogicSource := strings.Join([]string{
+		"import { connect, kea, path } from 'kea'",
+		"",
+		"import { accessLogic } from './accessLogic'",
+		"",
+		"export const consumerLogic = kea([",
+		"    path(['consumerLogic']),",
+		"    connect({",
+		"        actions: [accessLogic, ['updateAccessControlMembers']],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(consumerLogicFile, []byte(consumerLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       consumerLogicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "updateAccessControlMembers")
+	if !ok {
+		t.Fatalf("expected connected updateAccessControlMembers action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ accessControls: { member: string; level: AccessControlLevel | null; }[]; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected connected payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(accessControls: { member: OrganizationMemberType['id']; level: AccessControlLevel | null; }[]) =>"
+	if !strings.Contains(action.FunctionType, expectedFunctionType) {
+		t.Fatalf("expected connected function type to contain %q, got %+v", expectedFunctionType, action)
+	}
+	if !hasImport(logics[0].Imports, "./types", "OrganizationMemberType") {
+		t.Fatalf("expected connected action import for OrganizationMemberType, got %+v", logics[0].Imports)
+	}
+}
+
+func TestBuildParsedLogicsConnectedActionsKeepFullPayloadWhenLocalListenerDestructuresSubset(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := "export type SidePanelTab = 'docs' | 'settings'\n"
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	stateLogicFile := filepath.Join(tempDir, "sidePanelStateLogic.ts")
+	stateLogicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import type { SidePanelTab } from './types'",
+		"",
+		"export const sidePanelStateLogic = kea([",
+		"    path(['sidePanelStateLogic']),",
+		"    actions({",
+		"        openSidePanel: (tab: SidePanelTab, options?: string) => ({ tab, options }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(stateLogicFile, []byte(stateLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	consumerLogicFile := filepath.Join(tempDir, "consumerLogic.ts")
+	consumerLogicSource := strings.Join([]string{
+		"import { connect, kea, listeners, path } from 'kea'",
+		"",
+		"import { sidePanelStateLogic } from './sidePanelStateLogic'",
+		"",
+		"export const consumerLogic = kea([",
+		"    path(['consumerLogic']),",
+		"    connect(() => ({",
+		"        actions: [sidePanelStateLogic, ['openSidePanel']],",
+		"    })),",
+		"    listeners(() => ({",
+		"        openSidePanel: ({ options }) => {",
+		"            console.log(options)",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(consumerLogicFile, []byte(consumerLogicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       consumerLogicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "openSidePanel")
+	if !ok {
+		t.Fatalf("expected connected openSidePanel action, got %+v", logics[0].Actions)
+	}
+	if !strings.Contains(action.FunctionType, "tab: SidePanelTab") || !strings.Contains(action.FunctionType, "options?: string") {
+		t.Fatalf("expected connected function type to preserve both parameters, got %+v", action)
+	}
+	actionPayload, ok := parseActionPayloadObjectMembers(action.PayloadType)
+	if !ok {
+		t.Fatalf("expected connected action payload object type, got %+v", action)
+	}
+	if len(actionPayload) != 2 || actionPayload["tab"].Type != "SidePanelTab" || actionPayload["options"].Type != "string | undefined" {
+		t.Fatalf("expected connected action payload to preserve tab/options members, got %+v", action)
+	}
+
+	listener, ok := findParsedListener(logics[0].Listeners, "openSidePanel")
+	if !ok {
+		t.Fatalf("expected openSidePanel listener, got %+v", logics[0].Listeners)
+	}
+	listenerPayload, ok := parseActionPayloadObjectMembers(listener.PayloadType)
+	if !ok {
+		t.Fatalf("expected openSidePanel listener payload object type, got %+v", listener)
+	}
+	if len(listenerPayload) != 2 || listenerPayload["tab"].Type != "SidePanelTab" || listenerPayload["options"].Type != "string | undefined" {
+		t.Fatalf("expected openSidePanel listener payload to preserve tab/options members, got %+v", listener)
+	}
+}
+
+func TestBuildParsedLogicsFromSourceRecoversSourceOnlyActionsReferencedByListeners(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, listeners, path } from 'kea'",
+		"import { loaders } from 'kea-loaders'",
+		"",
+		"type IncidentIoSummary = { status: string }",
+		"",
+		"export const logic = kea([",
+		"    path(['logic']),",
+		"    actions({",
+		"        setPageVisibility: (visible: boolean) => ({ visible }),",
+		"    }),",
+		"    loaders(() => ({",
+		"        summary: [null as IncidentIoSummary | null, {",
+		"            loadSummary: async () => null as IncidentIoSummary | null,",
+		"        }],",
+		"    })),",
+		"    listeners(({ actions }) => ({",
+		"        setPageVisibility: ({ visible }) => {",
+		"            if (visible) {",
+		"                actions.loadSummary()",
+		"            }",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/logic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "logic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:    "actions",
+						Members: nil,
+					},
+					{
+						Name: "loaders",
+						Members: []MemberReport{
+							{Name: "summary", TypeString: "any[]"},
+						},
+					},
+					{
+						Name:    "listeners",
+						Members: nil,
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "setPageVisibility")
+	if !ok {
+		t.Fatalf("expected source-only setPageVisibility action, got %+v", logics[0].Actions)
+	}
+	if !strings.Contains(action.FunctionType, "(visible: boolean) =>") {
+		t.Fatalf("expected setPageVisibility function type to preserve boolean parameter, got %+v", action)
+	}
+	payload, ok := parseActionPayloadObjectMembers(action.PayloadType)
+	if !ok || len(payload) != 1 || payload["visible"].Type != "boolean" {
+		t.Fatalf("expected setPageVisibility payload type to recover visible boolean member, got %+v", action)
+	}
+
+	listener, ok := findParsedListener(logics[0].Listeners, "setPageVisibility")
+	if !ok {
+		t.Fatalf("expected setPageVisibility listener, got %+v", logics[0].Listeners)
+	}
+	listenerPayload, ok := parseActionPayloadObjectMembers(listener.PayloadType)
+	if !ok || len(listenerPayload) != 1 || listenerPayload["visible"].Type != "boolean" {
+		t.Fatalf("expected setPageVisibility listener payload type to recover visible boolean member, got %+v", listener)
+	}
+}
+
+func TestBuildParsedLogicsFromSourceRecoversSourceOnlyEventNames(t *testing.T) {
+	source := strings.Join([]string{
+		"import { events, kea, path } from 'kea'",
+		"",
+		"export const logic = kea([",
+		"    path(['logic']),",
+		"    events(() => ({",
+		"        afterMount() {",
+		"            console.log('mounted')",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/logic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "logic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:    "events",
+						Members: nil,
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+	if !containsString(logics[0].Events, "afterMount") {
+		t.Fatalf("expected afterMount event to recover from source, got %+v", logics[0].Events)
+	}
+}
+
+func TestBuildParsedLogicsFromSourceRecoversBlockBodyEventNames(t *testing.T) {
+	source := strings.Join([]string{
+		"import { events, kea, path } from 'kea'",
+		"",
+		"export const logic = kea([",
+		"    path(['logic']),",
+		"    events(({ actions }) => {",
+		"        const logAction = actions",
+		"        return {",
+		"            afterMount() {",
+		"                console.log(logAction)",
+		"            },",
+		"        }",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/logic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "logic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:    "events",
+						Members: nil,
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+	if !containsString(logics[0].Events, "afterMount") {
+		t.Fatalf("expected block-body afterMount event to recover from source, got %+v", logics[0].Events)
+	}
+}
+
+func TestShouldRefineActionPayloadTypeIgnoresNestedUndefinedWhenHintDropsMembers(t *testing.T) {
+	current := "{ tab: SidePanelTab; options: string | undefined; }"
+	hinted := "{ options: any; }"
+
+	if shouldRefineActionPayloadType(current, hinted) {
+		t.Fatalf("expected nested undefined member to not trigger payload refinement from %+q to %+q", current, hinted)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedHelperReturnTypesForKeysAndSelectors(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export type AccessControlLevel = 'viewer' | 'editor'",
+		"",
+		"export type Entry = {",
+		"    id: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	helpersFile := filepath.Join(tempDir, "helpers.ts")
+	helpersSource := strings.Join([]string{
+		"import type { AccessControlLevel, Entry } from './types'",
+		"",
+		"export function getEntryId(entry: Entry): string {",
+		"    return entry.id",
+		"}",
+		"",
+		"export function getLevelOptionsForResource(",
+		"    availableLevels: AccessControlLevel[],",
+		"    options: { resourceLabel: string }",
+		"): { label: string; value: AccessControlLevel }[] {",
+		"    return availableLevels.map((level) => ({ label: `${options.resourceLabel}:${level}`, value: level }))",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(helpersFile, []byte(helpersSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "groupedAccessLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, key, path, props, selectors } from 'kea'",
+		"",
+		"import { getEntryId, getLevelOptionsForResource } from './helpers'",
+		"import type { AccessControlLevel, Entry } from './types'",
+		"",
+		"type LogicProps = {",
+		"    entry: Entry",
+		"    availableProjectLevels: AccessControlLevel[]",
+		"}",
+		"",
+		"export const groupedAccessLogic = kea([",
+		"    path((key) => ['groupedAccessLogic', key]),",
+		"    key((props: LogicProps) => getEntryId(props.entry)),",
+		"    props({} as LogicProps),",
+		"    selectors({",
+		"        entryId: [(_, p) => [p.entry], (entry) => getEntryId(entry)],",
+		"        projectLevelOptions: [",
+		"            (_, p) => [p.availableProjectLevels],",
+		"            (availableProjectLevels) =>",
+		"                getLevelOptionsForResource(availableProjectLevels, { resourceLabel: 'project' }),",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if logic.KeyType != "string" {
+		t.Fatalf("expected helper-backed key type %q, got %+v", "string", logic)
+	}
+
+	entryID, ok := findParsedField(logic.Selectors, "entryId")
+	if !ok {
+		t.Fatalf("expected entryId selector, got %+v", logic.Selectors)
+	}
+	if entryID.Type != "string" {
+		t.Fatalf("expected entryId selector type %q, got %+v", "string", entryID)
+	}
+
+	projectLevelOptions, ok := findParsedField(logic.Selectors, "projectLevelOptions")
+	if !ok {
+		t.Fatalf("expected projectLevelOptions selector, got %+v", logic.Selectors)
+	}
+	if !strings.HasSuffix(projectLevelOptions.Type, "[]") ||
+		!strings.Contains(projectLevelOptions.Type, "label: string") ||
+		!strings.Contains(projectLevelOptions.Type, "value: AccessControlLevel") {
+		t.Fatalf("expected projectLevelOptions selector to recover helper return array, got %+v", projectLevelOptions)
+	}
+}
+
+func TestBuildParsedLogicsRecoversUntypedBuilderKeyFromImportedHelper(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export type Entry = {",
+		"    id: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	helpersFile := filepath.Join(tempDir, "helpers.ts")
+	helpersSource := strings.Join([]string{
+		"import type { Entry } from './types'",
+		"",
+		"export function getEntryId(entry: Entry): string {",
+		"    return entry.id",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(helpersFile, []byte(helpersSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "groupedAccessLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"",
+		"import { getEntryId } from './helpers'",
+		"import type { Entry } from './types'",
+		"",
+		"type LogicProps = {",
+		"    entry: Entry",
+		"}",
+		"",
+		"export const groupedAccessLogic = kea([",
+		"    path((key) => ['groupedAccessLogic', key]),",
+		"    key((props) => getEntryId(props.entry)),",
+		"    props({} as LogicProps),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	if logics[0].KeyType != "string" {
+		t.Fatalf("expected imported helper-backed untyped key type %q, got %+v", "string", logics[0])
+	}
+}
+
+func TestBuildParsedLogicsRecoversKeyFromImportedPropsMemberLogicalFallback(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	workflowFile := filepath.Join(tempDir, "workflowLogic.ts")
+	workflowSource := strings.Join([]string{
+		"export type WorkflowLogicProps = {",
+		"    id?: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(workflowFile, []byte(workflowSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "stepDelayLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"import type { WorkflowLogicProps } from './workflowLogic'",
+		"",
+		"type StepDelayLogicProps = {",
+		"    workflowLogicProps: WorkflowLogicProps",
+		"}",
+		"",
+		"export const stepDelayLogic = kea([",
+		"    path((key) => ['stepDelayLogic', key]),",
+		"    props({} as StepDelayLogicProps),",
+		"    key(({ workflowLogicProps }: StepDelayLogicProps) => workflowLogicProps.id || 'new'),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	if logics[0].KeyType != "string" {
+		t.Fatalf("expected imported props member key type %q, got %+v", "string", logics[0])
+	}
+}
+
+func TestBuildParsedLogicsRecoversKeyFromNestedImportedPropsMemberLogicalFallback(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	categoryFile := filepath.Join(tempDir, "optOutCategoriesLogic.ts")
+	categorySource := strings.Join([]string{
+		"export type MessageCategory = {",
+		"    id?: string",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(categoryFile, []byte(categorySource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "newCategoryLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, key, path, props } from 'kea'",
+		"import type { MessageCategory } from './optOutCategoriesLogic'",
+		"",
+		"type CategoryLogicProps = {",
+		"    category?: MessageCategory | null",
+		"}",
+		"",
+		"export const newCategoryLogic = kea([",
+		"    path(['newCategoryLogic']),",
+		"    props({} as CategoryLogicProps),",
+		"    key((props: CategoryLogicProps) => props.category?.id || 'new'),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	if logics[0].KeyType != "string" {
+		t.Fatalf("expected nested imported props member key type %q, got %+v", "string", logics[0])
+	}
+}
+
+func TestBuildParsedLogicsPrefersTypeProbeForMultiReturnSelectors(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export type APIScopeObject = 'project' | 'dashboard'",
+		"export type AccessControlLevel = 'viewer' | 'editor'",
+		"",
+		"export type Entry = {",
+		"    id: string",
+		"    inheritedReason: 'organization_admin' | null",
+		"    inheritedLevel: AccessControlLevel | null",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	helpersFile := filepath.Join(tempDir, "helpers.ts")
+	helpersSource := strings.Join([]string{
+		"import type { AccessControlLevel } from './types'",
+		"",
+		"export function getLevelOptionsForResource(",
+		"    availableLevels: AccessControlLevel[],",
+		"    resourceLabel: string",
+		"): { value: AccessControlLevel; label: string; disabledReason?: string }[] {",
+		"    return availableLevels.map((level) => ({ value: level, label: `${resourceLabel}:${level}` }))",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(helpersFile, []byte(helpersSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "groupedAccessLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path, props, selectors } from 'kea'",
+		"",
+		"import { getLevelOptionsForResource } from './helpers'",
+		"import type { APIScopeObject, AccessControlLevel, Entry } from './types'",
+		"",
+		"type LogicProps = {",
+		"    entry: Entry",
+		"    availableLevels: AccessControlLevel[]",
+		"    loading: boolean",
+		"    canEdit: boolean",
+		"}",
+		"",
+		"export const groupedAccessLogic = kea([",
+		"    path(['groupedAccessLogic']),",
+		"    props({} as LogicProps),",
+		"    selectors({",
+		"        loading: [(_, p) => [p.loading], (loading) => loading],",
+		"        canEdit: [(_, p) => [p.canEdit], (canEdit) => canEdit],",
+		"        entry: [(_, p) => [p.entry], (entry) => entry],",
+		"        availableLevels: [(_, p) => [p.availableLevels], (availableLevels) => availableLevels],",
+		"        featuresDisabledReason: [",
+		"            (s) => [s.loading, s.canEdit, s.entry],",
+		"            (loading, canEdit, entry) => {",
+		"                if (loading) {",
+		"                    return 'Loading...'",
+		"                }",
+		"                if (!canEdit) {",
+		"                    return 'Cannot edit'",
+		"                }",
+		"                if (entry.inheritedReason === 'organization_admin') {",
+		"                    return 'User is an organization admin and has access to all features'",
+		"                }",
+		"                return undefined",
+		"            },",
+		"        ],",
+		"        projectDisabledReason: [",
+		"            (s) => [s.loading, s.canEdit, s.entry],",
+		"            (loading, canEdit, entry) => {",
+		"                if (loading) {",
+		"                    return 'Loading...'",
+		"                }",
+		"                if (!canEdit) {",
+		"                    return 'Cannot edit'",
+		"                }",
+		"                if (entry.inheritedReason === 'organization_admin') {",
+		"                    return 'User is an organization admin'",
+		"                }",
+		"                return undefined",
+		"            },",
+		"        ],",
+		"        resourceLevelOptions: [",
+		"            (s) => [s.availableLevels, s.entry],",
+		"            (availableLevels, entry) => (resource: APIScopeObject, resourceLabel: string) => {",
+		"                const levelOptions = getLevelOptionsForResource(availableLevels, resourceLabel)",
+		"                if (resource === 'dashboard' && entry.inheritedLevel === null) {",
+		"                    return [",
+		"                        { value: null as AccessControlLevel | null, label: 'No override', disabledReason: undefined },",
+		"                        ...levelOptions,",
+		"                    ]",
+		"                }",
+		"                return levelOptions",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	featuresDisabledReason, ok := findParsedField(logics[0].Selectors, "featuresDisabledReason")
+	if !ok {
+		t.Fatalf("expected featuresDisabledReason selector, got %+v", logics[0].Selectors)
+	}
+	for _, expected := range []string{
+		"Cannot edit",
+		"Loading...",
+		"User is an organization admin and has access to all features",
+		"undefined",
+	} {
+		if !strings.Contains(featuresDisabledReason.Type, expected) {
+			t.Fatalf("expected featuresDisabledReason type to contain %q, got %+v", expected, featuresDisabledReason)
+		}
+	}
+
+	projectDisabledReason, ok := findParsedField(logics[0].Selectors, "projectDisabledReason")
+	if !ok {
+		t.Fatalf("expected projectDisabledReason selector, got %+v", logics[0].Selectors)
+	}
+	for _, expected := range []string{"Cannot edit", "Loading...", "User is an organization admin", "undefined"} {
+		if !strings.Contains(projectDisabledReason.Type, expected) {
+			t.Fatalf("expected projectDisabledReason type to contain %q, got %+v", expected, projectDisabledReason)
+		}
+	}
+
+	resourceLevelOptions, ok := findParsedField(logics[0].Selectors, "resourceLevelOptions")
+	if !ok {
+		t.Fatalf("expected resourceLevelOptions selector, got %+v", logics[0].Selectors)
+	}
+	for _, expected := range []string{
+		"(resource: APIScopeObject, resourceLabel: string) =>",
+		"value: AccessControlLevel | null",
+		"value: AccessControlLevel",
+		"disabledReason: undefined",
+	} {
+		if !strings.Contains(resourceLevelOptions.Type, expected) {
+			t.Fatalf("expected resourceLevelOptions type to contain %q, got %+v", expected, resourceLevelOptions)
+		}
 	}
 }
 
@@ -3476,6 +7371,450 @@ func TestBuildParsedLogicsRecoversGenericAPILoaderReturnTypesFromSource(t *testi
 	}
 	if action, ok := findParsedAction(logic.Actions, "updateDefaultsSuccess"); !ok || action.FunctionType != "(updatedDefaults: AccessControlDefaultsResponse, payload?: any) => { updatedDefaults: AccessControlDefaultsResponse; payload?: any }" {
 		t.Fatalf("expected updateDefaultsSuccess action signature to preserve awaited generic API type, got %+v", action)
+	}
+}
+
+func TestBuildParsedLogicsKeepsConcreteLoaderSuccessTypesAcrossTryCatchFallbacks(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "baseUrl": "frontend",`,
+		`    "paths": {`,
+		`      "~/*": ["src/*"],`,
+		`      "lib/*": ["src/lib/*"]`,
+		`    },`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	apiFile := filepath.Join(tempDir, "frontend", "src", "lib", "api.ts")
+	if err := os.MkdirAll(filepath.Dir(apiFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	apiSource := strings.Join([]string{
+		"const api = {",
+		"    async get<T>(_url: string): Promise<T> {",
+		"        throw new Error('network')",
+		"    },",
+		"}",
+		"",
+		"export default api",
+	}, "\n")
+	if err := os.WriteFile(apiFile, []byte(apiSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "frontend", "src", "types.ts")
+	typesSource := strings.Join([]string{
+		"export enum AccessControlLevel {",
+		"    None = 'none',",
+		"    Viewer = 'viewer',",
+		"    Editor = 'editor',",
+		"}",
+		"",
+		"export type AccessControlResponseType = {",
+		"    access_controls: { access_level: AccessControlLevel | null }[]",
+		"    available_access_levels: AccessControlLevel[]",
+		"    user_access_level: AccessControlLevel",
+		"    default_access_level: AccessControlLevel",
+		"    user_can_edit_access_levels: boolean",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "frontend", "src", "accessLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path } from 'kea'",
+		"import { loaders } from 'kea-loaders'",
+		"",
+		"import api from 'lib/api'",
+		"import { AccessControlLevel, AccessControlResponseType } from '~/types'",
+		"",
+		"export const accessLogic = kea([",
+		"    path(['accessLogic']),",
+		"    loaders(() => ({",
+		"        accessControls: [",
+		"            null as AccessControlResponseType | null,",
+		"            {",
+		"                loadAccessControls: async () => {",
+		"                    try {",
+		"                        const response = await api.get<AccessControlResponseType>('api/access_controls')",
+		"                        return response",
+		"                    } catch {",
+		"                        return {",
+		"                            access_controls: [],",
+		"                            available_access_levels: [",
+		"                                AccessControlLevel.None,",
+		"                                AccessControlLevel.Viewer,",
+		"                                AccessControlLevel.Editor,",
+		"                            ],",
+		"                            user_access_level: AccessControlLevel.None,",
+		"                            default_access_level: AccessControlLevel.None,",
+		"                            user_can_edit_access_levels: false,",
+		"                        }",
+		"                    }",
+		"                },",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "loadAccessControlsSuccess")
+	if !ok {
+		t.Fatalf("expected loadAccessControlsSuccess action, got %+v", logics[0].Actions)
+	}
+	expectedFunctionType := "(accessControls: AccessControlResponseType, payload?: any) => { accessControls: AccessControlResponseType; payload?: any }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected loadAccessControlsSuccess function type %q, got %+v", expectedFunctionType, action)
+	}
+}
+
+func TestBuildParsedLogicsKeepsConcreteLazyLoaderSuccessTypesForAwaitedLocalResponses(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "baseUrl": "frontend",`,
+		`    "paths": {`,
+		`      "lib/*": ["src/lib/*"]`,
+		`    },`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	apiFile := filepath.Join(tempDir, "frontend", "src", "lib", "api.ts")
+	if err := os.MkdirAll(filepath.Dir(apiFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	apiSource := strings.Join([]string{
+		"export type PaginatedResponse<T> = {",
+		"    results: T[]",
+		"    next: string | null",
+		"}",
+		"",
+		"export type ActivityLogItem = { id: string }",
+		"",
+		"const api = {",
+		"    activity: {",
+		"        async list(_filters: Record<string, unknown>): Promise<PaginatedResponse<ActivityLogItem>> {",
+		"            throw new Error('network')",
+		"        },",
+		"    },",
+		"    async get<T>(_url: string): Promise<T> {",
+		"        throw new Error('network')",
+		"    },",
+		"}",
+		"",
+		"export default api",
+	}, "\n")
+	if err := os.WriteFile(apiFile, []byte(apiSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "frontend", "src", "activityLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path } from 'kea'",
+		"import { lazyLoaders } from 'kea-loaders'",
+		"",
+		"import api, { ActivityLogItem, PaginatedResponse } from 'lib/api'",
+		"",
+		"export const activityLogic = kea([",
+		"    path(['activityLogic']),",
+		"    actions({",
+		"        loadAllActivity: true,",
+		"        loadOlderActivity: true,",
+		"    }),",
+		"    lazyLoaders(({ values }) => ({",
+		"        allActivityResponse: [",
+		"            null as PaginatedResponse<ActivityLogItem> | null,",
+		"            {",
+		"                loadAllActivity: async () => {",
+		"                    const response = await api.activity.list({})",
+		"                    return response",
+		"                },",
+		"                loadOlderActivity: async () => {",
+		"                    if (!values.allActivityResponse?.next) {",
+		"                        return values.allActivityResponse",
+		"                    }",
+		"                    const response = await api.get<PaginatedResponse<ActivityLogItem>>(values.allActivityResponse.next)",
+		"                    response.results = [...values.allActivityResponse.results, ...response.results]",
+		"                    return response",
+		"                },",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	loadAllActivitySuccess, ok := findParsedAction(logics[0].Actions, "loadAllActivitySuccess")
+	if !ok {
+		t.Fatalf("expected loadAllActivitySuccess action, got %+v", logics[0].Actions)
+	}
+	expectedLoadAllActivitySuccess := "(allActivityResponse: PaginatedResponse<ActivityLogItem>, payload?: { value: true; }) => { allActivityResponse: PaginatedResponse<ActivityLogItem>; payload?: { value: true; } }"
+	if loadAllActivitySuccess.FunctionType != expectedLoadAllActivitySuccess {
+		t.Fatalf("expected loadAllActivitySuccess function type %q, got %+v", expectedLoadAllActivitySuccess, loadAllActivitySuccess)
+	}
+
+	loadOlderActivitySuccess, ok := findParsedAction(logics[0].Actions, "loadOlderActivitySuccess")
+	if !ok {
+		t.Fatalf("expected loadOlderActivitySuccess action, got %+v", logics[0].Actions)
+	}
+	expectedLoadOlderActivitySuccess := "(allActivityResponse: PaginatedResponse<ActivityLogItem> | null, payload?: { value: true; }) => { allActivityResponse: PaginatedResponse<ActivityLogItem> | null; payload?: { value: true; } }"
+	if loadOlderActivitySuccess.FunctionType != expectedLoadOlderActivitySuccess {
+		t.Fatalf("expected loadOlderActivitySuccess function type %q, got %+v", expectedLoadOlderActivitySuccess, loadOlderActivitySuccess)
+	}
+}
+
+func TestSourceReturnExpressionTypeWithContextMergesMultipleLiteralReturns(t *testing.T) {
+	source := strings.Join([]string{
+		"type Entry = {",
+		"    inheritedReason: 'organization_admin' | null",
+		"}",
+	}, "\n")
+	body := strings.Join([]string{
+		"{",
+		"    if (loading) {",
+		"        return 'Loading...'",
+		"    }",
+		"    if (!canEdit) {",
+		"        return 'Cannot edit'",
+		"    }",
+		"    if (entry.inheritedReason === 'organization_admin') {",
+		"        return 'User is an organization admin and has access to all features'",
+		"    }",
+		"    return undefined",
+		"}",
+	}, "\n")
+
+	returnType := sourceReturnExpressionTypeWithContext(
+		source,
+		"",
+		body,
+		true,
+		[]string{"loading", "canEdit", "entry"},
+		[]string{"boolean", "boolean", "{ inheritedReason: 'organization_admin' | null; }"},
+		false,
+		nil,
+	)
+	for _, expected := range []string{
+		"Cannot edit",
+		"Loading...",
+		"User is an organization admin and has access to all features",
+		"undefined",
+	} {
+		if !strings.Contains(returnType, expected) {
+			t.Fatalf("expected merged multi-return type to contain %q, got %q", expected, returnType)
+		}
+	}
+}
+
+func TestSourceArrowFunctionTypeTextWithContextKeepsNestedMultiReturnFunction(t *testing.T) {
+	source := strings.Join([]string{
+		"type APIScopeObject = 'project' | 'dashboard'",
+		"type AccessControlLevel = 'viewer' | 'editor'",
+		"",
+		"function getLevelOptionsForResource(",
+		"    resourceLabel: string",
+		"): { value: AccessControlLevel; label: string; disabledReason?: string }[] {",
+		"    return [{ value: 'viewer', label: resourceLabel }]",
+		"}",
+	}, "\n")
+	expression := strings.Join([]string{
+		"(resource: APIScopeObject, resourceLabel: string) => {",
+		"    const levelOptions = getLevelOptionsForResource(resourceLabel)",
+		"    if (resource === 'dashboard') {",
+		"        return [",
+		"            { value: null as AccessControlLevel | null, label: 'No override', disabledReason: undefined },",
+		"            ...levelOptions,",
+		"        ]",
+		"    }",
+		"    return levelOptions",
+		"}",
+	}, "\n")
+
+	returnType := sourceArrowFunctionTypeTextWithContext(source, "", expression, nil)
+	expected := "(resource: APIScopeObject, resourceLabel: string) => ({ disabledReason: undefined; label: string; value: AccessControlLevel | null; } | { value: AccessControlLevel; label: string; disabledReason?: string; })[]"
+	if returnType != expected {
+		t.Fatalf("expected nested multi-return function type %q, got %q", expected, returnType)
+	}
+	if strings.Contains(returnType, "| { value: AccessControlLevel; label: string; disabledReason?: string; }[]") {
+		t.Fatalf("expected nested multi-return function type to collapse redundant array union, got %q", returnType)
+	}
+}
+
+func TestBuildParsedLogicsFromSourcePrefersRecoveredMultiReturnFunctionSelectors(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path, selectors } from 'kea'",
+		"",
+		"type APIScopeObject = 'project' | 'dashboard'",
+		"type AccessControlLevel = 'viewer' | 'editor'",
+		"type Entry = {",
+		"    inheritedLevel: AccessControlLevel | null",
+		"}",
+		"",
+		"function getLevelOptionsForResource(",
+		"    resourceLabel: string",
+		"): { value: AccessControlLevel; label: string; disabledReason?: string }[] {",
+		"    return [{ value: 'viewer', label: resourceLabel }]",
+		"}",
+		"",
+		"export const groupedAccessLogic = kea([",
+		"    path(['groupedAccessLogic']),",
+		"    selectors({",
+		"        resourceLevelOptions: [",
+		"            () => [['viewer', 'editor'] as AccessControlLevel[], { inheritedLevel: null } as Entry],",
+		"            (availableLevels, entry) => (resource: APIScopeObject, resourceLabel: string) => {",
+		"                const levelOptions = getLevelOptionsForResource(resourceLabel)",
+		"                if (resource === 'dashboard' && entry.inheritedLevel === null) {",
+		"                    return [",
+		"                        { value: null as AccessControlLevel | null, label: 'No override', disabledReason: undefined },",
+		"                        ...levelOptions,",
+		"                    ]",
+		"                }",
+		"                return levelOptions",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/groupedAccessLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "groupedAccessLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:       "resourceLevelOptions",
+								TypeString: "(((s: any) => any[]) | ((availableLevels: AccessControlLevel[], entry: Entry) => (resource: APIScopeObject, resourceLabel: string) => { value: AccessControlLevel; label: string; disabledReason?: string; }[]))[]",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	resourceLevelOptions, ok := findParsedField(logics[0].Selectors, "resourceLevelOptions")
+	if !ok {
+		t.Fatalf("expected resourceLevelOptions selector, got %+v", logics[0].Selectors)
+	}
+	expected := "((resource: APIScopeObject, resourceLabel: string) => ({ disabledReason: undefined; label: string; value: AccessControlLevel | null; } | { value: AccessControlLevel; label: string; disabledReason?: string | undefined; })[])"
+	if resourceLevelOptions.Type != expected {
+		t.Fatalf("expected recovered multi-return function selector %q, got %+v", expected, resourceLevelOptions)
+	}
+	if strings.Contains(resourceLevelOptions.Type, "| { value: AccessControlLevel; label: string; disabledReason?: string | undefined; }[]") {
+		t.Fatalf("expected recovered multi-return function selector to collapse redundant array union, got %+v", resourceLevelOptions)
+	}
+}
+
+func TestMergeNormalizedTypeUnionDropsRedundantObjectArraySubset(t *testing.T) {
+	left := "({ disabledReason: undefined; label: string; value: AccessControlLevel | null; } | { value: AccessControlLevel; label: string; disabledReason?: string; })[]"
+	right := "{ value: AccessControlLevel; label: string; disabledReason?: string; }[]"
+
+	merged := mergeNormalizedTypeUnion(left, right)
+	if merged != left {
+		t.Fatalf("expected redundant object array subset to be dropped, got %q", merged)
+	}
+}
+
+func TestMergeNormalizedTypeUnionAbsorbsAny(t *testing.T) {
+	merged := mergeNormalizedTypeUnion("true | false", "any")
+	if merged != "any" {
+		t.Fatalf("expected union containing any to collapse to any, got %q", merged)
+	}
+}
+
+func TestNormalizeSelectorFunctionTypeOptionalUndefinedPreservesReturnObjectMembers(t *testing.T) {
+	typeText := "((resource: APIScopeObject, resourceLabel: string) => ({ disabledReason: undefined; label: string; value: AccessControlLevel | null; } | { value: AccessControlLevel; label: string; disabledReason?: string; })[])"
+
+	normalized := normalizeSelectorFunctionTypeOptionalUndefined(typeText)
+	expected := "((resource: APIScopeObject, resourceLabel: string) => ({ disabledReason: undefined; label: string; value: AccessControlLevel | null; } | { value: AccessControlLevel; label: string; disabledReason?: string | undefined; })[])"
+	if normalized != expected {
+		t.Fatalf("expected selector function type %q, got %q", expected, normalized)
 	}
 }
 
@@ -3621,6 +7960,185 @@ func TestBuildParsedLogicsProbesLoaderReturnTypesWhenSourceLooksNarrowerThanReal
 	}
 	if action, ok := findParsedAction(logic.Actions, "deleteUserSuccess"); !ok || action.FunctionType != "(user: null, payload?: any) => { user: null; payload?: any }" {
 		t.Fatalf("expected deleteUserSuccess to keep the null-only return type, got %+v", action)
+	}
+}
+
+func TestBuildParsedLogicsRecoversTypedAPILoaderSuccessUnionFromBlockBody(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "userLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path } from 'kea'",
+		"import { loaders } from 'kea-loaders'",
+		"",
+		"type UserType = { id: string }",
+		"",
+		"declare const api: {",
+		"    get<T>(url: string): Promise<T>",
+		"    delete(url: string): Promise<void>",
+		"}",
+		"",
+		"export const userLogic = kea([",
+		"    path(['userLogic']),",
+		"    loaders(() => ({",
+		"        user: [",
+		"            null as UserType | null,",
+		"            {",
+		"                loadUser: async () => {",
+		"                    try {",
+		"                        return await api.get<UserType>('api/users/@me/')",
+		"                    } catch (error: any) {",
+		"                        console.error(error)",
+		"                    }",
+		"                    return null",
+		"                },",
+		"                deleteUser: async () => {",
+		"                    return await api.delete('api/users/@me/').then(() => {",
+		"                        return null",
+		"                    })",
+		"                },",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if action, ok := findParsedAction(logic.Actions, "loadUserSuccess"); !ok || action.FunctionType != "(user: UserType | null, payload?: any) => { user: UserType | null; payload?: any }" {
+		t.Fatalf("expected loadUserSuccess to recover the typed API union return type, got %+v", action)
+	}
+	if action, ok := findParsedAction(logic.Actions, "deleteUserSuccess"); !ok || action.FunctionType != "(user: null, payload?: any) => { user: null; payload?: any }" {
+		t.Fatalf("expected deleteUserSuccess to keep the null-only return type, got %+v", action)
+	}
+}
+
+func TestSourceLoaderMemberTypeFromPropertyRecoversTypedAPILoaderUnionWithActionsContext(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import { loaders } from 'kea-loaders'",
+		"",
+		"type UserType = { id: string }",
+		"",
+		"declare const api: {",
+		"    get<T>(url: string): Promise<T>",
+		"}",
+		"",
+		"export const userLogic = kea([",
+		"    loaders(({ values, actions }) => ({",
+		"        user: [",
+		"            null as UserType | null,",
+		"            {",
+		"                loadUser: async () => {",
+		"                    try {",
+		"                        return await api.get<UserType>('api/users/@me/')",
+		"                    } catch (error: any) {",
+		"                        console.error(error)",
+		"                        actions.loadUserFailure(error.message)",
+		"                    }",
+		"                    return null",
+		"                },",
+		"            },",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	loadersProperty := mustFindLogicProperty(t, logics[0], "loaders")
+	userProperty, ok := sectionSourceProperties(source, loadersProperty)["user"]
+	if !ok {
+		t.Fatalf("expected user loader source property, got %+v", sectionSourceProperties(source, loadersProperty))
+	}
+	defaultType, properties, ok := sourceLoaderMemberTypeFromProperty(source, userProperty, "", nil)
+	if !ok {
+		t.Fatalf("expected source loader property recovery to succeed")
+	}
+	if defaultType != "UserType | null" {
+		t.Fatalf("expected loader default type %q, got %q", "UserType | null", defaultType)
+	}
+	if properties["loadUser"] != "() => Promise<UserType | null>" {
+		expression := strings.Join([]string{
+			"async () => {",
+			"    try {",
+			"        return await api.get<UserType>('api/users/@me/')",
+			"    } catch (error: any) {",
+			"        console.error(error)",
+			"        actions.loadUserFailure(error.message)",
+			"    }",
+			"    return null",
+			"}",
+		}, "\n")
+		simpleType := sourceArrowFunctionTypeText(source, expression)
+		contextType := sourceArrowFunctionTypeTextWithContext(source, "", expression, nil)
+		arrayStart, arrayEnd, ok, err := FindInspectableArrayLiteral(source, userProperty.ValueStart, userProperty.ValueEnd)
+		if err != nil || !ok {
+			t.Fatalf("FindInspectableArrayLiteral returned ok=%v err=%v", ok, err)
+		}
+		parts, err := splitTopLevelSourceSegments(source, arrayStart+1, arrayEnd)
+		if err != nil || len(parts) < 2 {
+			t.Fatalf("splitTopLevelSourceSegments returned err=%v parts=%d", err, len(parts))
+		}
+		nestedProperties, err := parseTopLevelProperties(source, parts[1].Start, parts[1].End)
+		if err != nil {
+			t.Fatalf("parseTopLevelProperties returned error: %v", err)
+		}
+		rangeType := ""
+		for _, nested := range nestedProperties {
+			if nested.Name == "loadUser" {
+				rangeType = sourceArrowFunctionTypeTextFromRange(source, "", nested, nil)
+				break
+			}
+		}
+		t.Fatalf(
+			"expected loadUser loader function type %q, got %q (simple=%q range=%q context=%q)",
+			"() => Promise<UserType | null>",
+			properties["loadUser"],
+			simpleType,
+			rangeType,
+			contextType,
+		)
 	}
 }
 
@@ -4283,6 +8801,247 @@ func TestBuildParsedLogicsLogicSampleRecoversDerivedSelectorReturnTypes(t *testi
 	}
 }
 
+func TestBuildParsedLogicsFromSourceRecoversReducedWriteRoundSelectorReturns(t *testing.T) {
+	source := mustReadFile(t, filepath.Join(repoRoot(t), "samples", "logic.ts"))
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/logic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "logic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "name", TypeString: "[string, { updateName: (_: string, { name }: { name: string; }) => string; }]"},
+							{Name: "number", TypeString: "[number, { updateNumber: (_: number, { number }: { number: number; }) => number; }]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "capitalizedName",
+								TypeString:       "((name: any, number: any) => any)[]",
+								ReturnTypeString: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	capitalizedName, ok := findParsedField(logics[0].Selectors, "capitalizedName")
+	if !ok {
+		t.Fatalf("expected capitalizedName selector, got %+v", logics[0].Selectors)
+	}
+	if capitalizedName.Type != "string" {
+		t.Fatalf("expected capitalizedName selector type string, got %+v", capitalizedName)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedDefaultArrayTypesFromSourceExpressions(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	defaultTreeFile := filepath.Join(tempDir, "defaultTree.ts")
+	defaultTreeSource := strings.Join([]string{
+		"export type FileSystemImport = { path: string; category?: string }",
+		"",
+		"export function getDefaultTreeProducts(): FileSystemImport[] {",
+		"    return [{ path: 'Product analytics' }, { path: 'Session Replay', category: 'Replay' }]",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(defaultTreeFile, []byte(defaultTreeSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "logic.ts")
+	logicSource := strings.Join([]string{
+		"import { defaults, kea, path } from 'kea'",
+		"import { getDefaultTreeProducts } from './defaultTree'",
+		"",
+		"export const logic = kea([",
+		"    path(['logic']),",
+		"    defaults({",
+		"        allProducts: getDefaultTreeProducts().sort((a, b) => a.path.localeCompare(b.path || 'b')),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if reducer, ok := findParsedField(logic.Reducers, "allProducts"); !ok || reducer.Type != "FileSystemImport[]" {
+		t.Fatalf("expected allProducts reducer type FileSystemImport[], got %+v", logic.Reducers)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 14, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"allProducts: FileSystemImport[]",
+		"allProducts: (state: any, props?: any) => FileSystemImport[]",
+	} {
+		if !typegenAssertionContains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedReducerTupleDefaultTypesFromSourceExpressions(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	defaultTreeFile := filepath.Join(tempDir, "defaultTree.ts")
+	defaultTreeSource := strings.Join([]string{
+		"export type FileSystemImport = { path: string; category?: string }",
+		"",
+		"export function getDefaultTreeProducts(): FileSystemImport[] {",
+		"    return [{ path: 'Product analytics' }, { path: 'Session Replay', category: 'Replay' }]",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(defaultTreeFile, []byte(defaultTreeSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "logic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path, reducers } from 'kea'",
+		"import { getDefaultTreeProducts } from './defaultTree'",
+		"",
+		"export const logic = kea([",
+		"    path(['logic']),",
+		"    reducers({",
+		"        allProducts: [getDefaultTreeProducts().sort((a, b) => a.path.localeCompare(b.path || 'b')), {}],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if reducer, ok := findParsedField(logic.Reducers, "allProducts"); !ok || reducer.Type != "FileSystemImport[]" {
+		t.Fatalf("expected allProducts reducer type FileSystemImport[], got %+v", logic.Reducers)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 14, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"allProducts: FileSystemImport[]",
+		"allProducts: (state: any, props?: any) => FileSystemImport[]",
+	} {
+		if !typegenAssertionContains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestSourceSelectorInferredTypeRecoversReducedWriteRoundDerivedSelector(t *testing.T) {
+	source := mustReadFile(t, filepath.Join(repoRoot(t), "samples", "logic.ts"))
+
+	logics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+
+	selectorsProperty := mustFindLogicProperty(t, logics[0], "selectors")
+	sourceMembers := sectionSourceProperties(source, selectorsProperty)
+	capitalizedName, ok := sourceMembers["capitalizedName"]
+	if !ok {
+		t.Fatalf("expected capitalizedName source selector, got %+v", sourceMembers)
+	}
+
+	inferred := sourceSelectorInferredType(ParsedLogic{
+		Reducers: []ParsedField{
+			{Name: "name", Type: "string"},
+			{Name: "number", Type: "number"},
+		},
+	}, source, filepath.Join(repoRoot(t), "samples", "logic.ts"), sourcePropertyText(source, capitalizedName), nil)
+	if inferred != "string" {
+		t.Fatalf("expected inferred capitalizedName selector type string, got %q", inferred)
+	}
+}
+
 func TestBuildParsedLogicsWindowValuesSample(t *testing.T) {
 	report := inspectSampleReport(t, "windowValuesLogic.ts")
 
@@ -4403,11 +9162,17 @@ func TestBuildParsedLogicsPosthogBuilderPropsKeySampleRecoversKeyAndHelpers(t *t
 	if logic.KeyType != "string" {
 		t.Fatalf("expected key type %q, got %q", "string", logic.KeyType)
 	}
-	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "endpoint"); !ok || !strings.Contains(helper.FunctionType, "resource:") || !strings.Contains(helper.FunctionType, "resourceId: string") || !strings.Contains(helper.FunctionType, "'project' | 'feature_flag'") && !strings.Contains(helper.FunctionType, "'feature_flag' | 'project'") {
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "endpoint"); !ok || !strings.Contains(helper.FunctionType, "resource:") || !strings.Contains(helper.FunctionType, "resourceId: string") || !strings.Contains(helper.FunctionType, "'project' | 'feature_flag'") && !strings.Contains(helper.FunctionType, "'feature_flag' | 'project'") && !strings.Contains(helper.FunctionType, `"project" | "feature_flag"`) && !strings.Contains(helper.FunctionType, `"feature_flag" | "project"`) {
 		t.Fatalf("expected endpoint helper to recover builder props types, got %+v", logic.InternalSelectorTypes)
 	}
-	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "humanReadableResource"); !ok || !strings.Contains(helper.FunctionType, "resource:") || !strings.Contains(helper.FunctionType, "'project' | 'feature_flag'") && !strings.Contains(helper.FunctionType, "'feature_flag' | 'project'") {
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "humanReadableResource"); !ok || !strings.Contains(helper.FunctionType, "resource:") || !strings.Contains(helper.FunctionType, "'project' | 'feature_flag'") && !strings.Contains(helper.FunctionType, "'feature_flag' | 'project'") && !strings.Contains(helper.FunctionType, `"project" | "feature_flag"`) && !strings.Contains(helper.FunctionType, `"feature_flag" | "project"`) {
 		t.Fatalf("expected humanReadableResource helper to recover builder props type, got %+v", logic.InternalSelectorTypes)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "endpoint"); !ok || selector.Type != "string" {
+		t.Fatalf("expected endpoint selector type %q, got %+v", "string", selector)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "humanReadableResource"); !ok || selector.Type != "string" {
+		t.Fatalf("expected humanReadableResource selector type %q, got %+v", "string", selector)
 	}
 }
 
@@ -4678,7 +9443,7 @@ func TestBuildParsedLogicsNormalizesTypedFormBuilder(t *testing.T) {
 	}
 }
 
-func TestBuildParsedLogicsDefersBuilderFormsPluginOutputs(t *testing.T) {
+func TestBuildParsedLogicsDefersSampleBuilderFormsPluginOutputs(t *testing.T) {
 	report := inspectSampleReport(t, "builderLogic.ts")
 
 	logics, err := BuildParsedLogics(report)
@@ -4746,6 +9511,423 @@ func TestBuildParsedLogicsDefersBuilderFormsPluginOutputs(t *testing.T) {
 	} {
 		if strings.Contains(rendered, unexpected) {
 			t.Fatalf("expected emitted output to defer builder forms parity and omit %q:\n%s", unexpected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsBuildsBuilderFormsPluginOutputsFromFormsSection(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path } from 'kea'",
+		"import { forms } from 'kea-forms'",
+		"",
+		"export interface LoginLogicForm {",
+		"    email: string",
+		"    password: string",
+		"}",
+		"",
+		"export const loginLogic = kea([",
+		"    path(['src', 'scenes', 'login', 'loginForm']),",
+		"    forms(({ actions }) => ({",
+		"        loginForm: {",
+		"            defaults: { email: '', password: '' } as LoginLogicForm,",
+		"            options: { showErrorsOnTouch: true, canSubmitWithErrors: true },",
+		"            errors: (frame: Partial<LoginLogicForm>) => ({",
+		"                email: frame.email ? null : 'missing',",
+		"                password: frame.password ? null : 'missing',",
+		"            }),",
+		"            submit: async (frame) => {",
+		"                actions.setLoginFormManualErrors({ password: frame.password })",
+		"            },",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/loginLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "loginLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "forms",
+						Members: []MemberReport{
+							{
+								Name:       "loginForm",
+								TypeString: "{ defaults: LoginLogicForm; options: { showErrorsOnTouch: true; canSubmitWithErrors: true; }; errors: (frame: Partial<LoginLogicForm>) => { email: string | null; password: string | null; }; submit: (frame: LoginLogicForm) => Promise<void>; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	for _, expectedAction := range []string{
+		"setLoginFormValue",
+		"setLoginFormValues",
+		"setLoginFormManualErrors",
+		"touchLoginFormField",
+		"resetLoginForm",
+		"submitLoginForm",
+		"submitLoginFormRequest",
+		"submitLoginFormSuccess",
+		"submitLoginFormFailure",
+	} {
+		if !hasAction(logic.Actions, expectedAction) {
+			t.Fatalf("expected builder forms action %s, got %+v", expectedAction, logic.Actions)
+		}
+	}
+	for _, expectedReducer := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "loginForm", typ: "LoginLogicForm"},
+		{name: "isLoginFormSubmitting", typ: "boolean"},
+		{name: "showLoginFormErrors", typ: "boolean"},
+		{name: "loginFormChanged", typ: "boolean"},
+		{name: "loginFormTouches", typ: "Record<string, boolean>"},
+		{name: "loginFormManualErrors", typ: "Record<string, any>"},
+	} {
+		if !hasReducer(logic.Reducers, expectedReducer.name, expectedReducer.typ) {
+			t.Fatalf("expected builder forms reducer %+v, got %+v", expectedReducer, logic.Reducers)
+		}
+	}
+	for _, expectedSelector := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "loginFormTouched", typ: "boolean"},
+		{name: "loginFormValidationErrors", typ: "DeepPartialMap<LoginLogicForm, ValidationErrorType>"},
+		{name: "loginFormAllErrors", typ: "Record<string, any>"},
+		{name: "loginFormHasErrors", typ: "boolean"},
+		{name: "loginFormErrors", typ: "DeepPartialMap<LoginLogicForm, ValidationErrorType>"},
+		{name: "isLoginFormValid", typ: "boolean"},
+	} {
+		if selector, ok := findParsedField(logic.Selectors, expectedSelector.name); !ok || selector.Type != expectedSelector.typ {
+			t.Fatalf("expected builder forms selector %+v, got %+v", expectedSelector, logic.Selectors)
+		}
+	}
+	for _, expectedImport := range []string{"DeepPartial", "DeepPartialMap", "FieldName", "ValidationErrorType"} {
+		if !hasImport(logic.Imports, "kea-forms", expectedImport) {
+			t.Fatalf("expected kea-forms import %s, got %+v", expectedImport, logic.Imports)
+		}
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 15, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"import type { LoginLogicForm } from './loginLogic'",
+		"import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from 'kea-forms'",
+		"setLoginFormValue: (key: FieldName, value: any) => void",
+		"submitLoginFormFailure: (error: Error, errors: Record<string, any>) => void",
+		"loginFormValidationErrors: (state: any, props?: any) => DeepPartialMap<LoginLogicForm, ValidationErrorType>",
+		"isLoginFormValid: (state: any, props?: any) => boolean",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsBuildsSmallInlineBuilderFormsPluginOutputs(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path } from 'kea'",
+		"import { forms } from 'kea-forms'",
+		"",
+		"export const scenesLogic = kea([",
+		"    path(['src', 'scenes', 'frame', 'panels', 'Scenes', 'scenesLogic']),",
+		"    forms(({ actions }) => ({",
+		"        newScene: {",
+		"            defaults: { name: '' },",
+		"            submit: async (newScene) => {",
+		"                console.log(actions, newScene)",
+		"            },",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/scenesLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "scenesLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "forms",
+						Members: []MemberReport{
+							{
+								Name:       "newScene",
+								TypeString: "{ defaults: { name: string; }; errors: (values: { name: string; }) => { name: string | undefined; }; submit: ({ name }: { name: string; }, breakpoint: BreakPointFunction) => void; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	for _, expectedAction := range []string{
+		"setNewSceneValue",
+		"setNewSceneValues",
+		"setNewSceneManualErrors",
+		"touchNewSceneField",
+		"resetNewScene",
+		"submitNewScene",
+		"submitNewSceneRequest",
+		"submitNewSceneSuccess",
+		"submitNewSceneFailure",
+	} {
+		if !hasAction(logic.Actions, expectedAction) {
+			t.Fatalf("expected inline builder forms action %s, got %+v", expectedAction, logic.Actions)
+		}
+	}
+	for _, expectedReducer := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "newScene", typ: "{ name: string; }"},
+		{name: "isNewSceneSubmitting", typ: "boolean"},
+		{name: "showNewSceneErrors", typ: "boolean"},
+		{name: "newSceneChanged", typ: "boolean"},
+		{name: "newSceneTouches", typ: "Record<string, boolean>"},
+		{name: "newSceneManualErrors", typ: "Record<string, any>"},
+	} {
+		if !hasReducer(logic.Reducers, expectedReducer.name, expectedReducer.typ) {
+			t.Fatalf("expected inline builder forms reducer %+v, got %+v", expectedReducer, logic.Reducers)
+		}
+	}
+	for _, expectedSelector := range []struct {
+		name string
+		typ  string
+	}{
+		{name: "newSceneTouched", typ: "boolean"},
+		{name: "newSceneValidationErrors", typ: "DeepPartialMap<{ name: string; }, ValidationErrorType>"},
+		{name: "newSceneAllErrors", typ: "Record<string, any>"},
+		{name: "newSceneHasErrors", typ: "boolean"},
+		{name: "newSceneErrors", typ: "DeepPartialMap<{ name: string; }, ValidationErrorType>"},
+		{name: "isNewSceneValid", typ: "boolean"},
+	} {
+		if selector, ok := findParsedField(logic.Selectors, expectedSelector.name); !ok || selector.Type != expectedSelector.typ {
+			t.Fatalf("expected inline builder forms selector %+v, got %+v", expectedSelector, logic.Selectors)
+		}
+	}
+	for _, expectedImport := range []string{"DeepPartial", "DeepPartialMap", "FieldName", "ValidationErrorType"} {
+		if !hasImport(logic.Imports, "kea-forms", expectedImport) {
+			t.Fatalf("expected kea-forms import %s, got %+v", expectedImport, logic.Imports)
+		}
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 15, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from 'kea-forms'",
+		"setNewSceneValue: (key: FieldName, value: any) => void",
+		"newScene: { name: string; }",
+		"newSceneValidationErrors: (state: any, props?: any) => DeepPartialMap<{ name: string; }, ValidationErrorType>",
+		"isNewSceneValid: (state: any, props?: any) => boolean",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsPreservesExplicitReducerTypesOverBuilderFormsDefaults(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, path, reducers } from 'kea'",
+		"import { forms } from 'kea-forms'",
+		"",
+		"export interface FrameType {",
+		"    name: string",
+		"}",
+		"",
+		"export const frameLogic = kea([",
+		"    path(['src', 'scenes', 'frame', 'frameLogic']),",
+		"    forms(() => ({",
+		"        frameForm: {",
+		"            defaults: {} as FrameType,",
+		"            submit: async (frame) => frame,",
+		"        },",
+		"    })),",
+		"    reducers({",
+		"        frameForm: [",
+		"            {} as Partial<FrameType>,",
+		"            {",
+		"                setDeployWithAgent: (state) => state,",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/frameLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "frameLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "forms",
+						Members: []MemberReport{
+							{
+								Name:       "frameForm",
+								TypeString: "{ defaults: FrameType; submit: (frame: FrameType) => Promise<FrameType>; }",
+							},
+						},
+					},
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{
+								Name:       "frameForm",
+								TypeString: "[Partial<FrameType>, { setDeployWithAgent: (_: Partial<FrameType>) => Partial<FrameType>; }]",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if reducer, ok := findParsedField(logic.Reducers, "frameForm"); !ok || reducer.Type != "Partial<FrameType>" {
+		t.Fatalf("expected explicit reducer type to win over forms default, got %+v", logic.Reducers)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "frameFormValidationErrors"); !ok || selector.Type != "DeepPartialMap<FrameType, ValidationErrorType>" {
+		t.Fatalf("expected form selectors to use form defaults type, got %+v", logic.Selectors)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 15, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"frameForm: Partial<FrameType>",
+		"frameFormValidationErrors: (state: any, props?: any) => DeepPartialMap<FrameType, ValidationErrorType>",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversInterfaceBackedBuilderPropsKeyAndSelectorTypes(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, key, path, props, selectors } from 'kea'",
+		"",
+		"export interface DemoLogicProps {",
+		"    frameId: number",
+		"}",
+		"",
+		"export const demoLogic = kea([",
+		"    path(['demoLogic']),",
+		"    props({} as DemoLogicProps),",
+		"    key((props) => props.frameId),",
+		"    selectors({",
+		"        frameId: [() => [(_, props) => props.frameId], (frameId) => frameId],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/demoLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "demoLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{Name: "props", EffectiveTypeString: "DemoLogicProps"},
+					{Name: "key", EffectiveTypeString: "any"},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "frameId",
+								TypeString:       "[(s: any) => [(_: any, props: any) => any], (frameId: any) => any]",
+								ReturnTypeString: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(sourceLogics) != 1 {
+		t.Fatalf("expected 1 source logic, got %d", len(sourceLogics))
+	}
+	keyProperty := mustFindLogicProperty(t, sourceLogics[0], "key")
+	directKeyType := sourceKeyTypeFromProps(source, keyProperty, "DemoLogicProps")
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+	selectorMembers := sectionSourceProperties(source, selectorsProperty)
+	frameIDProperty, ok := selectorMembers["frameId"]
+	if !ok {
+		t.Fatalf("expected frameId selector source property, got %+v", selectorMembers)
+	}
+	frameIDExpression := sourcePropertyText(source, frameIDProperty)
+	directDependencyTypes := sourceSelectorDependencyTypes(ParsedLogic{PropsType: "DemoLogicProps"}, source, "", frameIDExpression, nil)
+	directSelectorType := sourceSelectorInferredType(ParsedLogic{PropsType: "DemoLogicProps"}, source, "", frameIDExpression, nil)
+	directInternalSelectorType := sourceInternalSelectorFunctionType(ParsedLogic{PropsType: "DemoLogicProps"}, source, "", frameIDExpression, nil)
+	directNormalizedSelectorType := normalizePublicRecoveredSelectorType(ParsedLogic{PropsType: "DemoLogicProps"}, source, "", frameIDExpression, "any", "number", nil)
+	directParsedSelectors := parseSelectorsWithSource(report.Logics[0].Sections[2], ParsedLogic{PropsType: "DemoLogicProps"}, source, selectorsProperty, "", nil)
+	if logic.KeyType != "number" {
+		t.Fatalf("expected key type %q, got %q (direct source recovery: %q)", "number", logic.KeyType, directKeyType)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "frameId"); !ok || selector.Type != "number" {
+		t.Fatalf("expected frameId selector type %q, got %+v (dependency types: %+v, direct selector type: %q, internal selector type: %q, normalized selector type: %q, direct parsed selectors: %+v)", "number", logic.Selectors, directDependencyTypes, directSelectorType, directInternalSelectorType, directNormalizedSelectorType, directParsedSelectors)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.March, 15, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"key: number",
+		"frameId: (state: any, props?: any) => number",
+		"frameId: number",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
 	}
 }
@@ -4921,6 +10103,199 @@ func TestBuildParsedLogicsRecoversNavigationStyleListenersMissingFromSectionMemb
 	}
 }
 
+func TestBuildParsedLogicsRecoversListenerMethodShorthandFromArrowReturnedObject(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, listeners, path } from 'kea'",
+		"",
+		"export const discussionLogic = kea([",
+		"    path(['discussionLogic']),",
+		"    actions({",
+		"        scrollToLastComment: true,",
+		"    }),",
+		"    listeners(({ values }) => ({",
+		"        scrollToLastComment() {",
+		"            console.log(values)",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/discussionLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "discussionLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{Name: "scrollToLastComment", TypeString: "() => { value: true; }", ReturnTypeString: "{ value: true; }"},
+						},
+					},
+					{
+						Name:    "listeners",
+						Members: nil,
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	listener, ok := findParsedListener(logics[0].Listeners, "scrollToLastComment")
+	if !ok {
+		t.Fatalf("expected listener method shorthand to be recovered, got %+v", logics[0].Listeners)
+	}
+	payload, ok := parseActionPayloadObjectMembers(listener.PayloadType)
+	if !ok || len(payload) != 1 || payload["value"].Type != "true" {
+		t.Fatalf("expected scrollToLastComment payload type { value: true; }, got %+v", listener)
+	}
+}
+
+func TestBuildParsedLogicsRecoversListenersFromBlockBodyReturnedObject(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, listeners, path } from 'kea'",
+		"",
+		"export const workflowLogic = kea([",
+		"    path(['workflowLogic']),",
+		"    actions({",
+		"        start: true,",
+		"        stop: true,",
+		"    }),",
+		"    listeners(({ actions }) => {",
+		"        let timeout: ReturnType<typeof setTimeout> | null = null",
+		"        return {",
+		"            start: () => {",
+		"                timeout = setTimeout(() => actions.stop(), 10)",
+		"            },",
+		"            stop() {",
+		"                if (timeout) {",
+		"                    clearTimeout(timeout)",
+		"                    timeout = null",
+		"                }",
+		"            },",
+		"        }",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/workflowLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "workflowLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{Name: "start", TypeString: "() => { value: true; }", ReturnTypeString: "{ value: true; }"},
+							{Name: "stop", TypeString: "() => { value: true; }", ReturnTypeString: "{ value: true; }"},
+						},
+					},
+					{
+						Name:    "listeners",
+						Members: nil,
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	for _, expected := range []string{"start", "stop"} {
+		listener, ok := findParsedListener(logics[0].Listeners, expected)
+		if !ok {
+			t.Fatalf("expected block-body listener %q, got %+v", expected, logics[0].Listeners)
+		}
+		payload, ok := parseActionPayloadObjectMembers(listener.PayloadType)
+		if !ok || len(payload) != 1 || payload["value"].Type != "true" {
+			t.Fatalf("expected %s payload type { value: true; }, got %+v", expected, listener)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversSourceOnlySharedListenersFromBlockBody(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, listeners, path, sharedListeners } from 'kea'",
+		"",
+		"export const logic = kea([",
+		"    path(['logic']),",
+		"    sharedListeners(() => {",
+		"        const noop = true",
+		"        return {",
+		"            saveUrls: async () => {",
+		"                return noop",
+		"            },",
+		"        }",
+		"    }),",
+		"    listeners(({ sharedListeners }) => ({",
+		"        triggerSave: sharedListeners.saveUrls,",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/logic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "logic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:    "sharedListeners",
+						Members: nil,
+					},
+					{
+						Name:    "listeners",
+						Members: nil,
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	if len(logics[0].SharedListeners) != 1 {
+		t.Fatalf("expected one shared listener, got %+v", logics[0].SharedListeners)
+	}
+	listener := logics[0].SharedListeners[0]
+	if listener.Name != "saveUrls" {
+		t.Fatalf("expected shared listener name saveUrls, got %+v", listener)
+	}
+	if listener.PayloadType != "any" {
+		t.Fatalf("expected shared listener payload any, got %+v", listener)
+	}
+	if listener.ActionType != "{ type: string; payload: any }" {
+		t.Fatalf("expected shared listener action type { type: string; payload: any }, got %+v", listener)
+	}
+}
+
 func TestBuildParsedLogicsRecoversMissingSelectorNamesAndSkipsOpaqueBuilderHelpers(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea, path, selectors } from 'kea'",
@@ -5091,6 +10466,63 @@ func TestBuildParsedLogicsPreservesNullableActionPayloadProperties(t *testing.T)
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestBuildParsedLogicsKeepsReportedActionPayloadAliasWhenSourceAddsNullish(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"type EditorSidebarTreeRef = { current: HTMLDivElement | null } | null",
+		"",
+		"export const queryDatabaseLogic = kea([",
+		"    path(['queryDatabaseLogic']),",
+		"    actions({",
+		"        setTreeRef: (ref: EditorSidebarTreeRef | null) => ({ ref }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/queryDatabaseLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "queryDatabaseLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "setTreeRef",
+								TypeString:       "(ref: EditorSidebarTreeRef) => { ref: EditorSidebarTreeRef; }",
+								ReturnTypeString: "{ ref: EditorSidebarTreeRef; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "setTreeRef")
+	if !ok {
+		t.Fatalf("expected setTreeRef action, got %+v", logics[0].Actions)
+	}
+	if action.FunctionType != "(ref: EditorSidebarTreeRef | null) => { ref: EditorSidebarTreeRef; }" {
+		t.Fatalf("expected nullable source parameter with reported payload alias, got %+v", action)
+	}
+	if action.PayloadType != "{ ref: EditorSidebarTreeRef; }" {
+		t.Fatalf("expected reported payload alias to survive source recovery, got %+v", action)
 	}
 }
 
@@ -5628,6 +11060,15 @@ func hasImport(imports []TypeImport, path, name string) bool {
 	return false
 }
 
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
 func findParsedListener(listeners []ParsedListener, name string) (ParsedListener, bool) {
 	for _, listener := range listeners {
 		if listener.Name == name {
@@ -5644,6 +11085,53 @@ func findParsedFunction(functions []ParsedFunction, name string) (ParsedFunction
 		}
 	}
 	return ParsedFunction{}, false
+}
+
+func TestListenerPayloadHelpersPreferPrintedFunctionType(t *testing.T) {
+	member := MemberReport{
+		TypeString:      "(action: { foo: string; ... 2 more ...; }) => void",
+		PrintedTypeNode: "(action: { foo: string; bar: number; baz: boolean; }) => void",
+	}
+
+	expected := "{ foo: string; bar: number; baz: boolean; }"
+	if payload := listenerPayloadTypeFromMember(member); payload != expected {
+		t.Fatalf("expected listener payload %q, got %q", expected, payload)
+	}
+	if payload := sharedListenerPayloadTypeFromMember(member); payload != expected {
+		t.Fatalf("expected shared listener payload %q, got %q", expected, payload)
+	}
+}
+
+func TestSynthesizeConnectedActionFromSymbolsPrefersPrintedFunctionType(t *testing.T) {
+	action, ok := synthesizeConnectedActionFromSymbols(
+		connectedName{SourceName: "loadThing", LocalName: "loadThing"},
+		[]MemberReport{
+			{
+				Name:            "loadThing",
+				TypeString:      "(payload: { foo: string; ... 1 more ...; }) => void",
+				PrintedTypeNode: "(payload: { foo: string; bar: number; }) => void",
+			},
+		},
+		[]MemberReport{
+			{
+				Name:                  "loadThing",
+				TypeString:            "(payload: { foo: string; ... 1 more ...; }) => { type: 'load thing'; payload: { foo: string; ... 1 more ...; } }",
+				PrintedTypeNode:       "(payload: { foo: string; bar: number; }) => { type: 'load thing'; payload: { foo: string; bar: number; } }",
+				ReturnTypeString:      "{ type: 'load thing'; payload: { foo: string; ... 1 more ...; } }",
+				PrintedReturnTypeNode: "{ type: 'load thing'; payload: { foo: string; bar: number; } }",
+			},
+		},
+	)
+	if !ok {
+		t.Fatalf("expected connected action to be synthesized")
+	}
+	if strings.Contains(action.FunctionType, "...") || !strings.Contains(action.FunctionType, "bar: number") {
+		t.Fatalf("expected synthesized action function type to prefer printed type node, got %q", action.FunctionType)
+	}
+	expectedPayload := "{ foo: string; bar: number; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected synthesized action payload %q, got %q", expectedPayload, action.PayloadType)
+	}
 }
 
 func extractInterfaceBlock(t *testing.T, rendered, startProperty, endProperty string) string {

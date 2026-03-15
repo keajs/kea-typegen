@@ -1,0 +1,22 @@
+schema-version = "1.10.0"
+
+[install]
+go.pkg-path = "go"
+yarn.pkg-path = "yarn"
+nodejs.pkg-path = "nodejs"
+
+[hook]
+on-activate = """
+    cache_root="$FLOX_ENV_PROJECT/.cache/kea-typegen"
+    mkdir -p \
+        "$cache_root/tmp" \
+        "$cache_root/go-build" \
+        "$cache_root/go-mod" \
+        "$cache_root/npm" \
+        "$cache_root/yarn"
+    export TMPDIR="$cache_root/tmp"
+    export GOCACHE="$cache_root/go-build"
+    export GOMODCACHE="$cache_root/go-mod"
+    export npm_config_cache="$cache_root/npm"
+    export YARN_CACHE_FOLDER="$cache_root/yarn"
+"""

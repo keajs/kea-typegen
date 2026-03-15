@@ -1,14 +1,17 @@
 package keainspect
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -172,6 +175,12 @@ func (t *typegenStabilityTracker) preferredBody(fileName, existing, next string)
 		return existingBody, true
 	}
 
+	if transition, ok := t.transitions[fileName]; ok && transition.Next == existingBody {
+		if typegenInformationScore(existingBody) > typegenInformationScore(nextBody) {
+			return existingBody, true
+		}
+	}
+
 	if stable, ok := t.stableBodies[fileName]; ok {
 		switch {
 		case existingBody == stable:
@@ -207,11 +216,39 @@ func typegenInformationScore(body string) int {
 	score := 0
 	score -= countStandaloneTokenOccurrences(text, "any") * 4
 	score -= countStandaloneTokenOccurrences(text, "unknown") * 4
+	score -= countStandaloneTokenOccurrences(internalSelectorTypegenBlock(text), "null") * 2
 	score -= strings.Count(text, "__keaTypeGenInternalSelectorTypes") * 3
 	score += countStandaloneTokenOccurrences(text, "true")
 	score += countStandaloneTokenOccurrences(text, "false")
 	score += strings.Count(text, " | ")
 	return score
+}
+
+func internalSelectorTypegenBlock(body string) string {
+	const marker = "__keaTypeGenInternalSelectorTypes:"
+	index := strings.Index(body, marker)
+	if index < 0 {
+		return ""
+	}
+	text := body[index+len(marker):]
+	braceIndex := strings.IndexByte(text, '{')
+	if braceIndex < 0 {
+		return ""
+	}
+	start := braceIndex
+	depth := 0
+	for i := start; i < len(text); i++ {
+		switch text[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return text[start : i+1]
+			}
+		}
+	}
+	return ""
 }
 
 func countStandaloneTokenOccurrences(text, token string) int {
@@ -459,18 +496,13 @@ func runTypegenRounds(ctx context.Context, options AppOptions) (runSummary, erro
 		return processProjectOnce(ctx, options, nil)
 	}
 
-	candidateFiles, err := candidateSourceFiles(options)
-	if err != nil {
+	if _, err := candidateSourceFiles(options); err != nil {
 		return runSummary{}, err
-	}
-	if restored, err := restoreCachedTypes(candidateFiles, options); err != nil {
-		return runSummary{}, err
-	} else if restored {
-		// A restored cache entry changes the next inspection round.
 	}
 
 	var summary runSummary
 	tracker := newTypegenStabilityTracker()
+	var err error
 	for round := 1; ; round++ {
 		summary, err = processProjectOnce(ctx, options, tracker)
 		if err != nil {
@@ -533,28 +565,19 @@ func collectParsedFiles(options AppOptions, state *buildState) ([]parsedFile, er
 			options.Log(fmt.Sprintf("👀 Visiting: %s", relativeToWorkingDir(options, file)))
 		}
 
-		report, source, err := state.inspectFile(file)
+		entry, err := state.loadParsedFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
 		}
-		if len(report.Logics) == 0 {
+		if len(entry.Logics) == 0 {
 			continue
 		}
 
-		sourceLogics, err := FindLogics(source)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", file, err)
-		}
-		logics, err := buildParsedLogicsFromSource(report, source, state)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", file, err)
-		}
-		state.parsedByFile[filepath.Clean(file)] = logics
 		parsedFiles = append(parsedFiles, parsedFile{
 			File:         file,
-			Source:       source,
-			SourceLogics: sourceLogics,
-			Logics:       logics,
+			Source:       entry.Source,
+			SourceLogics: entry.SourceLogics,
+			Logics:       entry.Logics,
 			TypeFile:     typeFileNameForSource(options, file),
 		})
 	}
@@ -566,9 +589,10 @@ func writeTypegenFiles(files []parsedFile, compilerTypes []string, state *buildS
 	ignoredPrefixes := ignoredImportPrefixes(options, compilerTypes)
 	summary := runSummary{}
 	generatedAt := time.Now().UTC()
+	outputsByTypeFile := make(map[string]string, len(files))
 
 	for _, file := range files {
-		output := emitTypegenFile(file.Logics, fileEmitOptions{
+		outputsByTypeFile[file.TypeFile] = emitTypegenFile(file.Logics, fileEmitOptions{
 			TypeFile:          file.TypeFile,
 			SourceFile:        file.File,
 			PackageJSONPath:   options.PackageJSONPath,
@@ -580,6 +604,11 @@ func writeTypegenFiles(files []parsedFile, compilerTypes []string, state *buildS
 			CompilerTypes:     compilerTypes,
 			GeneratedAt:       generatedAt,
 		})
+	}
+	outputsByTypeFile = formatTypegenOutputs(outputsByTypeFile, options)
+
+	for _, file := range files {
+		output := outputsByTypeFile[file.TypeFile]
 
 		existing, _ := os.ReadFile(file.TypeFile)
 		existingText := string(existing)
@@ -685,6 +714,105 @@ func writeTypegenFiles(files []parsedFile, compilerTypes []string, state *buildS
 	}
 
 	return summary, nil
+}
+
+type typegenFormatFile struct {
+	FilePath   string `json:"filePath"`
+	SourceText string `json:"sourceText"`
+}
+
+type typegenFormatPayload struct {
+	Files []typegenFormatFile `json:"files"`
+}
+
+func formatTypegenOutputs(outputsByTypeFile map[string]string, options AppOptions) map[string]string {
+	if len(outputsByTypeFile) == 0 {
+		return outputsByTypeFile
+	}
+	if os.Getenv("KEA_TYPEGEN_FORMAT_OUTPUTS") != "1" {
+		return outputsByTypeFile
+	}
+
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		return outputsByTypeFile
+	}
+	scriptPath, ok := typegenFormatterScriptPath()
+	if !ok {
+		return outputsByTypeFile
+	}
+
+	paths := make([]string, 0, len(outputsByTypeFile))
+	for path := range outputsByTypeFile {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+
+	payload := typegenFormatPayload{Files: make([]typegenFormatFile, 0, len(paths))}
+	for _, path := range paths {
+		payload.Files = append(payload.Files, typegenFormatFile{
+			FilePath:   path,
+			SourceText: outputsByTypeFile[path],
+		})
+	}
+
+	input, err := json.Marshal(payload)
+	if err != nil {
+		return outputsByTypeFile
+	}
+
+	cmd := exec.Command(nodePath, scriptPath)
+	cmd.Dir = formatterWorkingDir(options, scriptPath)
+	cmd.Stdin = bytes.NewReader(input)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return outputsByTypeFile
+	}
+
+	var formatted typegenFormatPayload
+	if err := json.Unmarshal(stdout.Bytes(), &formatted); err != nil {
+		return outputsByTypeFile
+	}
+
+	result := make(map[string]string, len(outputsByTypeFile))
+	for path, text := range outputsByTypeFile {
+		result[path] = text
+	}
+	for _, file := range formatted.Files {
+		if file.FilePath == "" {
+			continue
+		}
+		result[file.FilePath] = file.SourceText
+	}
+	return result
+}
+
+func typegenFormatterScriptPath() (string, bool) {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", false
+	}
+	scriptPath := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "scripts", "format-generated-typegen.js"))
+	if _, err := os.Stat(scriptPath); err != nil {
+		return "", false
+	}
+	return scriptPath, true
+}
+
+func formatterWorkingDir(options AppOptions, scriptPath string) string {
+	if options.PackageJSONPath != "" {
+		return filepath.Dir(options.PackageJSONPath)
+	}
+	if options.RootPath != "" {
+		return options.RootPath
+	}
+	if options.WorkingDir != "" {
+		return options.WorkingDir
+	}
+	return filepath.Dir(scriptPath)
 }
 
 func emitTypegenFile(logics []ParsedLogic, options fileEmitOptions) string {
