@@ -1,3 +1,7 @@
+## 3.6.7 - 2026-03-24
+
+Fix a memory leak.
+
 ## 3.6.6 - 2026-03-05
 
 Upgrade to TypeScript 5.9
