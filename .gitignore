@@ -15,5 +15,7 @@ poc/tsgo-api/bin
 rewrite/.gocache
 rewrite/bin
 .cache
+.direnv
 .benchmark-*
 .posthog-*
+tmp-*
