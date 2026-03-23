@@ -85,17 +85,43 @@ export async function runTypeGen(appOptions: AppOptions) {
                 console.info(codes[diagnostic.code] || `🥚 ${ts.formatDiagnostic(diagnostic, formatHost).trim()}`)
             }
 
-            const origCreateProgram = host.createProgram
-            host.createProgram = (rootNames: ReadonlyArray<string>, options, host, oldProgram) => {
-                return origCreateProgram(rootNames, options, host, oldProgram)
-            }
             const origPostProgramCreate = host.afterProgramCreate
+            let scheduledProgram: Program | undefined
+            let runningTypegen = false
 
-            host.afterProgramCreate = async (prog) => {
+            const runScheduledTypegen = async () => {
+                if (runningTypegen) {
+                    return
+                }
+
+                runningTypegen = true
+
+                try {
+                    while (scheduledProgram) {
+                        const nextProgram = scheduledProgram
+                        scheduledProgram = undefined
+
+                        try {
+                            await goThroughAllTheFiles(nextProgram, appOptions)
+                        } catch (error) {
+                            console.error('⛔ Error running kea-typegen in watch mode')
+                            console.error(error)
+                        }
+                    }
+                } finally {
+                    runningTypegen = false
+
+                    if (scheduledProgram) {
+                        void runScheduledTypegen()
+                    }
+                }
+            }
+
+            host.afterProgramCreate = (prog) => {
                 program = prog.getProgram()
-                origPostProgramCreate!(prog)
-
-                await goThroughAllTheFiles(program, appOptions)
+                origPostProgramCreate?.(prog)
+                scheduledProgram = program
+                void runScheduledTypegen()
             }
 
             ts.createWatchProgram(host)
