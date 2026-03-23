@@ -231,6 +231,53 @@ func TestNormalizedTypeImportsRewritesConfiguredAliasImportsToRelativePaths(t *t
 	}
 }
 
+func TestNormalizedTypeImportsPreservesBarePackageSpecifierForPackageTypesEntry(t *testing.T) {
+	tempDir := t.TempDir()
+	sourceDir := filepath.Join(tempDir, "src")
+	sourceFile := filepath.Join(sourceDir, "logic.ts")
+	typeFile := filepath.Join(sourceDir, "logicType.ts")
+	packageDir := filepath.Join(tempDir, "node_modules", "kea")
+	typesEntry := filepath.Join(packageDir, "lib", "index.d.ts")
+
+	for _, dir := range []string{
+		sourceDir,
+		filepath.Dir(typesEntry),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("os.MkdirAll %s: %v", dir, err)
+		}
+	}
+	for path, contents := range map[string]string{
+		filepath.Join(tempDir, "package.json"):    `{}`,
+		sourceFile:                                ``,
+		filepath.Join(packageDir, "package.json"): `{"types":"lib/index.d.ts"}`,
+		typesEntry:                                `export interface KeaPlugin {}`,
+	} {
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatalf("os.WriteFile %s: %v", path, err)
+		}
+	}
+
+	imports := normalizedTypeImports([]ParsedLogic{
+		{
+			File: sourceFile,
+			Imports: []TypeImport{
+				{Path: "kea", Names: []string{"KeaPlugin"}},
+			},
+		},
+	}, fileEmitOptions{
+		TypeFile:        typeFile,
+		PackageJSONPath: filepath.Join(tempDir, "package.json"),
+	})
+
+	if !hasImport(imports, "kea", "KeaPlugin") {
+		t.Fatalf("expected bare package import path %q, got %+v", "kea", imports)
+	}
+	if hasImport(imports, "kea/lib/index", "KeaPlugin") {
+		t.Fatalf("expected package types entry path to stay collapsed to bare import, got %+v", imports)
+	}
+}
+
 func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 	root := repoRoot(t)
 	tempDir := t.TempDir()
@@ -303,9 +350,9 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		"updateDashboardInsight: (id: number, payload: DashboardItemType) => {",
 		"key39: string",
 		"__keaTypeGenInternalSelectorTypes: {",
-		"selectedAction: (selectedActionId: number | 'new', newActionForElement: HTMLElement) => ActionType | null",
-		"initialValuesForForm: (selectedAction: ActionType) => ActionForm",
-		"selectedEditedAction: (selectedAction: ActionType, initialValuesForForm: ActionForm, form: FormInstance, editingFields: AntdFieldData[], inspectingElement: number, counter: number) => ActionForm",
+		"selectedAction: (selectedActionId: number | 'new' | null, newActionForElement: HTMLElement | null) => ActionType | null",
+		"initialValuesForForm: (selectedAction: ActionType | null) => ActionForm",
+		"selectedEditedAction: (selectedAction: ActionType | null, initialValuesForForm: ActionForm, form: FormInstance | null, editingFields: AntdFieldData[] | null, inspectingElement: number | null, counter: number) => ActionForm",
 	} {
 		if !typegenAssertionContains(complexTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, complexTypegen)
@@ -325,6 +372,21 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 	} {
 		if !typegenAssertionContains(loadersTypegen, expected) {
 			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, loadersTypegen)
+		}
+	}
+
+	builderTypegen := mustReadFile(t, filepath.Join(tempDir, "builderLogicType.ts"))
+	for _, expected := range []string{
+		"import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from 'kea-forms'",
+		"setMyFormValue: (key: FieldName, value: any) => void",
+		"submitMyFormFailure: (error: Error, errors: Record<string, any>) => void",
+		"myFormValidationErrors: (state: any, props?: any) => DeepPartialMap<",
+		"isMyFormValid: (state: any, props?: any) => boolean",
+		"__keaTypeGenInternalSelectorTypes: {",
+		"sortedRepositories: (repositories: Repository[]) => Repository[]",
+	} {
+		if !typegenAssertionContains(builderTypegen, expected) {
+			t.Fatalf("expected reduced write round output to contain %q:\n%s", expected, builderTypegen)
 		}
 	}
 

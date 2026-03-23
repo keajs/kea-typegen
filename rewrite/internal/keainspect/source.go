@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type SourceProperty struct {
@@ -13,6 +14,15 @@ type SourceProperty struct {
 	NameStart  int    `json:"nameStart"`
 	ValueStart int    `json:"valueStart"`
 	ValueEnd   int    `json:"valueEnd"`
+}
+
+type SourceRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+type sourceOffsetMap struct {
+	utf16ByByte []int
 }
 
 type SourceLogic struct {
@@ -86,6 +96,48 @@ func FindLogics(source string) ([]SourceLogic, error) {
 		i = objectEnd
 	}
 	return logics, nil
+}
+
+func newSourceOffsetMap(source string) sourceOffsetMap {
+	utf16ByByte := make([]int, len(source)+1)
+	utf16Offset := 0
+
+	for byteOffset := 0; byteOffset < len(source); {
+		utf16ByByte[byteOffset] = utf16Offset
+		r, size := utf8.DecodeRuneInString(source[byteOffset:])
+		for extra := 1; extra < size; extra++ {
+			utf16ByByte[byteOffset+extra] = utf16Offset
+		}
+		byteOffset += size
+		utf16Offset += sourceUTF16Width(r)
+		utf16ByByte[byteOffset] = utf16Offset
+	}
+
+	return sourceOffsetMap{utf16ByByte: utf16ByByte}
+}
+
+func (m sourceOffsetMap) utf16Length() int {
+	if len(m.utf16ByByte) == 0 {
+		return 0
+	}
+	return m.utf16ByByte[len(m.utf16ByByte)-1]
+}
+
+func (m sourceOffsetMap) utf16Offset(byteOffset int) int {
+	if len(m.utf16ByByte) == 0 || byteOffset <= 0 {
+		return 0
+	}
+	if byteOffset >= len(m.utf16ByByte) {
+		return m.utf16Length()
+	}
+	return m.utf16ByByte[byteOffset]
+}
+
+func sourceUTF16Width(r rune) int {
+	if r >= 0x10000 {
+		return 2
+	}
+	return 1
 }
 
 func parseTopLevelProperties(source string, objectStart, objectEnd int) ([]SourceProperty, error) {
@@ -433,13 +485,37 @@ func FindInspectableArrayLiteral(source string, valueStart, valueEnd int) (int, 
 }
 
 func FindLastTopLevelArrayElement(source string, valueStart, valueEnd int) (int, int, bool, error) {
-	arrayStart, arrayEnd, ok, err := FindInspectableArrayLiteral(source, valueStart, valueEnd)
-	if err != nil || !ok {
+	selected, ok, err := findTopLevelArrayElement(source, valueStart, valueEnd, nil)
+	if err != nil {
 		return 0, 0, false, err
 	}
+	if !ok || selected.End <= selected.Start {
+		return 0, 0, false, nil
+	}
+	return selected.Start, selected.End, true, nil
+}
 
-	lastStart := -1
-	lastEnd := -1
+func FindLastFunctionLikeTopLevelArrayElement(source string, valueStart, valueEnd int) (int, int, bool, error) {
+	selected, ok, err := findTopLevelArrayElement(source, valueStart, valueEnd, isFunctionLikeTopLevelArrayElement)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if !ok || selected.End <= selected.Start {
+		return 0, 0, false, nil
+	}
+	return selected.Start, selected.End, true, nil
+}
+
+func FindTopLevelArrayElements(source string, valueStart, valueEnd int) ([]SourceRange, error) {
+	arrayStart, arrayEnd, ok, err := FindInspectableArrayLiteral(source, valueStart, valueEnd)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	elements := make([]SourceRange, 0, 4)
 	i := arrayStart + 1
 	for i < arrayEnd {
 		i = skipTrivia(source, i)
@@ -453,17 +529,50 @@ func FindLastTopLevelArrayElement(source string, valueStart, valueEnd int) (int,
 
 		end, err := findPropertyEnd(source, i, arrayEnd)
 		if err != nil {
-			return 0, 0, false, err
+			return nil, err
 		}
-		lastStart = i
-		lastEnd = trimExpressionEnd(source, end)
+		trimmedEnd := trimExpressionEnd(source, end)
+		if trimmedEnd > i {
+			elements = append(elements, SourceRange{Start: i, End: trimmedEnd})
+		}
 		i = end
 	}
 
-	if lastStart == -1 || lastEnd <= lastStart {
-		return 0, 0, false, nil
+	return elements, nil
+}
+
+func findTopLevelArrayElement(source string, valueStart, valueEnd int, prefer func(string) bool) (SourceRange, bool, error) {
+	elements, err := FindTopLevelArrayElements(source, valueStart, valueEnd)
+	if err != nil {
+		return SourceRange{}, false, err
 	}
-	return lastStart, lastEnd, true, nil
+	if len(elements) == 0 {
+		return SourceRange{}, false, nil
+	}
+
+	selected := elements[len(elements)-1]
+	if prefer != nil {
+		for candidate := len(elements) - 1; candidate >= 0; candidate-- {
+			element := strings.TrimSpace(source[elements[candidate].Start:elements[candidate].End])
+			if prefer(element) {
+				selected = elements[candidate]
+				break
+			}
+		}
+	}
+
+	return selected, true, nil
+}
+
+func isFunctionLikeTopLevelArrayElement(expression string) bool {
+	text := strings.TrimSpace(expression)
+	if text == "" {
+		return false
+	}
+	if _, ok := parseSourceArrowInfo(text); ok {
+		return true
+	}
+	return strings.HasPrefix(text, "function") || strings.HasPrefix(text, "async function")
 }
 
 func FindArrowFunctionReturnProbe(source string, valueStart, valueEnd int) (int, bool, error) {

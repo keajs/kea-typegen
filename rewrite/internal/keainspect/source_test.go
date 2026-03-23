@@ -3,6 +3,7 @@ package keainspect
 import (
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 func TestFindLogics(t *testing.T) {
@@ -301,6 +302,91 @@ capitalizedName: [
 	expected := "(name, number) => name.toUpperCase() + number.toString()"
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestFindTopLevelArrayElements(t *testing.T) {
+	source := `
+capitalizedName: [
+    (s) => [s.name, s.number],
+    (name, number) => name.toUpperCase() + number.toString(),
+]
+`
+
+	valueStart := strings.Index(source, "[")
+	if valueStart == -1 {
+		t.Fatalf("expected array literal start")
+	}
+	valueEnd := len(source) - 1
+
+	elements, err := FindTopLevelArrayElements(source, valueStart, valueEnd)
+	if err != nil {
+		t.Fatalf("FindTopLevelArrayElements returned error: %v", err)
+	}
+	if len(elements) != 2 {
+		t.Fatalf("expected 2 array elements, got %+v", elements)
+	}
+
+	first := strings.TrimSpace(source[elements[0].Start:elements[0].End])
+	if first != "(s) => [s.name, s.number]" {
+		t.Fatalf("unexpected first array element: %q", first)
+	}
+	second := strings.TrimSpace(source[elements[1].Start:elements[1].End])
+	if second != "(name, number) => name.toUpperCase() + number.toString()" {
+		t.Fatalf("unexpected second array element: %q", second)
+	}
+}
+
+func TestFindLastFunctionLikeTopLevelArrayElementSkipsTrailingOptionsObject(t *testing.T) {
+	source := `
+ipAddresses: [
+    (s) => [s.logs],
+    (logs) => logs.map((log) => log.ip).filter(Boolean),
+    { resultEqualityCheck: (a, b) => JSON.stringify(a) === JSON.stringify(b) },
+]
+`
+
+	valueStart := strings.Index(source, "[")
+	if valueStart == -1 {
+		t.Fatalf("expected array literal start")
+	}
+	valueEnd := len(source) - 1
+
+	elementStart, elementEnd, ok, err := FindLastFunctionLikeTopLevelArrayElement(source, valueStart, valueEnd)
+	if err != nil {
+		t.Fatalf("FindLastFunctionLikeTopLevelArrayElement returned error: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected function-like array element to be found")
+	}
+
+	got := strings.TrimSpace(source[elementStart:elementEnd])
+	want := "(logs) => logs.map((log) => log.ip).filter(Boolean)"
+	if got != want {
+		t.Fatalf("expected function-like array element %q, got %q", want, got)
+	}
+}
+
+func TestSourceOffsetMapUsesUTF16Offsets(t *testing.T) {
+	source := "key: '👈 emoji'\nselector: value\n"
+	keyByte := strings.Index(source, "selector")
+	valueByte := strings.Index(source, "value")
+	if keyByte == -1 || valueByte == -1 {
+		t.Fatalf("expected selector markers in source")
+	}
+
+	offsets := newSourceOffsetMap(source)
+	wantKey := len(utf16.Encode([]rune(source[:keyByte])))
+	wantValue := len(utf16.Encode([]rune(source[:valueByte])))
+
+	if got := offsets.utf16Offset(keyByte); got != wantKey {
+		t.Fatalf("expected UTF-16 selector offset %d, got %d", wantKey, got)
+	}
+	if got := offsets.utf16Offset(valueByte); got != wantValue {
+		t.Fatalf("expected UTF-16 value offset %d, got %d", wantValue, got)
+	}
+	if got := offsets.utf16Length(); got != len(utf16.Encode([]rune(source))) {
+		t.Fatalf("expected UTF-16 source length %d, got %d", len(utf16.Encode([]rune(source))), got)
 	}
 }
 

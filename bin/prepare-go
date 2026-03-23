@@ -8,6 +8,15 @@ TMP_ROOT=${TMPDIR:-/tmp}
 TSGO_BIN="$REPO_ROOT/.tsgo/node_modules/.bin/tsgo"
 GO_BIN_DIR="$REPO_ROOT/rewrite/bin"
 GO_BIN="$GO_BIN_DIR/kea-typegen-go"
+ROOT_GO_BIN="$REPO_ROOT/bin/kea-typegen-go"
+
+clear_macos_xattr() {
+    if ! command -v xattr >/dev/null 2>&1; then
+        return
+    fi
+    xattr -d com.apple.quarantine "$1" 2>/dev/null || true
+    xattr -d com.apple.provenance "$1" 2>/dev/null || true
+}
 
 if [ ! -x "$TSGO_BIN" ]; then
     if ! command -v npm >/dev/null 2>&1; then
@@ -19,10 +28,18 @@ fi
 
 mkdir -p "$GO_BIN_DIR"
 
+clear_macos_xattr "$REPO_ROOT"
+clear_macos_xattr "$REPO_ROOT/bin"
+clear_macos_xattr "$GO_BIN_DIR"
+
 GOCACHE=${GOCACHE:-"$TMP_ROOT/kea-typegen-gocache"}
 GOMODCACHE=${GOMODCACHE:-"$TMP_ROOT/kea-typegen-gomodcache"}
 export GOCACHE
 export GOMODCACHE
 
 cd "$REPO_ROOT/rewrite"
-exec go build -o "$GO_BIN" ./cmd/kea-typegen-go
+go build -o "$GO_BIN" ./cmd/kea-typegen-go
+cp "$GO_BIN" "$ROOT_GO_BIN"
+
+clear_macos_xattr "$GO_BIN"
+clear_macos_xattr "$ROOT_GO_BIN"

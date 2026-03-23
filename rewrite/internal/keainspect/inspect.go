@@ -64,6 +64,7 @@ func InspectFile(ctx context.Context, options InspectOptions) (*Report, error) {
 		return nil, err
 	}
 	sourceText := string(sourceBytes)
+	offsets := newSourceOffsetMap(sourceText)
 
 	logics, err := FindLogics(sourceText)
 	if err != nil {
@@ -118,7 +119,7 @@ func InspectFile(ctx context.Context, options InspectOptions) (*Report, error) {
 	}
 
 	for _, logic := range logics {
-		report.Logics = append(report.Logics, inspectLogic(ctx, client, options.Timeout, snapshot.Snapshot, project.ID, options.File, sourceText, logic))
+		report.Logics = append(report.Logics, inspectLogic(ctx, client, options.Timeout, snapshot.Snapshot, project.ID, options.File, sourceText, offsets, logic))
 	}
 
 	return report, nil
@@ -132,11 +133,12 @@ func inspectLogic(
 	projectID string,
 	file string,
 	source string,
+	offsets sourceOffsetMap,
 	logic SourceLogic,
 ) LogicReport {
 	report := LogicReport{Name: logic.Name, InputKind: logic.InputKind}
 	for _, property := range logic.Properties {
-		report.Sections = append(report.Sections, inspectSection(ctx, client, timeout, snapshot, projectID, file, source, property, logic.InputKind))
+		report.Sections = append(report.Sections, inspectSection(ctx, client, timeout, snapshot, projectID, file, source, offsets, property, logic.InputKind))
 	}
 
 	return report
@@ -150,30 +152,33 @@ func inspectSection(
 	projectID string,
 	file string,
 	source string,
+	offsets sourceOffsetMap,
 	property SourceProperty,
 	inputKind string,
 ) SectionReport {
-	position := property.NameStart
+	symbolPosition := property.NameStart
 	if len(property.Name) > 1 {
-		position++
+		symbolPosition++
 	}
+	symbolPosition = offsets.utf16Offset(symbolPosition)
+	valuePosition := offsets.utf16Offset(property.ValueStart)
 
 	report := SectionReport{
 		Name:     property.Name,
-		Position: position,
+		Position: symbolPosition,
 	}
 
 	var (
 		rawType *tsgoapi.TypeResponse
 		err     error
 	)
-	symbol, symbolErr := client.GetSymbolAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, position)
+	symbol, symbolErr := client.GetSymbolAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, symbolPosition)
 	if symbolErr == nil {
 		report.Symbol = symbol
 	}
 
 	if inputKind == "builders" {
-		rawType, err = client.GetTypeAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, property.ValueStart)
+		rawType, err = client.GetTypeAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, valuePosition)
 	} else {
 		if symbolErr != nil {
 			report.Error = symbolErr.Error()
@@ -263,7 +268,7 @@ func inspectSection(
 	}
 
 	if shouldUseFallback {
-		fallbackMembers, fallbackErr := inspectBuilderFallbackMembers(ctx, client, timeout, snapshot, projectID, file, source, property)
+		fallbackMembers, fallbackErr := inspectBuilderFallbackMembers(ctx, client, timeout, snapshot, projectID, file, source, offsets, property)
 		if fallbackErr != nil {
 			report.Error = appendError(report.Error, fallbackErr.Error())
 		} else if len(fallbackMembers) > 0 {
@@ -272,7 +277,7 @@ func inspectSection(
 	}
 
 	if property.Name == "selectors" {
-		report.Members = enrichSelectorReturnTypes(ctx, client, timeout, snapshot, projectID, file, source, property, report.Members)
+		report.Members = enrichSelectorReturnTypes(ctx, client, timeout, snapshot, projectID, file, source, offsets, property, report.Members)
 	}
 
 	sort.Slice(report.Members, func(i, j int) bool {
@@ -305,6 +310,7 @@ func inspectBuilderFallbackMembers(
 	projectID string,
 	file string,
 	source string,
+	offsets sourceOffsetMap,
 	property SourceProperty,
 ) ([]MemberReport, error) {
 	objectStart, objectEnd, ok, err := FindInspectableObjectLiteral(source, property.ValueStart, property.ValueEnd)
@@ -323,6 +329,7 @@ func inspectBuilderFallbackMembers(
 		if len(nested.Name) > 1 {
 			position++
 		}
+		position = offsets.utf16Offset(position)
 
 		item := MemberReport{Name: nested.Name}
 		symbol, err := client.GetSymbolAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, position)
@@ -381,6 +388,7 @@ func enrichSelectorReturnTypes(
 	projectID string,
 	file string,
 	source string,
+	offsets sourceOffsetMap,
 	property SourceProperty,
 	members []MemberReport,
 ) []MemberReport {
@@ -408,17 +416,17 @@ func enrichSelectorReturnTypes(
 			continue
 		}
 
-		elementStart, elementEnd, ok, err := FindLastTopLevelArrayElement(source, nested.ValueStart, nested.ValueEnd)
+		elementStart, elementEnd, ok, err := FindLastFunctionLikeTopLevelArrayElement(source, nested.ValueStart, nested.ValueEnd)
 		if err != nil || !ok {
 			continue
 		}
 
-		if typeText := selectorReturnTypeFromSourceProbe(ctx, client, timeout, snapshot, projectID, file, source, elementStart, elementEnd); typeText != "" {
+		if typeText := selectorReturnTypeFromSourceProbe(ctx, client, timeout, snapshot, projectID, file, source, offsets, elementStart, elementEnd); typeText != "" {
 			members[index].ReturnTypeString = typeText
 			continue
 		}
 
-		if typeText := selectorReturnTypeFromSignature(ctx, client, timeout, snapshot, projectID, file, elementStart); typeText != "" {
+		if typeText := selectorReturnTypeFromSignature(ctx, client, timeout, snapshot, projectID, file, offsets, elementStart); typeText != "" {
 			members[index].ReturnTypeString = typeText
 		}
 	}
@@ -434,6 +442,7 @@ func selectorReturnTypeFromSourceProbe(
 	projectID string,
 	file string,
 	source string,
+	offsets sourceOffsetMap,
 	elementStart int,
 	elementEnd int,
 ) string {
@@ -450,7 +459,7 @@ func selectorReturnTypeFromSourceProbe(
 
 	var fallback string
 	for _, position := range selectorTypeProbePositions(source, probePosition, probeEnd) {
-		typeText := typeAtPositionString(ctx, client, timeout, snapshot, projectID, file, position)
+		typeText := typeAtPositionString(ctx, client, timeout, snapshot, projectID, file, offsets, position)
 		if typeText == "" {
 			continue
 		}
@@ -471,9 +480,16 @@ func selectorReturnTypeFromSignature(
 	snapshot string,
 	projectID string,
 	file string,
+	offsets sourceOffsetMap,
 	elementStart int,
 ) string {
-	selectorType, err := client.GetTypeAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, elementStart)
+	selectorType, err := client.GetTypeAtPosition(
+		tsgoapi.WithTimeout(ctx, timeout),
+		snapshot,
+		projectID,
+		file,
+		offsets.utf16Offset(elementStart),
+	)
 	if err != nil || selectorType == nil {
 		return ""
 	}
@@ -500,9 +516,16 @@ func typeAtPositionString(
 	snapshot string,
 	projectID string,
 	file string,
+	offsets sourceOffsetMap,
 	position int,
 ) string {
-	typ, err := client.GetTypeAtPosition(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, file, position)
+	typ, err := client.GetTypeAtPosition(
+		tsgoapi.WithTimeout(ctx, timeout),
+		snapshot,
+		projectID,
+		file,
+		offsets.utf16Offset(position),
+	)
 	if err != nil || typ == nil {
 		return ""
 	}
@@ -663,4 +686,8 @@ func callbackTypeProbePositions(source string, start, end int) []int {
 	}
 
 	return positions
+}
+
+func CallbackTypeProbePositions(source string, start, end int) []int {
+	return callbackTypeProbePositions(source, start, end)
 }

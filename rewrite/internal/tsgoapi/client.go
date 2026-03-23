@@ -307,6 +307,18 @@ func (c *Client) GetDeclaredTypeOfSymbol(ctx context.Context, snapshot, projectI
 	return response, nil
 }
 
+func (c *Client) GetMembersOfSymbol(ctx context.Context, snapshot, projectID, symbolID string) ([]*SymbolResponse, error) {
+	var response []*SymbolResponse
+	if err := c.call(ctx, "getMembersOfSymbol", map[string]any{
+		"snapshot": snapshot,
+		"project":  projectID,
+		"symbol":   symbolID,
+	}, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (c *Client) GetTypeAtPosition(ctx context.Context, snapshot, projectID, file string, position int) (*TypeResponse, error) {
 	var response *TypeResponse
 	if err := c.call(ctx, "getTypeAtPosition", map[string]any{
@@ -314,6 +326,30 @@ func (c *Client) GetTypeAtPosition(ctx context.Context, snapshot, projectID, fil
 		"project":  projectID,
 		"file":     file,
 		"position": position,
+	}, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) GetSymbolOfType(ctx context.Context, snapshot, projectID, typeID string) (*SymbolResponse, error) {
+	var response *SymbolResponse
+	if err := c.call(ctx, "getSymbolOfType", map[string]any{
+		"snapshot": snapshot,
+		"project":  projectID,
+		"type":     typeID,
+	}, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) GetTypeAtLocation(ctx context.Context, snapshot, projectID, location string) (*TypeResponse, error) {
+	var response *TypeResponse
+	if err := c.call(ctx, "getTypeAtLocation", map[string]any{
+		"snapshot": snapshot,
+		"project":  projectID,
+		"location": location,
 	}, &response); err != nil {
 		return nil, err
 	}

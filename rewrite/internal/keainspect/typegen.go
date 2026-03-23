@@ -1402,6 +1402,18 @@ func shouldIgnoreImportPath(fullPath string, ignoredPrefixes []string) bool {
 	return false
 }
 
+func resolvedImportLivesInNodeModules(resolvedFile, nodeModulesPath string) bool {
+	if resolvedFile == "" {
+		return false
+	}
+	resolvedFile = filepath.Clean(resolvedFile)
+	nodeModulesPath = filepath.Clean(nodeModulesPath)
+	if strings.HasPrefix(resolvedFile, nodeModulesPath+string(os.PathSeparator)) {
+		return true
+	}
+	return strings.Contains(resolvedFile, string(os.PathSeparator)+"node_modules"+string(os.PathSeparator))
+}
+
 func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath string, state *buildState) (string, string) {
 	finalPath := importPath
 	fullPath := importPath
@@ -1419,7 +1431,11 @@ func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath strin
 		finalPath = fullPath
 	} else if resolvedFile, ok := resolveImportFile(sourceFile, finalPath, state); ok {
 		fullPath = resolvedFile
-		finalPath = resolvedFile
+		if resolvedImportLivesInNodeModules(resolvedFile, nodeModulesPath) {
+			finalPath = importPath
+		} else {
+			finalPath = resolvedFile
+		}
 	}
 
 	if strings.HasPrefix(finalPath, nodeModulesPath+string(os.PathSeparator)) {
