@@ -26,12 +26,17 @@ export async function runTypeGen(appOptions: AppOptions) {
     if (appOptions.sourceFilePath) {
         log(`❇️ Loading file: ${appOptions.sourceFilePath}`)
         resetProgram = () => {
-            program = ts.createProgram([appOptions.sourceFilePath], {
-                target: ts.ScriptTarget.ES5,
-                module: ts.ModuleKind.CommonJS,
-                noEmit: true,
-                noErrorTruncation: true,
-            })
+            program = replaceProgram(() =>
+                ts.createProgram([appOptions.sourceFilePath], {
+                    target: ts.ScriptTarget.ES5,
+                    module: ts.ModuleKind.CommonJS,
+                    noEmit: true,
+                    noErrorTruncation: true,
+                }),
+                (nextProgram) => {
+                    program = nextProgram
+                },
+            )
         }
         resetProgram()
     } else if (appOptions.tsConfigPath) {
@@ -130,8 +135,17 @@ export async function runTypeGen(appOptions: AppOptions) {
                 // Write mode can require multiple passes as generated imports and type files
                 // land on disk. Reusing the previous Program retains too much compiler state
                 // for large projects, so rebuild from a fresh host each round instead.
-                const host = ts.createCompilerHost(compilerOptions.options)
-                program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
+                // Clear the previous Program reference before allocating the next one to
+                // avoid holding both huge compiler graphs live at the same time.
+                program = replaceProgram(
+                    () => {
+                        const host = ts.createCompilerHost(compilerOptions.options)
+                        return ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
+                    },
+                    (nextProgram) => {
+                        program = nextProgram
+                    },
+                )
             }
             resetProgram()
         }
@@ -186,4 +200,11 @@ export async function runTypeGen(appOptions: AppOptions) {
             goThroughAllTheFiles(program, appOptions)
         }
     }
+}
+
+export function replaceProgram(createProgram: () => Program, setProgram: (program?: Program) => void): Program {
+    setProgram(undefined)
+    const nextProgram = createProgram()
+    setProgram(nextProgram)
+    return nextProgram
 }
