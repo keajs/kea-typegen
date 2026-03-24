@@ -1,5 +1,11 @@
 import { spawn } from 'child_process'
+import * as fs from 'fs'
+import * as os from 'os'
 import * as path from 'path'
+import * as ts from 'typescript'
+import { AppOptions } from '../types'
+import { visitProgram } from '../visit/visit'
+import { writeTypeImports } from '../write/writeTypeImports'
 
 test(
     'write mode recreates the TypeScript program from scratch between passes',
@@ -41,3 +47,54 @@ test(
     },
     30000,
 )
+
+test('writeTypeImports adds missing type import and kea generic', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-write-imports-'))
+
+    try {
+        const logicDir = path.join(tempDir, 'src')
+        const logicPath = path.join(logicDir, 'logic.ts')
+        const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+
+        fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+        fs.mkdirSync(logicDir, { recursive: true })
+
+        fs.writeFileSync(keaDtsPath, 'export function kea<T = any>(input: any): T\n')
+        fs.writeFileSync(
+            logicPath,
+            [
+                "import { kea } from 'kea'",
+                '',
+                'export const logic = kea({',
+                '    actions: () => ({',
+                '        setValue: (value: string) => ({ value }),',
+                '    }),',
+                '})',
+                '',
+            ].join('\n'),
+        )
+
+        const program = ts.createProgram([logicPath], {
+            module: ts.ModuleKind.CommonJS,
+            moduleResolution: ts.ModuleResolutionKind.NodeJs,
+            target: ts.ScriptTarget.ES2020,
+            skipLibCheck: true,
+        })
+
+        const appOptions: AppOptions = {
+            rootPath: logicDir,
+            typesPath: logicDir,
+            log: () => {},
+        }
+
+        const [parsedLogic] = visitProgram(program, appOptions)
+        await writeTypeImports(appOptions, program, logicPath, [parsedLogic], [parsedLogic])
+
+        const writtenLogic = fs.readFileSync(logicPath, 'utf8')
+
+        expect(writtenLogic).toContain("import type { logicType } from './logicType'")
+        expect(writtenLogic).toContain('export const logic = kea<logicType>({')
+    } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+})
