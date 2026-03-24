@@ -30,6 +30,14 @@ function getImportInsertPosition(sourceFile: ts.SourceFile, rawCode: string): nu
     return shebangMatch ? shebangMatch[0].length : 0
 }
 
+function getTypeArgumentInsertEnd(callExpression: ts.CallExpression, sourceFile: ts.SourceFile): number {
+    const openParenToken = callExpression
+        .getChildren(sourceFile)
+        .find((child) => child.kind === ts.SyntaxKind.OpenParenToken)
+
+    return openParenToken ? openParenToken.getStart(sourceFile) : callExpression.expression.getEnd()
+}
+
 export async function writeTypeImports(
     appOptions: AppOptions,
     program: ts.Program,
@@ -92,7 +100,9 @@ export async function writeTypeImports(
         }
 
         const typeArgumentStart = callExpression.expression.getEnd()
-        const typeArgumentEnd = callExpression.typeArguments?.end ?? typeArgumentStart
+        const typeArgumentEnd = callExpression.typeArguments
+            ? getTypeArgumentInsertEnd(callExpression, sourceFile)
+            : typeArgumentStart
 
         edits.push({
             start: typeArgumentStart,

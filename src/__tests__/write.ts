@@ -98,3 +98,58 @@ test('writeTypeImports adds missing type import and kea generic', async () => {
         fs.rmSync(tempDir, { recursive: true, force: true })
     }
 })
+
+test('writeTypeImports replaces existing kea generic without leaving a trailing >', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-write-existing-generic-'))
+
+    try {
+        const logicDir = path.join(tempDir, 'src')
+        const logicPath = path.join(logicDir, 'logic.ts')
+        const logicTypePath = path.join(logicDir, 'logicType.ts')
+        const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+
+        fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+        fs.mkdirSync(logicDir, { recursive: true })
+
+        fs.writeFileSync(keaDtsPath, 'export function kea<T = any>(input: any): T\n')
+        fs.writeFileSync(logicTypePath, 'export interface logicType {}\n')
+        fs.writeFileSync(
+            logicPath,
+            [
+                "import type { logicType } from './logicType'",
+                "import { kea, actions } from 'kea'",
+                '',
+                'export const logic = kea<logicType<string>>([',
+                '    actions({',
+                '        setValue: (value: string) => ({ value }),',
+                '    }),',
+                '])',
+                '',
+            ].join('\n'),
+        )
+
+        const program = ts.createProgram([logicPath], {
+            module: ts.ModuleKind.CommonJS,
+            moduleResolution: ts.ModuleResolutionKind.NodeJs,
+            target: ts.ScriptTarget.ES2020,
+            skipLibCheck: true,
+        })
+
+        const appOptions: AppOptions = {
+            rootPath: logicDir,
+            typesPath: logicDir,
+            log: () => {},
+        }
+
+        const [parsedLogic] = visitProgram(program, appOptions)
+        await writeTypeImports(appOptions, program, logicPath, [parsedLogic], [parsedLogic])
+
+        const writtenLogic = fs.readFileSync(logicPath, 'utf8')
+
+        expect(writtenLogic).toContain("import type { logicType } from './logicType'")
+        expect(writtenLogic).toContain('export const logic = kea<logicType>([')
+        expect(writtenLogic).not.toContain('kea<logicType>>([')
+    } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+})
