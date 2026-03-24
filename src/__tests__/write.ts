@@ -1,5 +1,11 @@
 import { spawn } from 'child_process'
+import * as fs from 'fs'
+import * as os from 'os'
 import * as path from 'path'
+import * as ts from 'typescript'
+import { AppOptions } from '../types'
+import { visitProgram } from '../visit/visit'
+import { writeTypeImports } from '../write/writeTypeImports'
 
 test(
     'write mode recreates the TypeScript program from scratch between passes',
@@ -86,7 +92,7 @@ test('writeTypeImports adds missing type import and kea generic', async () => {
 
         const writtenLogic = fs.readFileSync(logicPath, 'utf8')
 
-        expect(writtenLogic).toContain("import type { logicType } from './logicType'")
+        expect(writtenLogic).toMatch(/import type \{ logicType \} from ['"]\.\/logicType['"]/)
         expect(writtenLogic).toContain('export const logic = kea<logicType>({')
     } finally {
         fs.rmSync(tempDir, { recursive: true, force: true })
@@ -140,7 +146,7 @@ test('writeTypeImports replaces existing kea generic without leaving a trailing 
 
         const writtenLogic = fs.readFileSync(logicPath, 'utf8')
 
-        expect(writtenLogic).toContain("import type { logicType } from './logicType'")
+        expect(writtenLogic).toMatch(/import type \{ logicType \} from ['"]\.\/logicType['"]/)
         expect(writtenLogic).toContain('export const logic = kea<logicType>([')
         expect(writtenLogic).not.toContain('kea<logicType>>([')
     } finally {

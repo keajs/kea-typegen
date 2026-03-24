@@ -1,10 +1,33 @@
 import { AppOptions, ParsedLogic } from '../types'
 import * as ts from 'typescript'
-import { print, visit } from 'recast'
 import * as osPath from 'path'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
-import { t, b, visitAllKeaCalls, getAst } from './utils'
+interface TextEdit {
+    start: number
+    end: number
+    text: string
+}
+
+function applyTextEdits(source: string, edits: TextEdit[]): string {
+    return edits
+        .sort((a, b) => b.start - a.start || b.end - a.end)
+        .reduce((output, { start, end, text }) => output.slice(0, start) + text + output.slice(end), source)
+}
+
+function getImportPath(importDeclaration: ts.ImportDeclaration): string | null {
+    return ts.isStringLiteralLike(importDeclaration.moduleSpecifier) ? importDeclaration.moduleSpecifier.text : null
+}
+
+function getImportInsertPosition(sourceFile: ts.SourceFile, rawCode: string): number {
+    const importDeclarations = sourceFile.statements.filter(ts.isImportDeclaration)
+    if (importDeclarations.length > 0) {
+        return importDeclarations[importDeclarations.length - 1].getEnd()
+    }
+
+    const shebangMatch = rawCode.match(/^#!.*(?:\r?\n|$)/)
+    return shebangMatch ? shebangMatch[0].length : 0
+}
 
 function getTypeArgumentInsertEnd(callExpression: ts.CallExpression, sourceFile: ts.SourceFile): number {
     const openParenToken = callExpression
@@ -23,9 +46,10 @@ export async function writeTypeImports(
 ) {
     const { log } = appOptions
     const sourceFile = program.getSourceFile(filename)
-    const rawCode = sourceFile.getText()
-
-    const ast = getAst(filename, rawCode)
+    if (!sourceFile) {
+        throw new Error(`Could not find source file: ${filename}`)
+    }
+    const rawCode = fs.readFileSync(filename, 'utf8')
 
     let importLocation = osPath
         .relative(osPath.dirname(filename), logicsNeedingImports[0].typeFileName)
@@ -34,54 +58,43 @@ export async function writeTypeImports(
         importLocation = `./${importLocation}`
     }
 
-    // add import if missing
-    let foundImport = false
-    visit(ast, {
-        visitImportDeclaration(path) {
-            const importPath =
-                path.value.source && t.StringLiteral.check(path.value.source) ? path.value.source.value : null
-
-            if (
-                t.ImportDeclaration.check(path.value) &&
-                importPath &&
-                osPath.resolve(osPath.dirname(filename), importPath) ===
-                    osPath.resolve(osPath.dirname(filename), importLocation)
-            ) {
-                foundImport = true
-                path.value.importKind = 'type'
-                path.value.specifiers = parsedLogics.map((l) =>
-                    b.importSpecifier(b.identifier(l.logicTypeName), b.identifier(l.logicTypeName)),
-                )
-            }
-            return false
-        },
+    const desiredImport = `import type { ${parsedLogics.map((l) => l.logicTypeName).join(', ')} } from '${importLocation}'`
+    const importDeclarations = sourceFile.statements.filter(ts.isImportDeclaration)
+    const matchingImport = importDeclarations.find((importDeclaration) => {
+        const importPath = getImportPath(importDeclaration)
+        return (
+            importPath !== null &&
+            osPath.resolve(osPath.dirname(filename), importPath) ===
+                osPath.resolve(osPath.dirname(filename), importLocation)
+        )
     })
 
-    if (!foundImport) {
-        visit(ast, {
-            visitProgram(path) {
-                path.value.body = [
-                    ...path.value.body.filter((n) => t.ImportDeclaration.check(n)),
-                    b.importDeclaration(
-                        parsedLogics.map((l) =>
-                            b.importSpecifier(b.identifier(l.logicTypeName), b.identifier(l.logicTypeName)),
-                        ),
-                        b.stringLiteral(importLocation),
-                        'type',
-                    ),
-                    ...path.value.body.filter((n) => !t.ImportDeclaration.check(n)),
-                ]
-                return false
-            },
+    const edits: TextEdit[] = []
+    if (matchingImport) {
+        edits.push({
+            start: matchingImport.getStart(sourceFile),
+            end: matchingImport.getEnd(),
+            text: desiredImport,
+        })
+    } else {
+        const insertPos = getImportInsertPosition(sourceFile, rawCode)
+        const hasExistingImports = importDeclarations.length > 0
+        const importText = hasExistingImports
+            ? `\n${desiredImport}${rawCode.slice(insertPos, insertPos + 1) === '\n' ? '' : '\n'}`
+            : `${desiredImport}\n`
+
+        edits.push({
+            start: insertPos,
+            end: insertPos,
+            text: importText,
         })
     }
 
-    // find all kea calls, add `<logicType>` type parameters if needed
-    visitAllKeaCalls(ast, logicsNeedingImports, filename, ({ path, parsedLogic }) => {
-        path.node.typeParameters = b.tsTypeParameterInstantiation([
-            b.tsTypeReference(b.identifier(parsedLogic.logicTypeName)),
-        ])
-    })
+    for (const parsedLogic of logicsNeedingImports) {
+        const callExpression = parsedLogic.node.parent
+        if (!ts.isCallExpression(callExpression)) {
+            continue
+        }
 
         const typeArgumentStart = callExpression.expression.getEnd()
         const typeArgumentEnd = callExpression.typeArguments
