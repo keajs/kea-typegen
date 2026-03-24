@@ -1,6 +1,6 @@
 {
     "name": "kea-typegen",
-    "version": "3.6.2-leakfix",
+    "version": "3.6.2-leakfix.2",
     "description": "Generate type definitions for kea logic",
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
