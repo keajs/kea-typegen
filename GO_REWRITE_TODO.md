@@ -7,6 +7,28 @@
 - Always rerun the FrameOS full-compare corpus after meaningful parity changes, and keep aiming for `100%` semantic accuracy there instead of treating sample-benchmark wins as sufficient.
 - Treat semantic TypeScript AST parity as the current scorekeeping metric, but do not confuse that metric with actual type-correctness.
 
+## Strategy Reset
+
+- Yes: the current rewrite still contains too much semantic type recovery driven by source-shape / AST-shape / printed-type heuristics inside `rewrite/internal/keainspect/model.go`.
+- That is now explicit technical debt, not the roadmap.
+- Non-negotiable rule:
+  - we must get semantic types from TypeScript checker/internal API data, not from an endless pile of Go-side guesses about source shape
+- AST/source parsing is still allowed for one thing only:
+  - locating the exact node / symbol / signature / property handle to ask TypeScript the real question
+- AST/source parsing is not allowed to become the source of truth for semantic types.
+- Never add another long-lived rule whose job is “guess the type from the shape of the code”.
+- If a needed type is not exposed by the current hidden `tsgo` API, the default next move is:
+  - extend the probe path
+  - extend the wrapper
+  - or fork / vendor `tsgo` and add the missing endpoint
+- Do not keep playing compare-driven cat-and-mouse with one corpus at a time.
+- A heuristic that fixes FrameOS by guessing from source shape is not success if the same rule can drift on the next codebase.
+- The target architecture is now:
+  - Go finds the right TypeScript nodes and asks checker-backed APIs for truth
+  - `tsgo` returns normalized semantic data
+  - Go formats and merges that data
+  - Go does not re-implement TypeScript’s type reasoning in `model.go`
+
 ## March 24, 2026 Run
 
 ### Environment
@@ -72,7 +94,7 @@
   - while the real-world compare target is often “match the current JS generator’s narrower emitted surface”
 - So the current best reading is:
   - keeping parity-only shaping behind an explicit env flag is safer than hard-coding it into the default generator
-  - continuing to pile unconditional source-recovery heuristics into `model.go` is still the wrong route to `100%` real-world parity
+  - continuing to pile unconditional or parity-only source-recovery heuristics into `model.go` is still the wrong route to `100%` real-world parity
   - if `100%` parity remains the real goal, the rewrite likely needs a more explicit notion of “JS-emitted public surface” rather than ever more source-derived precision
 
 ### Current Branch Debt
@@ -148,6 +170,262 @@
     - new diffs appeared in `src/scenes/frame/panels/Logs/logsLogicType.ts` and `src/scenes/settings/systemInfoLogicType.ts`
   - action taken:
     - the heuristic was removed before continuing, and the branch was revalidated back to the last good baseline
+- Another March 24, 2026 parity-only selector experiment was tested and kept out of the baseline:
+  - first attempt:
+    - keep loose reported unannotated selector returns in parity mode across builder/object logics
+  - outcome:
+    - FrameOS regressed from `20/38` to `19/38`
+    - `src/scenes/settings/systemInfoLogicType.ts` re-entered the diff set
+  - narrowed follow-up:
+    - only keep the loose reported selector surface when at least one selector dependency is already loose/`any`
+    - added focused Go regression coverage for both object-input and builder-input selector shapes
+  - verification after the narrowed rule:
+    - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParityModeKeepsLooseReportedObjectSelectorTypes|TestBuildParsedLogicsParityModeKeepsLooseReportedBuilderSelectorTypes|TestBuildParsedLogicsRecoversFrameOSScheduleSelectorAndKeyTypesWithoutExistingTypegenFiles|TestBuildParsedLogicsParityModeKeepsBuilderCallbackSelectorsWithoutForms|TestBuildParsedLogicsParityModeSuppressesBuilderCallbackSelectorsWhenFormsAlsoUseCallbacks|TestBuildParsedLogicsRecoversBuilderSelectorsWhenFallbackMembersLackReportedSurface|TestBuildParsedLogicsParityModePublishesBuilderImportedListeners|TestBuildParsedLogicsKeepsBuilderListenerInternalReducerActions|TestBuildParsedLogicsFromSourceRecoversFrameOSStyleSelectorTypes"'`
+    - focused Go tests result: pass
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `20/38`
+    - FrameOS semantic accuracy: `52.63%`
+    - FrameOS semantic diffs: `18`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-UFodpe`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-UFodpe/frameos-compare.html`
+  - current reading:
+    - the narrower rule is safe on the current branch
+    - it did not move the measured FrameOS parity score
+    - the remaining selector/value gap still needs a more targeted family than “loose reported selector + loose dependency”
+- Another March 24, 2026 parity-only selector/helper follow-up was tested and kept as a safe-but-neutral baseline refinement:
+  - change:
+    - parity mode now also keeps loose reported selector returns when the selector depends on a non-sibling public field that is missing from the current parsed surface, instead of continuing into source-return recovery
+    - builder parity mode also stops dropping some loose reported internal selector helpers just because their `(…) => any` shapes look uninformative
+  - verification:
+    - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParityModeKeepsLooseReportedObjectSelectorTypes|TestBuildParsedLogicsParityModeKeepsLooseReportedSelectorTypesForOmittedDependencies|TestBuildParsedLogicsParityModeKeepsLooseReportedBuilderSelectorTypes|TestBuildParsedLogicsRecoversFrameOSScheduleSelectorAndKeyTypesWithoutExistingTypegenFiles"'`
+    - focused Go tests result: pass
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `20/38`
+    - FrameOS semantic accuracy: `52.63%`
+    - FrameOS semantic diffs: `18`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-1uc9l5`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-1uc9l5/frameos-compare.html`
+  - current reading:
+    - this did move concrete file shapes in the intended direction:
+      - `scheduleLogicType.ts` now keeps the JS-style loose public selector/value surface again
+      - `controlLogicType.ts` likewise now keeps `scenes` loose instead of re-tightening it to `FrameScene[] | undefined`
+      - some loose builder internal selector helpers are now emitted again instead of disappearing entirely
+    - however no file dropped out of the diff set yet
+    - the next remaining gap in this family is narrower than “public selector too precise”:
+      - helper parameter typing and helper-presence shaping still differ from the JS baseline in files like `scheduleLogicType.ts`
+      - so future work here should target helper-shape parity directly rather than reopening broad selector-return recovery
+- Another March 24, 2026 parity-only helper-shape follow-up did move the FrameOS corpus by one file:
+  - change:
+    - parity-mode internal selector helper recovery now preserves dependency slot positions when a selector depends on a mixed known/missing surface, instead of dropping unresolved slots and abandoning the recovered helper signature
+    - when that parity path sees an unresolved dependency slot, it now keeps the slot and falls back to `any`, which lets connected helpers like `schedule(frameForm, frame)` keep the recovered `frameForm: Partial<FrameType>` parameter even if `frame` is still missing from the current parsed surface
+    - helper source recovery also now uses the reported/current selector return as a fallback return hint when the reported selector member shape does not directly expose a projector function signature
+  - verification:
+    - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParityModeKeepsRecoveredConnectedHelperParameterTypes|TestParseInternalSelectorTypesWithStateKeepsRecoveredConnectedHelperParameterTypes|TestParseInternalSelectorTypesWithSourceKeepsRecoveredConnectedFieldParameterTypes|TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsConnectedFieldParameterTypes|TestBuildParsedLogicsParityModeKeepsLooseReportedObjectSelectorTypes|TestBuildParsedLogicsParityModeKeepsLooseReportedSelectorTypesForOmittedDependencies|TestBuildParsedLogicsParityModeKeepsLooseReportedBuilderSelectorTypes"'`
+    - focused Go tests result: pass
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+    - rebuilt Go binary result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `21/38`
+    - FrameOS semantic accuracy: `55.26%`
+    - FrameOS semantic diffs: `17`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-R4SWhT`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-R4SWhT/frameos-compare.html`
+  - current reading:
+    - this closes the `scheduleLogicType.ts` helper-shape gap enough to drop that file out of the semantic diff set
+    - it also pulled `sceneSettingsLogicType.ts` out of the diff set on the same run
+    - `controlLogicType.ts` did move in the intended direction:
+      - `scenes` now keeps the recovered `frameForm: Partial<FrameType>` helper parameter instead of collapsing both parameters to `any`
+      - but `sceneId` still falls back to `any` inside `scene(...)`, and `loading(...)` still mismatches the JS helper parameter naming/order surface
+    - with `scheduleLogicType.ts` gone, the next surfaced helper-shape bug in this lane is `settingsLogicType.ts`, where `embeddingsMissing` currently recovers `Math` instead of `number`
+    - the next iteration here should stay focused on stateful helper parameter-slot/name alignment, not reopen broad public selector return recovery
+- Another March 24, 2026 built-in selector-return follow-up did move the FrameOS corpus by one file:
+  - change:
+    - source built-in call inference now treats numeric built-ins such as `Math.max(...)` as returning `number`
+    - selector source-recovery logic now treats namespace-like built-in value surfaces such as `Math` as needing recovery instead of accepting them as stable public selector types
+    - internal helper recovery now lets those namespace-like built-in returns yield to recovered primitive returns, so helper surfaces no longer stay stuck on `Math`
+  - verification:
+    - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestSourceExpressionTypeTextWithContextRecoversMathMaxCallReturnType|TestBuildParsedLogicsRecoversMathMaxSelectorReturnType|TestBuildParsedLogicsParityModeKeepsLooseReportedObjectSelectorTypes|TestBuildParsedLogicsParityModeKeepsLooseReportedSelectorTypesForOmittedDependencies|TestBuildParsedLogicsParityModeKeepsLooseReportedBuilderSelectorTypes|TestBuildParsedLogicsParityModeKeepsRecoveredConnectedHelperParameterTypes|TestParseInternalSelectorTypesWithStateKeepsRecoveredConnectedHelperParameterTypes|TestParseInternalSelectorTypesWithSourceKeepsRecoveredConnectedFieldParameterTypes|TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsConnectedFieldParameterTypes"'`
+    - focused Go tests result: pass
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+    - rebuilt Go binary result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - sample benchmark exact accuracy: `0/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `22/38`
+    - FrameOS semantic accuracy: `57.89%`
+    - FrameOS semantic diffs: `16`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-tqfkeJ`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-tqfkeJ/frameos-compare.html`
+    - file that dropped out of the diff set:
+      - `src/scenes/settings/settingsLogicType.ts`
+  - current reading:
+    - this closes the `embeddingsMissing` `Math` vs `number` gap cleanly enough to remove `settingsLogicType.ts` from the semantic diff set
+    - the sample benchmark stayed at `20/20`, so the fix appears isolated to the intended real-world helper/selector recovery path
+    - the next surfaced gap in this helper-shape lane is still `controlLogicType.ts`:
+      - `scene(...)` still falls back to `sceneId: any` inside the internal helper
+      - `loading(...)` still keeps the projector-parameter naming/order surface instead of the JS-style dependency-slot naming surface, which leaves `stateRecordLoading` and `sceneChanging` effectively swapped in the helper signature
+    - so the next iteration should stay focused on internal-helper dependency-slot naming and later-sibling selector dependency typing rather than reopening the now-fixed built-in return family
+- Another March 24, 2026 internal-helper parity follow-up did move the FrameOS corpus by one more file:
+  - change:
+    - parity-mode internal helper recovery now lets recovered primitive/nullish helper returns beat a currently reported loose `any`/`unknown` return instead of blindly preserving the reported loose helper return
+    - internal helper canonicalization now rewrites helper parameter names back onto known selector dependency names and fills any-like parameter types from known reducer/selector dependency types when every dependency name is already known in the parsed local surface
+    - selector parsing now gives internal helper recovery a second pass after first-pass sibling refinement, so earlier helpers can see later sibling selectors that only became concrete during the first helper-recovery pass
+    - regression coverage now checks the direct parity merge rule and keeps the synthetic `controlLogic` regression focused on the real failure mode: concrete `sceneId` recovery and JS-style `loading(...)` dependency-slot naming/order, without pinning fixture-specific nullability
+  - verification:
+    - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParityModeKeepsControlLogicSceneHelperParameterTypes|TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsNullishStateFieldReturnType|TestParityModeRecoveredInternalHelperFunctionTypePrefersRecoveredPrimitiveNullishReturn|TestParseInternalSelectorTypesWithSourceCanonicalizesKnownSelectorDependencyNamesAndTypes|TestBuildParsedLogicsRecoversMathMaxSelectorReturnType"'`
+    - focused Go tests result: pass
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+    - rebuilt Go binary result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - sample benchmark exact accuracy: `0/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `23/38`
+    - FrameOS semantic accuracy: `60.53%`
+    - FrameOS semantic diffs: `15`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-KU4gDu`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-KU4gDu/frameos-compare.html`
+    - file that dropped out of the diff set:
+      - `src/scenes/frame/panels/Scenes/controlLogicType.ts`
+  - current reading:
+    - this closes the `controlLogicType.ts` helper-shape gap cleanly enough to remove that file from the semantic diff set
+    - the sample benchmark and full `internal/keainspect` suite both stayed green, so the fix appears isolated to parity-mode helper shaping rather than the default generator path
+    - the remaining FrameOS diff set is now down to `15` files:
+      - `src/scenes/frame/panels/Assets/assetsLogicType.ts`
+      - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/diagramLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/newNodePickerLogicType.ts`
+      - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+      - `src/scenes/frame/panels/Events/eventsLogicType.ts`
+      - `src/scenes/frame/panels/Metrics/metricsLogicType.ts`
+      - `src/scenes/frame/panels/Ping/pingLogicType.ts`
+      - `src/scenes/frame/panels/SceneJSON/sceneJSONLogicType.ts`
+      - `src/scenes/frame/panels/SceneState/sceneStateLogicType.ts`
+      - `src/scenes/frame/panels/Scenes/expandedSceneLogicType.ts`
+      - `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templateRowLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templatesLogicType.ts`
+    - the next pass should start by diffing a couple of those remaining panel files to see whether they share one more helper-shape/public-surface family or whether the corpus has split into multiple unrelated buckets
+- Another March 24, 2026 selector-refinement follow-up moved the FrameOS corpus by one more file:
+  - change:
+    - public selector refinement from internal helpers now lets a richer helper object-array return replace a malformed narrower public object-array surface when the helper preserves all existing members and adds either conflicting member fixes or obviously missing structure
+    - this keeps parity-mode selector/value surfaces from getting stranded on broken partial object arrays such as `cleanedAssets: { path: boolean }[]` when the recovered helper already carries the real asset shape
+    - regression coverage now includes the direct object-array refinement case
+  - verification:
+    - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestRefineSelectorTypesFromInternalHelpersPrefersRicherObjectArrayReturn|TestBuildParsedLogicsParityModeKeepsControlLogicSceneHelperParameterTypes|TestParityModeRecoveredInternalHelperFunctionTypePrefersRecoveredPrimitiveNullishReturn|TestBuildParsedLogicsRecoversMathMaxSelectorReturnType"'`
+    - focused Go tests result: pass
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+    - rebuilt Go binary result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - sample benchmark exact accuracy: `0/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `24/38`
+    - FrameOS semantic accuracy: `63.16%`
+    - FrameOS semantic diffs: `14`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-LwpnP5`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-LwpnP5/frameos-compare.html`
+    - file that dropped out of the diff set:
+      - `src/scenes/frame/panels/Assets/assetsLogicType.ts`
+  - current reading:
+    - this confirms there is still a concrete family where the helper already has the right structural return but the public selector/value surface does not adopt it
+    - the current remaining diff set is now down to `14` files:
+      - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/diagramLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/newNodePickerLogicType.ts`
+      - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+      - `src/scenes/frame/panels/Events/eventsLogicType.ts`
+      - `src/scenes/frame/panels/Metrics/metricsLogicType.ts`
+      - `src/scenes/frame/panels/Ping/pingLogicType.ts`
+      - `src/scenes/frame/panels/SceneJSON/sceneJSONLogicType.ts`
+      - `src/scenes/frame/panels/SceneState/sceneStateLogicType.ts`
+      - `src/scenes/frame/panels/Scenes/expandedSceneLogicType.ts`
+      - `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templateRowLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templatesLogicType.ts`
+    - the next obvious lane is the remaining `Scenes` family:
+      - `expandedSceneLogicType.ts` is still too precise on public/helper `scenes` and `hasStateChanges`
+      - `scenesLogicType.ts` is still in the semantic diff set and likely shares at least part of that same parity-vs-source-precision tension
+- One broader March 24, 2026 parity-seeding experiment was tested and explicitly backed out:
+  - attempted change:
+    - loading the current local generated logic surface for the active file in parity mode and letting those existing selector/helper surfaces override newly recovered source/report precision more aggressively
+  - outcome:
+    - FrameOS regressed from `24/38` to `22/38`
+    - `src/scenes/frame/panels/Assets/assetsLogicType.ts` and `src/scenes/frame/panels/Scenes/controlLogicType.ts` both re-entered the diff set immediately
+  - action taken:
+    - the experiment was reverted before continuing
+    - the branch was revalidated back to the stable `24/38` checkpoint with:
+      - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+      - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+      - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-uNGhjv`
+      - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-uNGhjv/frameos-compare.html`
+  - current reading:
+    - the remaining `Scenes` drift is real, but the fix has to be narrower than “prefer the current generated selector/helper surface wholesale”
+    - the safer next pass is still to target specific over-precise public/helper cases like `expandedSceneLogicType.ts` rather than trying to seed the whole current logic surface from the existing JS output
+- Another March 24, 2026 selector-return correctness follow-up was kept as a safe-but-neutral baseline refinement:
+  - change:
+    - source built-in call inference now treats `Object.keys(...)` as returning `string[]`
+    - block-bodied selector return inference now correctly widens mixed `return false` / computed boolean paths back to `boolean`, which fixes the `hasStateChanges` literal-`false` leak in the `expandedSceneLogic` lane
+    - regression coverage now includes both the direct `Object.keys(...)` call case and the block-bodied boolean selector case
+  - verification:
+    - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestSourceExpressionTypeTextWithContextRecoversObjectKeysCallReturnType|TestSourceSelectorInferredTypeAvoidsLiteralFalseFallbackForBlockBooleanSelector|TestRefineSelectorTypesFromInternalHelpersPrefersRicherObjectArrayReturn"'`
+    - focused Go tests result: pass
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+    - rebuilt Go binary result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `24/38`
+    - FrameOS semantic accuracy: `63.16%`
+    - FrameOS semantic diffs: `14`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-tdOyws`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-tdOyws/frameos-compare.html`
+  - current reading:
+    - this is a correctness fix, but it did not move the measured FrameOS parity score
+    - it does fix the local `expandedSceneLogicType.ts` `hasStateChanges` leak from `false` to `boolean`; that file still remains in the diff set because public/helper `scenes` surfaces are still too precise against the JS baseline
+- Another March 24, 2026 truncated-selector-member parity experiment was tested and backed out:
+  - attempted change:
+    - treating truncated tuple selector member `typeString` surfaces as loose parity signals even when the reported selector return was otherwise missing
+  - outcome:
+    - FrameOS regressed from `24/38` to `23/38`
+    - `src/scenes/frame/panels/Assets/assetsLogicType.ts` re-entered the semantic diff set immediately
+  - action taken:
+    - the experiment was reverted before continuing
+    - the branch was revalidated back to the stable `24/38` checkpoint with:
+      - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+      - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+      - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-tdOyws`
+      - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-tdOyws/frameos-compare.html`
+  - current reading:
+    - the `expandedScene` gap does seem related to truncated selector member surfaces in parity mode, but that signal is too weak on its own and reopens already-fixed files like `assets`
+    - the next pass needs to target the specific `Scenes` over-precision path more directly than “missing/truncated tuple report means stay loose”
 
 ## March 23, 2026 Run
 
@@ -586,7 +864,8 @@
 ### What This Means
 
 - The hidden API is materially richer than the wrapper we started with.
-- We can likely replace some current heuristic recovery with checker-backed queries without forking immediately.
+- We should replace current heuristic recovery with checker-backed queries wherever possible, and stop adding new semantic guesses in Go.
+- We may still be able to do that without forking immediately.
 - Position-based symbol queries are already useful as long as the probe keeps property-name positions separate from value-expression positions.
 - Real declaration-node handles are enough to unlock several `*AtLocation` checker queries, so this is no longer blocked on placeholder handles.
 - Identifier/name handles recovered from `getSourceFile` are now enough to unlock both `getSymbolAtLocation` and `getSymbolsAtLocations` on sample property keys.
@@ -611,27 +890,43 @@
 - Tuple-like selector members are now much easier to inspect with those helpers too: when the current type string is a tuple, `propertyDetails` / `memberDetails` trim inherited array-prototype noise and keep just the fixed tuple entries plus `length` in numeric order.
 - We still do not have a stable external “walk the full program exactly like JS does” API.
 - For true parity, the best long-term path is still one of:
-  - extend the hidden API until Go can reconstruct the same data with minimal guessing
+  - extend the hidden API until Go can reconstruct the same data with no semantic guessing
   - fork `tsgo` and add a kea-specific extraction endpoint or normalized IR
+  - vendor the relevant `tsgo` / TypeScript-integration code into this repo and hack directly on the data path if the external binary boundary is what blocks us
 
-## Recommended Next Steps
+## Re-Grouped Next Steps
 
-1. Expand the probe tool deliberately instead of expanding heuristics.
-2. Use `--sample <property> --member <member>` plus `typeToString` to map hidden methods onto the exact missing parity families:
+1. Freeze heuristic growth in `model.go`.
+   - No new semantic type-recovery branches based on source text shape, AST shape, string contains checks, object-member shape, or corpus-specific special cases.
+   - The only acceptable short-term edits in that area are:
+     - deleting old heuristics
+     - narrowing a regression while we migrate to checker-backed data
+     - plumbing checker-backed data through an existing callsite
+2. Inventory the current guessing surface.
+   - Make a concrete list of the `model.go` helpers that are still synthesizing semantic types from source shape.
+   - Tag each one as:
+     - replace with checker query
+     - keep only as node-locator glue
+     - delete after checker path exists
+3. Expand `probe-api` and `tsgoapi` deliberately instead of expanding heuristics.
+   - Use `--sample <property> --member <member>` plus `typeToString`, `signatureDetails`, `propertyDetails`, and `memberDetails` to map the exact missing parity families.
+   - On selector tuples, use `propertyDetails` / `memberDetails` first, then `--element <first|last|index>` to drill into the exact callback.
+   - On reducer/listener/loader object maps, use `--property <member>` instead of reconstructing the shape from source.
+4. Decide quickly whether the current hidden API is enough.
+   - If the required semantic fact exists behind one more hidden method, add that method to the Go wrapper.
+   - If the fact is not available cleanly, stop guessing and move the boundary.
+5. If needed, do the “impossible” thing early instead of late.
+   - Import / vendor the relevant `tsgo` code into this repo or add a local fork under `poc/` / `third_party/`.
+   - Add a kea-specific extraction endpoint or normalized IR that returns the exact selector/action/helper/connect surfaces we need.
+   - Prefer hacking the TypeScript side once over re-encoding TypeScript semantics forever in Go.
+6. After checker-backed extraction exists, replace heuristic families one category at a time.
    - selector/value shaping
-   - action payload surface
+   - action payload surfaces
    - helper emission
    - connected logic resolution
-   - when the full callback string is still abbreviated, pair it with `signatureDetails`
-   - when the target is an object-shaped wrapper and one printed type is still too coarse, pair it with `propertyDetails` or `memberDetails`
-3. On selector tuples, start with `propertyDetails` / `memberDetails` to expose fixed entries like `0`, `1`, and `length`, then use `--element <first|last|index>` to drill into the exact callback once the tuple slot is clear.
-4. Use `--property <member>` once the probe is sitting on a reducer/listener/loader object map and the outer object type is still too lossy.
-5. Use the broader real-world probe coverage to isolate the remaining hidden-API gaps:
-   - exact-node cases that still collapse or widen unexpectedly
-   - pretty-print cases where the full callback surface is still abbreviated and needs signature-return or signature-details probing to disambiguate
-   - package-import-dependent first-pass selectors that still collapse to `any` when local source recovery cannot expand external member surfaces
-6. Decide quickly whether the hidden API can expose or unwrap those remaining surfaces without more guesswork.
-7. If it is not enough, fork `tsgo` and add a kea-specific extraction API instead of continuing with source-recovery guesswork.
+   - builder callback / tuple projector recovery
+7. Only use real-world compare runs to verify the checker-backed path.
+   - Do not let compare deltas drive new source-shape guessing rules.
 
 ## Current Host Readiness
 
@@ -705,7 +1000,12 @@
 
 - Do not optimize for the current normalized compare score alone.
 - Do not chase precision-only diffs as if they were parity bugs.
-- Do not keep growing `model.go` heuristics unless the added logic is clearly temporary or directly informs the new checker-backed path.
+- Never add a new long-lived rule that guesses a semantic type from source text shape, AST shape, printed type fragments, naming conventions, or corpus-specific examples.
+- Use source / AST traversal only to find the exact node, symbol, signature, or property handle to query from TypeScript.
+- The final semantic type must come from TypeScript checker/internal API data, not from Go-side reconstruction.
+- If the current hidden `tsgo` API cannot provide the answer, extend `tsgoapi`, extend `probe-api`, or fork / vendor `tsgo` before adding another heuristic.
+- Prefer one invasive `tsgo` change over a permanent stream of cat-and-mouse fixes in `model.go`.
+- Treat existing `model.go` heuristic recovery as migration debt to retire, not an invitation to add more.
 
 ## Useful Commands
 

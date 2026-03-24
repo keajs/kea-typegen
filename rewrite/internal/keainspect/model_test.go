@@ -3846,6 +3846,681 @@ func TestBuildParsedLogicsRecoversFrameOSScheduleSelectorAndKeyTypesWithoutExist
 	}
 }
 
+func TestBuildParsedLogicsParityModeKeepsLooseReportedObjectSelectorTypes(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type ScheduledEvent = { id: string; hour: number; minute: number }",
+		"type FrameSchedule = { events: ScheduledEvent[] }",
+		"type FrameScene = { id: string; name: string }",
+		"type FrameType = { schedule?: FrameSchedule; scenes?: FrameScene[] }",
+		"",
+		"export const scheduleLogic = kea({",
+		"  reducers: {",
+		"    frame: [null as any, {}],",
+		"    frameForm: [{} as Partial<FrameType>, {}],",
+		"    sort: ['hour' as string, {}],",
+		"  },",
+		"  selectors: {",
+		"    schedule: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame.schedule],",
+		"    sceneNames: [",
+		"      (s) => [s.frameForm],",
+		"      (frameForm): Record<string, string> => Object.fromEntries((frameForm.scenes ?? []).map((scene) => [scene.id, scene.name])),",
+		"    ],",
+		"    sortedEvents: [",
+		"      (s) => [s.schedule, s.sort, s.sceneNames],",
+		"      (schedule, sort, sceneNames) => {",
+		"        if (sort === 'hour') {",
+		"          return [...(schedule?.events ?? [])].sort((a, b) => a.hour - b.hour || a.minute - b.minute)",
+		"        }",
+		"        return (schedule?.events ?? []).filter((event) => Boolean(sceneNames[event.id]))",
+		"      },",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/scheduleLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "scheduleLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "frame", TypeString: "[any, {}]"},
+							{Name: "frameForm", TypeString: "[Partial<FrameType>, {}]"},
+							{Name: "sort", TypeString: "[string, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{Name: "schedule", TypeString: "(((s: any) => any[]) | ((frameForm: any, frame: any) => any))[]", ReturnTypeString: "any"},
+							{Name: "sceneNames", TypeString: "(((s: any) => any[]) | ((scenes: FrameScene[]) => any))[]", ReturnTypeString: "any"},
+							{Name: "sortedEvents", TypeString: "(((s: any) => any[]) | ((schedule: any, sort: string, sceneNames: Record<string, string>) => any))[]", ReturnTypeString: "any"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "schedule"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode schedule selector type %q, got %+v", "any", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "sceneNames"); !ok || selector.Type != "Record<string, string>" {
+		t.Fatalf("expected parity-mode sceneNames selector type %q, got %+v", "Record<string, string>", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "sortedEvents"); !ok || selector.Type != "any[]" {
+		t.Fatalf("expected parity-mode sortedEvents selector type %q, got %+v", "any[]", logic.Selectors)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsLooseReportedSelectorTypesForOmittedDependencies(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type FrameSchedule = { disabled?: boolean }",
+		"type FrameType = { schedule?: FrameSchedule }",
+		"",
+		"export const scheduleLogic = kea({",
+		"  reducers: {",
+		"    frameForm: [{} as Partial<FrameType>, {}],",
+		"  },",
+		"  selectors: {",
+		"    schedule: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame.schedule],",
+		"    disabled: [(s) => [s.schedule], (schedule) => schedule?.disabled ?? false],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/scheduleLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "scheduleLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "frameForm", TypeString: "[Partial<FrameType>, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "schedule",
+								TypeString:       "[(s: any) => any[], (frameForm: Partial<FrameType>, frame: any) => any]",
+								PrintedTypeNode:  "[(s: any) => any[], (frameForm: Partial<FrameType>, frame: any) => any]",
+								ReturnTypeString: "any",
+							},
+							{
+								Name:             "disabled",
+								TypeString:       "[(s: any) => any[], (schedule: any) => any]",
+								PrintedTypeNode:  "[(s: any) => any[], (schedule: any) => any]",
+								ReturnTypeString: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "schedule"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode schedule selector type %q, got %+v", "any", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "disabled"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode disabled selector type %q, got %+v", "any", logic.Selectors)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsLooseReportedBuilderSelectorTypes(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea, path, reducers, selectors } from 'kea'",
+		"",
+		"type ScheduledEvent = { id: string; hour: number; minute: number }",
+		"type FrameSchedule = { events: ScheduledEvent[] }",
+		"type FrameScene = { id: string; name: string }",
+		"type FrameType = { schedule?: FrameSchedule; scenes?: FrameScene[] }",
+		"",
+		"export const scheduleLogic = kea([",
+		"  path(['scheduleLogic']),",
+		"  reducers({",
+		"    frame: [null as any, {}],",
+		"    frameForm: [{} as Partial<FrameType>, {}],",
+		"    sort: ['hour' as string, {}],",
+		"  }),",
+		"  selectors({",
+		"    schedule: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame.schedule],",
+		"    sceneNames: [",
+		"      (s) => [s.frameForm],",
+		"      (frameForm): Record<string, string> => Object.fromEntries((frameForm.scenes ?? []).map((scene) => [scene.id, scene.name])),",
+		"    ],",
+		"    sortedEvents: [",
+		"      (s) => [s.schedule, s.sort, s.sceneNames],",
+		"      (schedule, sort, sceneNames) => {",
+		"        if (sort === 'hour') {",
+		"          return [...(schedule?.events ?? [])].sort((a, b) => a.hour - b.hour || a.minute - b.minute)",
+		"        }",
+		"        return (schedule?.events ?? []).filter((event) => Boolean(sceneNames[event.id]))",
+		"      },",
+		"    ],",
+		"  }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/scheduleLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "scheduleLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "frame", TypeString: "[any, {}]"},
+							{Name: "frameForm", TypeString: "[Partial<FrameType>, {}]"},
+							{Name: "sort", TypeString: "[string, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{Name: "schedule", TypeString: "(((s: any) => any[]) | ((frameForm: any, frame: any) => any))[]", ReturnTypeString: "any"},
+							{Name: "sceneNames", TypeString: "(((s: any) => any[]) | ((scenes: FrameScene[]) => any))[]", ReturnTypeString: "any"},
+							{Name: "sortedEvents", TypeString: "(((s: any) => any[]) | ((schedule: any, sort: string, sceneNames: Record<string, string>) => any))[]", ReturnTypeString: "any"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "schedule"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode builder schedule selector type %q, got %+v", "any", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "sceneNames"); !ok || selector.Type != "Record<string, string>" {
+		t.Fatalf("expected parity-mode builder sceneNames selector type %q, got %+v", "Record<string, string>", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "sortedEvents"); !ok || selector.Type != "any[]" {
+		t.Fatalf("expected parity-mode builder sortedEvents selector type %q, got %+v", "any[]", logic.Selectors)
+	}
+}
+
+func TestBuildParsedLogicsRecoversMathMaxSelectorReturnType(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type EmbeddingsStatus = { count: number; total: number }",
+		"",
+		"export const settingsLogic = kea({",
+		"  reducers: {",
+		"    aiEmbeddingsStatus: [{ count: 0, total: 0 } as EmbeddingsStatus, {}],",
+		"  },",
+		"  selectors: {",
+		"    embeddingsMissing: [",
+		"      (selectors) => [selectors.aiEmbeddingsStatus],",
+		"      (aiEmbeddingsStatus) => Math.max((aiEmbeddingsStatus?.total ?? 0) - (aiEmbeddingsStatus?.count ?? 0), 0),",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/settingsLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "settingsLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "aiEmbeddingsStatus", TypeString: "[EmbeddingsStatus, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "embeddingsMissing",
+								TypeString:       "[(selectors: any) => any[], (aiEmbeddingsStatus: EmbeddingsStatus) => Math]",
+								PrintedTypeNode:  "[(selectors: any) => any[], (aiEmbeddingsStatus: EmbeddingsStatus) => Math]",
+								ReturnTypeString: "Math",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "embeddingsMissing"); !ok || selector.Type != "number" {
+		t.Fatalf("expected embeddingsMissing selector type %q, got %+v", "number", logic.Selectors)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "embeddingsMissing"); !ok || helper.FunctionType != "(aiEmbeddingsStatus: EmbeddingsStatus) => number" {
+		t.Fatalf("expected embeddingsMissing helper type %q, got %+v", "(aiEmbeddingsStatus: EmbeddingsStatus) => number", logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsRecoveredConnectedHelperParameterTypes(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logics := inspectTempLogicFile(t, map[string]string{
+		"src/types.ts": strings.Join([]string{
+			"export interface FrameSchedule {",
+			"    disabled?: boolean",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    id?: number",
+			"    schedule?: FrameSchedule",
+			"}",
+		}, "\n"),
+		"src/framesModel.ts": strings.Join([]string{
+			"import { kea, path, selectors } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export const framesModel = kea([",
+			"    path(['src', 'framesModel']),",
+			"    selectors(() => ({",
+			"        frames: [() => [], (): Record<number, FrameType> => ({})],",
+			"    })),",
+			"])",
+		}, "\n"),
+		"src/frameLogic.ts": strings.Join([]string{
+			"import { connect, kea, key, path, props, reducers, selectors } from 'kea'",
+			"import { forms } from 'kea-forms'",
+			"import type { frameLogicType } from './frameLogicType'",
+			"import { framesModel } from './framesModel'",
+			"import type { FrameType } from './types'",
+			"",
+			"export interface FrameLogicProps {",
+			"    frameId: number",
+			"}",
+			"",
+			"export const frameLogic = kea<frameLogicType>([",
+			"    path(['src', 'frameLogic']),",
+			"    props({} as FrameLogicProps),",
+			"    key((props) => props.frameId),",
+			"    connect(() => ({",
+			"        values: [framesModel, ['frames']],",
+			"    })),",
+			"    forms(() => ({",
+			"        frameForm: {",
+			"            defaults: {} as FrameType,",
+			"            submit: async (frame) => frame,",
+			"        },",
+			"    })),",
+			"    reducers(() => ({",
+			"        frameForm: [{} as Partial<FrameType>, {}],",
+			"    })),",
+			"    selectors(() => ({",
+			"        frameId: [() => [(_, props) => props.frameId], (frameId) => frameId],",
+			"        frame: [(s) => [s.frames, s.frameId], (frames, frameId) => frames[frameId] || null],",
+			"    })),",
+			"])",
+		}, "\n"),
+		"src/scheduleLogic.ts": strings.Join([]string{
+			"import { connect, kea, key, path, props, selectors } from 'kea'",
+			"import type { scheduleLogicType } from './scheduleLogicType'",
+			"import { frameLogic } from './frameLogic'",
+			"",
+			"export interface ScheduleLogicProps {",
+			"    frameId: number",
+			"}",
+			"",
+			"export const scheduleLogic = kea<scheduleLogicType>([",
+			"    path(['src', 'scheduleLogic']),",
+			"    props({} as ScheduleLogicProps),",
+			"    key((props) => props.frameId),",
+			"    connect(({ frameId }: ScheduleLogicProps) => ({",
+			"        values: [frameLogic({ frameId }), ['frame', 'frameForm']],",
+			"    })),",
+			"    selectors(() => ({",
+			"        schedule: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame?.schedule],",
+			"    })),",
+			"])",
+		}, "\n"),
+	}, "src/scheduleLogic.ts")
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "frameForm"); !ok || selector.Type != "Partial<FrameType>" {
+		t.Fatalf("expected parity-mode connected frameForm selector type %q, got %+v", "Partial<FrameType>", logic.Selectors)
+	}
+	if selector, ok := findParsedField(logic.Selectors, "schedule"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode connected schedule selector type %q, got %+v", "any", logic.Selectors)
+	}
+	helper, ok := findParsedFunction(logic.InternalSelectorTypes, "schedule")
+	if !ok {
+		t.Fatalf("expected parity-mode connected schedule helper, got %+v", logic.InternalSelectorTypes)
+	}
+	if !strings.Contains(helper.FunctionType, "frameForm: Partial<FrameType>") {
+		t.Fatalf("expected parity-mode connected schedule helper to preserve recovered frameForm parameter type, got %+v", helper)
+	}
+	if !strings.HasSuffix(helper.FunctionType, "=> any") {
+		t.Fatalf("expected parity-mode connected schedule helper to keep an any return, got %+v", helper)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsControlLogicSceneHelperParameterTypes(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logics := inspectTempLogicFile(t, map[string]string{
+		"src/types.ts": strings.Join([]string{
+			"export type StateField = { access?: 'public' | 'private' }",
+			"export type FrameScene = { id: string; name?: string; fields?: StateField[] }",
+			"export type FrameType = { scenes?: FrameScene[] }",
+			"export type FrameStateRecord = { sceneId?: string | null; states?: Record<string, Record<string, any>> }",
+		}, "\n"),
+		"src/controlLogicType.ts": strings.Join([]string{
+			"import type { Logic } from 'kea'",
+			"",
+			"export interface controlLogicType extends Logic {}",
+		}, "\n"),
+		"src/frameLogic.ts": strings.Join([]string{
+			"import { kea, path, props, reducers, selectors, key } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export interface FrameLogicProps {",
+			"  frameId: number",
+			"}",
+			"",
+			"export const frameLogic = kea([",
+			"  path(['src', 'frameLogic']),",
+			"  props({} as FrameLogicProps),",
+			"  key((props) => props.frameId),",
+			"  reducers({",
+			"    frame: [null as any, {}],",
+			"    frameForm: [{} as Partial<FrameType>, {}],",
+			"  }),",
+			"  selectors({",
+			"    frameId: [(s) => [(_, props) => props.frameId], (frameId) => frameId],",
+			"  }),",
+			"])",
+		}, "\n"),
+		"src/controlLogic.ts": strings.Join([]string{
+			"import { connect, kea, key, path, props, reducers, selectors } from 'kea'",
+			"import type { controlLogicType } from './controlLogicType'",
+			"import { frameLogic } from './frameLogic'",
+			"import type { FrameScene, FrameStateRecord, FrameType, StateField } from './types'",
+			"",
+			"export interface ControlLogicProps {",
+			"  frameId: number",
+			"}",
+			"",
+			"export const controlLogic = kea<controlLogicType>([",
+			"  path(['src', 'controlLogic']),",
+			"  props({} as ControlLogicProps),",
+			"  key((props) => props.frameId),",
+			"  connect(({ frameId }: ControlLogicProps) => ({",
+			"    values: [frameLogic({ frameId }), ['frame', 'frameForm']],",
+			"  })),",
+			"  reducers({",
+			"    stateRecord: [{} as FrameStateRecord, {}],",
+			"    sceneChanging: [null as string | null, {}],",
+			"    stateRecordLoading: [false, {}],",
+			"  }),",
+			"  selectors(() => ({",
+			"    scenes: [(s) => [s.frame, s.frameForm], (frame, frameForm) => frameForm.scenes ?? frame.scenes],",
+			"    scene: [",
+			"      (s) => [s.scenes, s.sceneId],",
+			"      (scenes, sceneId): FrameScene | null => scenes?.find((scene) => scene.id === sceneId) ?? null,",
+			"    ],",
+			"    fields: [(s) => [s.scene], (scene): StateField[] => (scene?.fields ?? []).filter((field) => field.access === 'public')],",
+			"    states: [(s) => [s.stateRecord], (stateRecord) => stateRecord?.states ?? {}],",
+			"    sceneId: [(s) => [s.stateRecord], (stateRecord) => stateRecord?.sceneId ?? null],",
+			"    loading: [",
+			"      (s) => [s.stateRecord, s.sceneChanging, s.stateRecordLoading],",
+			"      (stateRecord, stateRecordLoading, sceneChanging) => !stateRecord?.sceneId || stateRecordLoading || !!sceneChanging,",
+			"    ],",
+			"  })),",
+			"])",
+		}, "\n"),
+	}, "src/controlLogic.ts")
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	sceneHelper, ok := findParsedFunction(logic.InternalSelectorTypes, "scene")
+	if !ok {
+		t.Fatalf("expected scene helper, got %+v", logic.InternalSelectorTypes)
+	}
+	if !strings.Contains(sceneHelper.FunctionType, "sceneId: string") || strings.Contains(sceneHelper.FunctionType, "sceneId: any") {
+		t.Fatalf("expected scene helper to recover a concrete sceneId parameter type, got %+v", sceneHelper)
+	}
+	sceneIDHelper, ok := findParsedFunction(logic.InternalSelectorTypes, "sceneId")
+	if !ok || sceneIDHelper.FunctionType != "(stateRecord: FrameStateRecord) => string | null" {
+		t.Fatalf(
+			"expected sceneId helper type %q, got %+v",
+			"(stateRecord: FrameStateRecord) => string | null",
+			logic.InternalSelectorTypes,
+		)
+	}
+	loadingHelper, ok := findParsedFunction(logic.InternalSelectorTypes, "loading")
+	if !ok || !strings.HasPrefix(loadingHelper.FunctionType, "(stateRecord: FrameStateRecord, sceneChanging: string | null, stateRecordLoading: boolean) => ") {
+		t.Fatalf(
+			"expected loading helper parameter order %q, got %+v",
+			"(stateRecord: FrameStateRecord, sceneChanging: string | null, stateRecordLoading: boolean) => ...",
+			logic.InternalSelectorTypes,
+		)
+	}
+}
+
+func TestParseInternalSelectorTypesWithStateKeepsRecoveredConnectedHelperParameterTypes(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir, tsconfigPath := writeTempProject(t, map[string]string{
+		"src/types.ts": strings.Join([]string{
+			"export interface FrameSchedule {",
+			"    disabled?: boolean",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    id?: number",
+			"    schedule?: FrameSchedule",
+			"}",
+		}, "\n"),
+		"src/framesModel.ts": strings.Join([]string{
+			"import { kea, path, selectors } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export const framesModel = kea([",
+			"    path(['src', 'framesModel']),",
+			"    selectors(() => ({",
+			"        frames: [() => [], (): Record<number, FrameType> => ({})],",
+			"    })),",
+			"])",
+		}, "\n"),
+		"src/frameLogic.ts": strings.Join([]string{
+			"import { connect, kea, key, path, props, reducers, selectors } from 'kea'",
+			"import { forms } from 'kea-forms'",
+			"import type { frameLogicType } from './frameLogicType'",
+			"import { framesModel } from './framesModel'",
+			"import type { FrameType } from './types'",
+			"",
+			"export interface FrameLogicProps {",
+			"    frameId: number",
+			"}",
+			"",
+			"export const frameLogic = kea<frameLogicType>([",
+			"    path(['src', 'frameLogic']),",
+			"    props({} as FrameLogicProps),",
+			"    key((props) => props.frameId),",
+			"    connect(() => ({",
+			"        values: [framesModel, ['frames']],",
+			"    })),",
+			"    forms(() => ({",
+			"        frameForm: {",
+			"            defaults: {} as FrameType,",
+			"            submit: async (frame) => frame,",
+			"        },",
+			"    })),",
+			"    reducers(() => ({",
+			"        frameForm: [{} as Partial<FrameType>, {}],",
+			"    })),",
+			"    selectors(() => ({",
+			"        frameId: [() => [(_, props) => props.frameId], (frameId) => frameId],",
+			"        frame: [(s) => [s.frames, s.frameId], (frames, frameId) => frames[frameId] || null],",
+			"    })),",
+			"])",
+		}, "\n"),
+		"src/scheduleLogic.ts": strings.Join([]string{
+			"import { connect, kea, key, path, props, selectors } from 'kea'",
+			"import type { scheduleLogicType } from './scheduleLogicType'",
+			"import { frameLogic } from './frameLogic'",
+			"",
+			"export interface ScheduleLogicProps {",
+			"    frameId: number",
+			"}",
+			"",
+			"export const scheduleLogic = kea<scheduleLogicType>([",
+			"    path(['src', 'scheduleLogic']),",
+			"    props({} as ScheduleLogicProps),",
+			"    key((props) => props.frameId),",
+			"    connect(({ frameId }: ScheduleLogicProps) => ({",
+			"        values: [frameLogic({ frameId }), ['frame', 'frameForm']],",
+			"    })),",
+			"    selectors(() => ({",
+			"        schedule: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame?.schedule],",
+			"    })),",
+			"])",
+		}, "\n"),
+	})
+
+	targetFile := filepath.Join(tempDir, "src", "scheduleLogic.ts")
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       targetFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	source := mustReadFile(t, targetFile)
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(sourceLogics) != 1 || len(report.Logics) != 1 {
+		t.Fatalf("expected 1 source logic and 1 reported logic, got %d / %d", len(sourceLogics), len(report.Logics))
+	}
+
+	state := &buildState{
+		binaryPath:    report.BinaryPath,
+		projectDir:    report.ProjectDir,
+		configFile:    report.ConfigFile,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	sections := map[string][]SectionReport{}
+	for _, section := range report.Logics[0].Sections {
+		sections[section.Name] = append(sections[section.Name], section)
+	}
+	properties := map[string][]SourceProperty{}
+	for _, property := range sourceLogics[0].Properties {
+		properties[property.Name] = append(properties[property.Name], property)
+	}
+
+	parsed := ParsedLogic{InputKind: report.Logics[0].InputKind}
+	for _, property := range properties["connect"] {
+		enrichConnectedSections(source, report.File, property, sections["listeners"], &parsed, state)
+	}
+	selectorSection := sections["selectors"][0]
+	selectorProperty := sourcePropertyAt(properties["selectors"], 0)
+	parsed.Selectors = mergeParsedFields(parsed.Selectors, parseSelectorsWithSource(selectorSection, parsed, source, selectorProperty, report.File, state)...)
+	if selector, ok := findParsedField(parsed.Selectors, "frameForm"); !ok || selector.Type != "Partial<FrameType>" {
+		t.Fatalf("expected connected frameForm selector type before helper parsing, got %+v", parsed.Selectors)
+	}
+	sourceMembers := sectionSourceProperties(source, selectorProperty)
+	scheduleProperty, ok := sourceMembers["schedule"]
+	if !ok {
+		t.Fatalf("expected schedule source selector property, got %+v", sourceMembers)
+	}
+	directHelper := sourceInternalSelectorFunctionTypeWithFallbackReturn(
+		parsed,
+		source,
+		report.File,
+		sourcePropertyText(source, scheduleProperty),
+		"any",
+		state,
+	)
+	helpers := parseInternalSelectorTypesWithSource(selectorSection, parsed, source, selectorProperty, report.File, state)
+	helper, ok := findParsedFunction(helpers, "schedule")
+	if !ok || helper.FunctionType != "(frameForm: Partial<FrameType>, frame: any) => any" {
+		t.Fatalf(
+			"expected connected schedule helper type %q, got %+v (direct source helper: %q)",
+			"(frameForm: Partial<FrameType>, frame: any) => any",
+			helpers,
+			directHelper,
+		)
+	}
+}
+
 func TestBuildParsedLogicsRecoversTemplateLiteralKeyFromMalformedReportedType(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea, key, path, props } from 'kea'",
@@ -4034,6 +4709,332 @@ func TestInternalHelperComplexRecoveryShouldStayOpaque(t *testing.T) {
 	}
 }
 
+func TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsConnectedFieldParameterTypes(t *testing.T) {
+	logic := ParsedLogic{
+		InputKind: "builders",
+		Selectors: []ParsedField{
+			{Name: "frameForm", Type: "Partial<FrameType>"},
+			{Name: "frame", Type: "any"},
+		},
+	}
+
+	functionType := sourceInternalSelectorFunctionTypeWithFallbackReturn(
+		logic,
+		"",
+		"",
+		"[(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame?.schedule]",
+		"any",
+		nil,
+	)
+	if functionType != "(frameForm: Partial<FrameType>, frame: any) => any" {
+		t.Fatalf(
+			"expected connected schedule helper type %q, got %q",
+			"(frameForm: Partial<FrameType>, frame: any) => any",
+			functionType,
+		)
+	}
+}
+
+func TestInternalHelperOpaqueComplexFallbackReturnShouldStayAny(t *testing.T) {
+	if !internalHelperOpaqueComplexFallbackReturnShouldStayAny(
+		"frameForm.scenes ?? frame.scenes",
+		false,
+		"any",
+		"FrameScene[] | undefined",
+		[]string{"any", "Partial<FrameType>"},
+	) {
+		t.Fatalf("expected opaque complex logical fallback return to stay any")
+	}
+	if internalHelperOpaqueComplexFallbackReturnShouldStayAny(
+		"frameForm.sceneId ?? frame.sceneId",
+		false,
+		"any",
+		"string | null",
+		[]string{"any", "Partial<FrameType>"},
+	) {
+		t.Fatalf("did not expect primitive/nullish logical fallback return to stay any")
+	}
+	if internalHelperOpaqueComplexFallbackReturnShouldStayAny(
+		"frameForm.scenes",
+		false,
+		"any",
+		"FrameScene[] | undefined",
+		[]string{"any", "Partial<FrameType>"},
+	) {
+		t.Fatalf("did not expect non-fallback expression to stay any")
+	}
+}
+
+func TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsConnectedArrayFieldReturnOpaque(t *testing.T) {
+	source := strings.Join([]string{
+		"type FrameScene = { id: string }",
+		"type FrameType = { scenes?: FrameScene[] }",
+	}, "\n")
+
+	functionType := sourceInternalSelectorFunctionTypeWithFallbackReturn(
+		ParsedLogic{
+			Selectors: []ParsedField{
+				{Name: "frame", Type: "any"},
+				{Name: "frameForm", Type: "Partial<FrameType>"},
+			},
+		},
+		source,
+		"",
+		"[(s) => [s.frame, s.frameForm], (frame, frameForm) => frameForm.scenes ?? frame.scenes]",
+		"any",
+		nil,
+	)
+	if functionType != "(frame: any, frameForm: Partial<FrameType>) => any" {
+		t.Fatalf(
+			"expected connected scenes helper type %q, got %q",
+			"(frame: any, frameForm: Partial<FrameType>) => any",
+			functionType,
+		)
+	}
+}
+
+func TestParseInternalSelectorTypesWithSourceKeepsRecoveredConnectedFieldParameterTypes(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { connect, kea, key, path, props, selectors } from 'kea'",
+		"",
+		"type FrameSchedule = { disabled?: boolean }",
+		"type FrameType = { schedule?: FrameSchedule }",
+		"",
+		"interface ScheduleLogicProps {",
+		"    frameId: number",
+		"}",
+		"",
+		"export const scheduleLogic = kea([",
+		"    path(['src', 'scheduleLogic']),",
+		"    props({} as ScheduleLogicProps),",
+		"    key((props) => props.frameId),",
+		"    connect(({ frameId }: ScheduleLogicProps) => ({",
+		"        values: [frameLogic({ frameId }), ['frame', 'frameForm']],",
+		"    })),",
+		"    selectors(() => ({",
+		"        schedule: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm.schedule ?? frame?.schedule],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(sourceLogics) != 1 {
+		t.Fatalf("expected 1 source logic, got %d", len(sourceLogics))
+	}
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+	if _, ok := sectionSourceProperties(source, selectorsProperty)["schedule"]; !ok {
+		t.Fatalf("expected builder selectors source members to include schedule, got %+v", sectionSourceProperties(source, selectorsProperty))
+	}
+
+	helpers := parseInternalSelectorTypesWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{
+					Name:             "schedule",
+					TypeString:       "[(s: { frameForm: (state: any, props?: any) => Partial<FrameType>; frame: (state: any, props?: any) => any; schedule: (state: any, props?: any) => any; }) => [...], (frameForm: any, frame: any) => any]",
+					ReturnTypeString: "any",
+				},
+			},
+		},
+		ParsedLogic{
+			InputKind: "builders",
+			PropsType: "ScheduleLogicProps",
+			Selectors: []ParsedField{
+				{Name: "frameForm", Type: "Partial<FrameType>"},
+				{Name: "frame", Type: "any"},
+				{Name: "schedule", Type: "any"},
+			},
+		},
+		source,
+		selectorsProperty,
+		"/tmp/scheduleLogic.ts",
+		nil,
+	)
+	helper, ok := findParsedFunction(helpers, "schedule")
+	if !ok || helper.FunctionType != "(frameForm: Partial<FrameType>, frame: any) => any" {
+		t.Fatalf("expected connected schedule helper type %q, got %+v", "(frameForm: Partial<FrameType>, frame: any) => any", helpers)
+	}
+}
+
+func TestParseInternalSelectorTypesWithSourceCanonicalizesKnownSelectorDependencyNamesAndTypes(t *testing.T) {
+	source := strings.Join([]string{
+		"import { kea, selectors } from 'kea'",
+		"",
+		"type FrameScene = { id: string; name?: string }",
+		"type FrameType = { scenes?: FrameScene[] }",
+		"type FrameStateRecord = { sceneId?: string | null; states?: Record<string, Record<string, any>> }",
+		"",
+		"export const controlLogic = kea([",
+		"  selectors(() => ({",
+		"    scenes: [(s) => [s.frame, s.frameForm], (frame, frameForm) => frameForm.scenes ?? frame.scenes],",
+		"    scene: [",
+		"      (s) => [s.scenes, s.sceneId],",
+		"      (scenes, sceneId): FrameScene | null => scenes?.find((scene) => scene.id === sceneId) ?? null,",
+		"    ],",
+		"    sceneId: [(s) => [s.stateRecord], (stateRecord) => stateRecord?.sceneId ?? null],",
+		"    loading: [",
+		"      (s) => [s.stateRecord, s.sceneChanging, s.stateRecordLoading],",
+		"      (stateRecord, stateRecordLoading, sceneChanging) => !stateRecord?.sceneId || stateRecordLoading || !!sceneChanging,",
+		"    ],",
+		"  })),",
+		"])",
+	}, "\n")
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(sourceLogics) != 1 {
+		t.Fatalf("expected 1 source logic, got %d", len(sourceLogics))
+	}
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+
+	helpers := parseInternalSelectorTypesWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{
+					Name:             "scenes",
+					TypeString:       "[(s: any) => any[], (frame: any, frameForm: Partial<FrameType>) => any]",
+					ReturnTypeString: "any",
+				},
+				{
+					Name:             "scene",
+					TypeString:       "[(s: any) => any[], (scenes: any, sceneId: any) => FrameScene | null]",
+					ReturnTypeString: "FrameScene | null",
+				},
+				{
+					Name:             "sceneId",
+					TypeString:       "[(s: any) => any[], (stateRecord: FrameStateRecord) => string]",
+					ReturnTypeString: "string",
+				},
+				{
+					Name:             "loading",
+					TypeString:       "[(s: any) => any[], (stateRecord: FrameStateRecord, stateRecordLoading: string | null, sceneChanging: boolean) => string | boolean]",
+					ReturnTypeString: "string | boolean",
+				},
+			},
+		},
+		ParsedLogic{
+			InputKind: "builders",
+			Reducers: []ParsedField{
+				{Name: "stateRecord", Type: "FrameStateRecord"},
+				{Name: "sceneChanging", Type: "string | null"},
+				{Name: "stateRecordLoading", Type: "boolean"},
+			},
+			Selectors: []ParsedField{
+				{Name: "frame", Type: "any"},
+				{Name: "frameForm", Type: "Partial<FrameType>"},
+				{Name: "scenes", Type: "any"},
+				{Name: "sceneId", Type: "string"},
+				{Name: "loading", Type: "string | boolean"},
+			},
+		},
+		source,
+		selectorsProperty,
+		"/tmp/controlLogic.ts",
+		nil,
+	)
+
+	sceneHelper, ok := findParsedFunction(helpers, "scene")
+	if !ok || sceneHelper.FunctionType != "(scenes: any, sceneId: string) => FrameScene | null" {
+		t.Fatalf("expected scene helper type %q, got %+v", "(scenes: any, sceneId: string) => FrameScene | null", helpers)
+	}
+	loadingHelper, ok := findParsedFunction(helpers, "loading")
+	if !ok || loadingHelper.FunctionType != "(stateRecord: FrameStateRecord, sceneChanging: string | null, stateRecordLoading: boolean) => string | boolean" {
+		t.Fatalf(
+			"expected loading helper type %q, got %+v",
+			"(stateRecord: FrameStateRecord, sceneChanging: string | null, stateRecordLoading: boolean) => string | boolean",
+			helpers,
+		)
+	}
+}
+
+func TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsNullishStateFieldReturnType(t *testing.T) {
+	source := strings.Join([]string{
+		"type FrameStateRecord = { sceneId?: string | null }",
+	}, "\n")
+
+	functionType := sourceInternalSelectorFunctionTypeWithFallbackReturn(
+		ParsedLogic{
+			InputKind: "builders",
+			Reducers: []ParsedField{
+				{Name: "stateRecord", Type: "FrameStateRecord"},
+			},
+		},
+		source,
+		"",
+		"[(s) => [s.stateRecord], (stateRecord) => stateRecord?.sceneId ?? null]",
+		"any",
+		nil,
+	)
+	if functionType != "(stateRecord: FrameStateRecord) => string | null" {
+		t.Fatalf(
+			"expected nullish state field helper type %q, got %q",
+			"(stateRecord: FrameStateRecord) => string | null",
+			functionType,
+		)
+	}
+}
+
+func TestParityModeRecoveredInternalHelperFunctionTypePrefersRecoveredPrimitiveNullishReturn(t *testing.T) {
+	current := "(stateRecord: FrameStateRecord) => any"
+	recovered := "(stateRecord: FrameStateRecord) => string | null"
+
+	if got := parityModeRecoveredInternalHelperFunctionType(current, recovered, true); got != recovered {
+		t.Fatalf("expected recovered helper type %q, got %q", recovered, got)
+	}
+}
+
+func TestRefineSelectorTypesFromInternalHelpersPrefersRicherObjectArrayReturn(t *testing.T) {
+	selectors := []ParsedField{
+		{Name: "cleanedAssets", Type: "{ path: boolean; }[]"},
+	}
+	helpers := []ParsedFunction{
+		{
+			Name:         "cleanedAssets",
+			FunctionType: "(assets: AssetType[], frame: any) => { size: number; mtime: number; is_dir?: boolean | undefined; path: string; }[]",
+		},
+	}
+
+	refined := refineSelectorTypesFromInternalHelpers(selectors, helpers, false)
+	if len(refined) != 1 || refined[0].Type != "{ size: number; mtime: number; is_dir?: boolean | undefined; path: string; }[]" {
+		t.Fatalf(
+			"expected refined selector type %q, got %+v",
+			"{ size: number; mtime: number; is_dir?: boolean | undefined; path: string; }[]",
+			refined,
+		)
+	}
+}
+
+func TestSourceSelectorInferredTypeAvoidsLiteralFalseFallbackForBlockBooleanSelector(t *testing.T) {
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "stateChanges", Type: "any"},
+			{Name: "loading", Type: "boolean | string"},
+			{Name: "states", Type: "Record<string, Record<string, any>>"},
+		},
+		PropsType: "ExpandedSceneLogicProps",
+	}
+
+	got := sourceSelectorInferredType(
+		logic,
+		"",
+		"",
+		"[(s) => [s.stateChanges, s.loading, s.states, (_, props) => props.sceneId], (stateChanges, loading, states, sceneId) => { if (loading && !states) { return false } const currentState = states[sceneId] ?? {}; return Object.keys(stateChanges).some((key) => stateChanges[key] !== currentState[key]) }]",
+		nil,
+	)
+	if got != "boolean" {
+		t.Fatalf("expected boolean selector return, got %q", got)
+	}
+}
+
 func TestSelectorOpaqueComplexRecoveryShouldStayAny(t *testing.T) {
 	logic := ParsedLogic{
 		Selectors: []ParsedField{
@@ -4124,6 +5125,30 @@ func TestSourceExpressionTypeTextWithContextRecoversArrayFindFallbackAndSomeRetu
 		nil,
 	); got != "boolean" {
 		t.Fatalf("expected equality comparison type %q, got %q", "boolean", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextRecoversMathMaxCallReturnType(t *testing.T) {
+	if got := sourceExpressionTypeTextWithContext(
+		"",
+		"",
+		"Math.max((aiEmbeddingsStatus?.total ?? 0) - (aiEmbeddingsStatus?.count ?? 0), 0)",
+		map[string]string{"aiEmbeddingsStatus": "{ count: number; total: number }"},
+		nil,
+	); got != "number" {
+		t.Fatalf("expected Math.max return type %q, got %q", "number", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextRecoversObjectKeysCallReturnType(t *testing.T) {
+	if got := sourceExpressionTypeTextWithContext(
+		"",
+		"",
+		"Object.keys(stateChanges)",
+		map[string]string{"stateChanges": "Record<string, any>"},
+		nil,
+	); got != "string[]" {
+		t.Fatalf("expected Object.keys return type %q, got %q", "string[]", got)
 	}
 }
 
@@ -13330,15 +14355,6 @@ func findParsedListener(listeners []ParsedListener, name string) (ParsedListener
 		}
 	}
 	return ParsedListener{}, false
-}
-
-func findParsedFunction(functions []ParsedFunction, name string) (ParsedFunction, bool) {
-	for _, fn := range functions {
-		if fn.Name == name {
-			return fn, true
-		}
-	}
-	return ParsedFunction{}, false
 }
 
 func TestListenerPayloadHelpersPreferPrintedFunctionType(t *testing.T) {
