@@ -126,9 +126,12 @@ export async function runTypeGen(appOptions: AppOptions) {
 
             ts.createWatchProgram(host)
         } else {
-            const host = ts.createCompilerHost(compilerOptions.options)
             resetProgram = () => {
-                program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host, program)
+                // Write mode can require multiple passes as generated imports and type files
+                // land on disk. Reusing the previous Program retains too much compiler state
+                // for large projects, so rebuild from a fresh host each round instead.
+                const host = ts.createCompilerHost(compilerOptions.options)
+                program = ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
             }
             resetProgram()
         }
