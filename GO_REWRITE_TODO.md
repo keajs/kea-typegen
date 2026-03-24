@@ -426,6 +426,44 @@
   - current reading:
     - the `expandedScene` gap does seem related to truncated selector member surfaces in parity mode, but that signal is too weak on its own and reopens already-fixed files like `assets`
     - the next pass needs to target the specific `Scenes` over-precision path more directly than “missing/truncated tuple report means stay loose”
+- A later March 24, 2026 rerun changed the interpretation of the current FrameOS score more than the Go output itself:
+  - current verification on the same clean FrameOS commit `851422b0ab4234e2db139519522eabd0686ab5b6` now lands at:
+    - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - full Go package result: pass
+    - rebuilt Go binary command: `flox activate -c './bin/prepare-go'`
+    - rebuilt Go binary result: pass
+    - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+    - sample benchmark semantic accuracy: `20/20`
+    - sample benchmark exact accuracy: `0/20`
+    - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches: `17/38`
+    - FrameOS semantic accuracy: `44.74%`
+    - FrameOS semantic diffs: `21`
+    - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-XkF3cX`
+    - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-XkF3cX/frameos-compare.html`
+  - key finding:
+    - the current `17/38` result is not explained by a new Go-side regression in the files checked
+    - diffing the old preserved `25/38` artifact `.cache/kea-typegen/tmp/frameos-corpus-dmFDR2` against the current rerun shows the inspected Go outputs are unchanged apart from generated timestamps in files such as:
+      - `src/scenes/frame/frameLogicType.ts`
+      - `src/scenes/frame/panels/Scenes/expandedSceneLogicType.ts`
+      - `src/scenes/frame/panels/Schedule/scheduleLogicType.ts`
+    - the JS baseline did move between those two preserved compares on the same FrameOS commit:
+      - the current JS output now emits extra `kea-forms` companion surface in multiple files, including new form actions/defaults/selectors/imports in `frameLogicType.ts`, `expandedSceneLogicType.ts`, and `scheduleLogicType.ts`
+      - so the old `25/38` snapshot is not directly comparable to the current reruns unless the JS entrypoint/baseline is pinned
+  - one more narrow `Scenes` experiment was tested during that investigation and explicitly backed out:
+    - attempted change:
+      - forcing simple `??` / `||` property-fallback internal selector helpers to keep `=> any` in parity mode so files like `expandedScene` would stop re-tightening the helper/public `scenes` surface
+    - outcome:
+      - it did not improve the current measured corpus
+      - under the moved JS baseline, compare runs still stayed at `17/38`
+    - action taken:
+      - the helper-return experiment was removed
+      - only the safe cleanup remained:
+        - the temporary real-repo debug test for `expandedScene` was deleted from `rewrite/internal/keainspect/model_test.go`
+  - current reading:
+    - before more Go-side parity shaping on the `Scenes` family, the compare harness needs a stable reading of what the current JS generator is actually emitting
+    - the next practical move is to audit or pin the JS entrypoint used by `bin/kea-typegen-js`, specifically around current `kea-forms` companion-surface emission, before treating old `25/38` artifacts as the live score
+    - until that is clarified, treat `.cache/kea-typegen/tmp/frameos-corpus-XkF3cX` as the current reproducible checkpoint, not `.cache/kea-typegen/tmp/frameos-corpus-dmFDR2`
 
 ## March 23, 2026 Run
 

@@ -4210,6 +4210,9 @@ func parseSelectorsWithSource(
 				selectorType = inferred
 			}
 		}
+		if source != "" && selectorExpression != "" && parityModeSelectorPropertyFallbackShouldStayAny(contextLogic, source, file, selectorExpression, selectorType, state) {
+			selectorType = "any"
+		}
 		if selectorType == "" {
 			continue
 		}
@@ -4319,6 +4322,14 @@ func parseInternalSelectorTypesWithSource(
 		if nested, ok := sourceMembers[name]; ok {
 			expression := sourcePropertyText(source, nested)
 			fallbackReturnType := normalizeInferredTypeText(strings.TrimSpace(member.ReturnTypeString))
+			if parityModeEnabled() {
+				if field, ok := findParsedField(contextLogic.Selectors, name); ok {
+					fieldType := normalizeInferredTypeText(strings.TrimSpace(field.Type))
+					if fieldType != "" && (isAnyLikeType(fieldType) || isLooselyTypedType(fieldType)) {
+						fallbackReturnType = fieldType
+					}
+				}
+			}
 			if _, currentReturnType, ok := splitFunctionType(functionType); ok {
 				fallbackReturnType = currentReturnType
 			} else if fallbackReturnType == "" {
@@ -4412,7 +4423,6 @@ func canonicalizeInternalHelperFunctionTypeWithSelectorDependencies(logic Parsed
 	if len(dependencyNames) != len(params) {
 		return functionType
 	}
-
 	knownFields := mergeParsedFields(logic.Reducers, logic.Selectors...)
 	for _, name := range dependencyNames {
 		name = strings.TrimSpace(name)
@@ -4497,16 +4507,12 @@ func parityModeRecoveredInternalHelperFunctionType(current, recovered string, ke
 	if !ok {
 		return recovered
 	}
-	recoveredParameters, _, ok := splitFunctionType(recovered)
+	recoveredParameters, recoveredReturnType, ok := splitFunctionType(recovered)
 	if !ok {
 		return recovered
 	}
 	currentReturnType = normalizeInferredTypeText(strings.TrimSpace(currentReturnType))
 	if currentReturnType == "" || (!isAnyLikeType(currentReturnType) && !isLooselyTypedType(currentReturnType)) {
-		return recovered
-	}
-	_, recoveredReturnType, ok := splitFunctionType(recovered)
-	if !ok {
 		return recovered
 	}
 	recoveredReturnType = normalizeInferredTypeText(strings.TrimSpace(recoveredReturnType))
@@ -4787,7 +4793,7 @@ func parityModeKeepsLooseReportedSelectorType(logic ParsedLogic, currentSectionN
 		if dependencyType == "" {
 			continue
 		}
-		if isAnyLikeType(dependencyType) || isLooselyTypedType(dependencyType) {
+		if isAnyLikeType(dependencyType) || isLooselyTypedType(dependencyType) || dependencyType == "null" || dependencyType == "undefined" {
 			return true
 		}
 	}
@@ -4805,6 +4811,103 @@ func parityModeKeepsLooseReportedSelectorType(logic ParsedLogic, currentSectionN
 		return true
 	}
 	return false
+}
+
+func parityModeSelectorPropertyFallbackShouldStayAny(logic ParsedLogic, source, file, expression, inferred string, state *buildState) bool {
+	if !parityModeEnabled() {
+		return false
+	}
+	inferred = normalizeInferredTypeText(strings.TrimSpace(inferred))
+	if inferred == "" || isAnyLikeType(inferred) || isLooselyTypedType(inferred) {
+		return false
+	}
+	if isPrimitiveLikeUnionType(inferred) ||
+		isBroadPrimitiveSelectorType(inferred) ||
+		selectorTypeIsLiteralUnionOfKind(inferred, "string") ||
+		selectorTypeIsLiteralUnionOfKind(inferred, "number") ||
+		selectorTypeIsLiteralUnionOfKind(inferred, "boolean") {
+		return false
+	}
+
+	projector := sourceSelectorProjectorElement(expression)
+	if projector == "" {
+		projector = expression
+	}
+	info, ok := parseSourceArrowInfo(projector)
+	if !ok || strings.TrimSpace(info.ExplicitReturn) != "" {
+		return false
+	}
+
+	body := strings.TrimSpace(info.Body)
+	if info.BlockBody {
+		body = singleReturnExpression(body)
+		if body == "" {
+			body = blockReturnExpression(info.Body)
+		}
+	}
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return false
+	}
+
+	left, right, ok := sourceTopLevelLogicalOperands(body)
+	if !ok {
+		return false
+	}
+	leftParam, ok := sourceSimplePropertyFallbackParameterIndex(left, info.ParameterNames)
+	if !ok {
+		return false
+	}
+	rightParam, ok := sourceSimplePropertyFallbackParameterIndex(right, info.ParameterNames)
+	if !ok {
+		return false
+	}
+
+	dependencyTypes := sourceSelectorDependencyTypes(logic, source, file, expression, state)
+	if leftParam >= len(dependencyTypes) || rightParam >= len(dependencyTypes) {
+		return false
+	}
+	for _, index := range []int{leftParam, rightParam} {
+		typeText := normalizeInferredTypeText(strings.TrimSpace(dependencyTypes[index]))
+		if typeText != "" && (isAnyLikeType(typeText) || isLooselyTypedType(typeText) || typeText == "null" || typeText == "undefined") {
+			return true
+		}
+	}
+	return false
+}
+
+func sourceTopLevelLogicalOperands(expression string) (string, string, bool) {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	for _, operator := range []string{"??", "||"} {
+		index := findLastTopLevelOperator(text, operator)
+		if index == -1 {
+			continue
+		}
+		left := strings.TrimSpace(text[:index])
+		right := strings.TrimSpace(text[index+len(operator):])
+		if left == "" || right == "" {
+			return "", "", false
+		}
+		return left, right, true
+	}
+	return "", "", false
+}
+
+func sourceSimplePropertyFallbackParameterIndex(expression string, parameterNames []string) (int, bool) {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	if text == "" || strings.Contains(text, "(") {
+		return -1, false
+	}
+	for index, name := range parameterNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if strings.HasPrefix(text, name+".") || strings.HasPrefix(text, name+"?.") || strings.HasPrefix(text, name+"[") {
+			return index, true
+		}
+	}
+	return -1, false
 }
 
 func selectorSourceRecoveryAllowed(logic ParsedLogic, expression string) bool {
@@ -5921,7 +6024,11 @@ func internalHelperOpaqueComplexFallbackReturnShouldStayAny(body string, blockBo
 
 	for _, dependencyType := range dependencyTypes {
 		dependencyType = normalizeInferredTypeText(strings.TrimSpace(dependencyType))
-		if dependencyType == "" || isAnyLikeType(dependencyType) || isLooselyTypedType(dependencyType) {
+		if dependencyType == "" ||
+			isAnyLikeType(dependencyType) ||
+			isLooselyTypedType(dependencyType) ||
+			dependencyType == "null" ||
+			dependencyType == "undefined" {
 			return true
 		}
 	}

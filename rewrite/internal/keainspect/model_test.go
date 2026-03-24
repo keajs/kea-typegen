@@ -4364,6 +4364,156 @@ func TestBuildParsedLogicsParityModeKeepsControlLogicSceneHelperParameterTypes(t
 	}
 }
 
+func TestBuildParsedLogicsParityModeKeepsExpandedSceneHelperSurfaceLoose(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logics := inspectTempLogicFile(t, map[string]string{
+		"src/types.ts": strings.Join([]string{
+			"export interface StateField {",
+			"  access?: 'public' | 'private'",
+			"  name: string",
+			"}",
+			"",
+			"export interface FrameScene {",
+			"  id: string",
+			"  name: string",
+			"  fields?: StateField[]",
+			"}",
+			"",
+			"export interface FrameType {",
+			"  scenes?: FrameScene[]",
+			"}",
+		}, "\n"),
+		"src/frameLogicType.ts": strings.Join([]string{
+			"import type { Logic } from 'kea'",
+			"",
+			"export interface frameLogicType extends Logic {}",
+		}, "\n"),
+		"src/controlLogicType.ts": strings.Join([]string{
+			"import type { Logic } from 'kea'",
+			"",
+			"export interface controlLogicType extends Logic {}",
+		}, "\n"),
+		"src/expandedSceneLogicType.ts": strings.Join([]string{
+			"import type { Logic } from 'kea'",
+			"",
+			"export interface expandedSceneLogicType extends Logic {}",
+		}, "\n"),
+		"src/frameLogic.ts": strings.Join([]string{
+			"import { kea, key, path, props, selectors } from 'kea'",
+			"import type { frameLogicType } from './frameLogicType'",
+			"import type { FrameType } from './types'",
+			"",
+			"export interface FrameLogicProps {",
+			"  frameId: number",
+			"}",
+			"",
+			"export const frameLogic = kea<frameLogicType>([",
+			"  path(['src', 'frameLogic']),",
+			"  props({} as FrameLogicProps),",
+			"  key((props) => props.frameId),",
+			"  selectors({",
+			"    frame: [() => [], (): any => null],",
+			"    frameForm: [() => [], (): Partial<FrameType> => ({})],",
+			"  }),",
+			"])",
+		}, "\n"),
+		"src/controlLogic.ts": strings.Join([]string{
+			"import { connect, kea, key, path, props, reducers, selectors } from 'kea'",
+			"import type { controlLogicType } from './controlLogicType'",
+			"import { frameLogic } from './frameLogic'",
+			"import type { FrameType } from './types'",
+			"",
+			"export interface ControlLogicProps {",
+			"  frameId: number",
+			"}",
+			"",
+			"export const controlLogic = kea<controlLogicType>([",
+			"  path(['src', 'controlLogic']),",
+			"  props({} as ControlLogicProps),",
+			"  key((props) => props.frameId),",
+			"  connect(({ frameId }: ControlLogicProps) => ({",
+			"    values: [frameLogic({ frameId }), ['frame']],",
+			"  })),",
+			"  reducers({",
+			"    loading: [false as boolean | string, {}],",
+			"    states: [{} as Record<string, Record<string, any>>, {}],",
+			"  }),",
+			"  selectors({",
+			"    frameForm: [(s) => [s.frame], (): Partial<FrameType> => ({})],",
+			"  }),",
+			"])",
+		}, "\n"),
+		"src/expandedSceneLogic.ts": strings.Join([]string{
+			"import { connect, kea, key, path, props, reducers, selectors } from 'kea'",
+			"import type { expandedSceneLogicType } from './expandedSceneLogicType'",
+			"import { frameLogic } from './frameLogic'",
+			"import { controlLogic } from './controlLogic'",
+			"import type { FrameScene, StateField } from './types'",
+			"",
+			"export interface ExpandedSceneLogicProps {",
+			"  frameId: number",
+			"  sceneId: string",
+			"  scene?: FrameScene | null",
+			"}",
+			"",
+			"export const expandedSceneLogic = kea<expandedSceneLogicType>([",
+			"  path(['src', 'expandedSceneLogic']),",
+			"  props({} as ExpandedSceneLogicProps),",
+			"  key((props) => `${props.frameId}${props.sceneId}`),",
+			"  connect(({ frameId }: ExpandedSceneLogicProps) => ({",
+			"    values: [frameLogic({ frameId }), ['frame', 'frameForm'], controlLogic({ frameId }), ['states', 'loading']],",
+			"  })),",
+			"  reducers({",
+			"    stateChanges: [{} as Record<string, any>, {}],",
+			"  }),",
+			"  selectors({",
+			"    scenes: [(s) => [s.frame, s.frameForm], (frame, frameForm) => frameForm.scenes ?? frame.scenes],",
+			"    scene: [",
+			"      (s) => [s.scenes, (_, props) => props.sceneId, (_, props) => props.scene],",
+			"      (scenes, sceneId, sceneOverride): FrameScene | null => sceneOverride ?? scenes?.find((scene) => scene.id === sceneId) ?? null,",
+			"    ],",
+			"    fields: [(s) => [s.scene], (scene): StateField[] => (scene?.fields ?? []).filter((field) => field.access === 'public')],",
+			"    scenesAsOptions: [",
+			"      (s) => [s.scenes],",
+			"      (scenes): { label: string; value: string }[] => (scenes ?? []).map((scene) => ({ label: scene.name, value: scene.id })),",
+			"    ],",
+			"    hasStateChanges: [",
+			"      (s) => [s.stateChanges, s.loading, s.states, (_, props) => props.sceneId],",
+			"      (stateChanges, loading, states, sceneId) => {",
+			"        if (loading && !states) {",
+			"          return false",
+			"        }",
+			"        const currentState = states[sceneId] ?? {}",
+			"        return Object.keys(stateChanges).some((key) => stateChanges[key] !== currentState[key])",
+			"      },",
+			"    ],",
+			"  }),",
+			"])",
+		}, "\n"),
+	}, "src/expandedSceneLogic.ts")
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "scenes"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode expandedScene scenes selector type %q, got %+v", "any", logic.Selectors)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "scenes"); !ok || !strings.Contains(helper.FunctionType, "frameForm: Partial<FrameType>") || !strings.HasSuffix(helper.FunctionType, "=> any") {
+		t.Fatalf("expected parity-mode expandedScene scenes helper to preserve frameForm while keeping an any return, got %+v", logic.InternalSelectorTypes)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "scene"); !ok || !strings.Contains(helper.FunctionType, "scenes: any") || !strings.HasSuffix(helper.FunctionType, "=> FrameScene | null") {
+		t.Fatalf("expected parity-mode expandedScene scene helper to keep scenes loose while preserving the return type, got %+v", logic.InternalSelectorTypes)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "scenesAsOptions"); !ok || helper.FunctionType != "(scenes: any) => { label: string; value: string; }[]" {
+		t.Fatalf("expected parity-mode expandedScene scenesAsOptions helper %q, got %+v", "(scenes: any) => { label: string; value: string; }[]", logic.InternalSelectorTypes)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "hasStateChanges"); !ok || !strings.HasSuffix(helper.FunctionType, "=> boolean") {
+		t.Fatalf("expected parity-mode expandedScene hasStateChanges helper to preserve the boolean return, got %+v", logic.InternalSelectorTypes)
+	}
+}
+
 func TestParseInternalSelectorTypesWithStateKeepsRecoveredConnectedHelperParameterTypes(t *testing.T) {
 	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
 
