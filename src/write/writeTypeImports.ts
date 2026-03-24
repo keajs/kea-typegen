@@ -6,6 +6,14 @@ import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
 import { t, b, visitAllKeaCalls, getAst } from './utils'
 
+function getTypeArgumentInsertEnd(callExpression: ts.CallExpression, sourceFile: ts.SourceFile): number {
+    const openParenToken = callExpression
+        .getChildren(sourceFile)
+        .find((child) => child.kind === ts.SyntaxKind.OpenParenToken)
+
+    return openParenToken ? openParenToken.getStart(sourceFile) : callExpression.expression.getEnd()
+}
+
 export async function writeTypeImports(
     appOptions: AppOptions,
     program: ts.Program,
@@ -75,7 +83,19 @@ export async function writeTypeImports(
         ])
     })
 
-    const newText = await runThroughPrettier(print(ast).code, filename)
+        const typeArgumentStart = callExpression.expression.getEnd()
+        const typeArgumentEnd = callExpression.typeArguments
+            ? getTypeArgumentInsertEnd(callExpression, sourceFile)
+            : typeArgumentStart
+
+        edits.push({
+            start: typeArgumentStart,
+            end: typeArgumentEnd,
+            text: `<${parsedLogic.logicTypeName}>`,
+        })
+    }
+
+    const newText = await runThroughPrettier(applyTextEdits(rawCode, edits), filename)
     fs.writeFileSync(filename, newText)
 
     log(`🔥 Import added: ${osPath.relative(process.cwd(), filename)}`)
