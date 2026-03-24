@@ -222,6 +222,7 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 	}
 
 	reportedPropsType := ""
+	missingLocalLogicTypeImport := hasMissingLocalLogicTypeImport(source, report.File)
 	if section, ok := lastSectionReport(sections["props"]); ok {
 		reportedPropsType = preferredTypeText(section)
 		parsed.PropsType = reportedPropsType
@@ -234,9 +235,9 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 	if section, ok := lastSectionReport(sections["key"]); ok {
 		parsed.KeyType = preferredTypeText(section)
 		if property, hasProperty := lastSourceProperty(properties["key"]); hasProperty && keyTypeNeedsSourceRecovery(parsed.KeyType) {
-			expression := sourcePropertyText(source, property)
+			expression := normalizeSingleCallbackExpression(sourcePropertyText(source, property))
 			keepReportedAny := shouldKeepReportedAnyForBuilderKey(logicReport.InputKind, expression)
-			allowRecoveredUntypedKeyFromProps := !isAnyLikeType(reportedPropsType) || hasMissingLocalLogicTypeImport(source, report.File)
+			allowRecoveredUntypedKeyFromProps := !isAnyLikeType(reportedPropsType) || missingLocalLogicTypeImport
 			if probed := normalizeSourceTypeText(sourceCallbackReturnTypeFromTypeProbe(source, report.File, property, state)); probed != "" &&
 				!isAnyLikeType(probed) &&
 				!typeTextContainsStandaloneToken(probed, "any") &&
@@ -289,10 +290,14 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		}
 	}
 	for index, section := range sections["forms"] {
+		property := sourcePropertyAt(properties["forms"], index)
+		if parityModeEnabled() && logicReport.InputKind == "builders" && sectionUsesBuilderCallback(source, property) {
+			continue
+		}
 		formActions, formReducers, formSelectors, formImports := parseFormsPluginSectionWithSource(
 			section,
 			source,
-			sourcePropertyAt(properties["forms"], index),
+			property,
 			report.File,
 			state,
 		)
@@ -319,10 +324,13 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 	}
 	for index, section := range sections["selectors"] {
 		property := sourcePropertyAt(properties["selectors"], index)
+		if parityModeSuppressesBuilderCallbackSelectors(logicReport.InputKind, source, property, properties["forms"]) {
+			continue
+		}
 		parsed.Selectors = mergeParsedFields(parsed.Selectors, parseSelectorsWithSource(section, parsed, source, property, report.File, state)...)
 		helpers := parseInternalSelectorTypesWithSource(section, parsed, source, property, report.File, state)
 		parsed.InternalSelectorTypes = mergeParsedFunctions(parsed.InternalSelectorTypes, helpers...)
-		parsed.Selectors = refineSelectorTypesFromInternalHelpers(parsed.Selectors, helpers, hasMissingLocalLogicTypeImport(source, report.File))
+		parsed.Selectors = refineSelectorTypesFromInternalHelpers(parsed.Selectors, helpers, missingLocalLogicTypeImport)
 	}
 	for index, section := range sections["sharedListeners"] {
 		parsed.SharedListeners = mergeParsedSharedListeners(
@@ -411,6 +419,40 @@ func shouldKeepReportedAnyForBuilderKey(inputKind, expression string) bool {
 		}
 	}
 	return true
+}
+
+func parityModeEnabled() bool {
+	return os.Getenv("KEA_TYPEGEN_PARITY_MODE") == "1"
+}
+
+func sectionUsesBuilderCallback(source string, property SourceProperty) bool {
+	if source == "" || property.ValueEnd <= property.ValueStart {
+		return false
+	}
+	expression := normalizeSingleCallbackExpression(sourcePropertyText(source, property))
+	if expression == "" {
+		return false
+	}
+	if _, ok := parseSourceArrowInfo(expression); ok {
+		return true
+	}
+	return strings.HasPrefix(expression, "function")
+}
+
+func anySourcePropertiesUseBuilderCallback(source string, properties []SourceProperty) bool {
+	for _, property := range properties {
+		if sectionUsesBuilderCallback(source, property) {
+			return true
+		}
+	}
+	return false
+}
+
+func parityModeSuppressesBuilderCallbackSelectors(inputKind, source string, selectorProperty SourceProperty, formProperties []SourceProperty) bool {
+	if !parityModeEnabled() || inputKind != "builders" || !sectionUsesBuilderCallback(source, selectorProperty) {
+		return false
+	}
+	return anySourcePropertiesUseBuilderCallback(source, formProperties)
 }
 
 func hasMissingLocalLogicTypeImport(source, file string) bool {
@@ -665,7 +707,7 @@ func sourceIndexedAccessActionPayloadOverrides(source, file, expression, paramet
 			continue
 		}
 		expanded := normalizeSourceTypeText(expandSourceParameterHintTypeText(source, file, parameter.Type, state))
-		if expanded == "" || !isPrimitiveLikeActionPayloadType(expanded) {
+		if expanded == "" || !isUsableIndexedAccessActionPayloadOverrideType(expanded) {
 			continue
 		}
 		indexedAccessParameterTypes[name] = expanded
@@ -946,12 +988,17 @@ func shouldPreferCandidateActionPayloadMemberType(current, candidate string) boo
 	return strings.Contains(candidate, "<"+current+">")
 }
 
-func isPrimitiveLikeActionPayloadType(typeText string) bool {
-	switch strings.TrimSpace(typeText) {
-	case "string", "number", "boolean":
-		return true
+func isUsableIndexedAccessActionPayloadOverrideType(typeText string) bool {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" ||
+		isAnyLikeType(text) ||
+		typeTextContainsStandaloneToken(text, "any") ||
+		typeTextContainsStandaloneToken(text, "unknown") ||
+		isGenericIndexSignatureType(text) ||
+		strings.Contains(text, "...") {
+		return false
 	}
-	return isQuotedString(typeText) || isNumericLiteralType(typeText) || isBooleanLiteralType(typeText)
+	return true
 }
 
 func isPrimitiveLikeKeyType(typeText string) bool {
@@ -4290,7 +4337,15 @@ func parseInternalSelectorTypesWithSource(
 			continue
 		}
 		if logic.InputKind == "builders" && internalSelectorFunctionTypeIsUninformative(functionType, params) {
-			continue
+			keepParityPropsIdentityHelper := false
+			if parityModeEnabled() {
+				if selectorIdentityPropsDependency(selectorExpression) {
+					keepParityPropsIdentityHelper = true
+				}
+			}
+			if !keepParityPropsIdentityHelper {
+				continue
+			}
 		}
 		if field, ok := findParsedField(contextLogic.Selectors, name); ok && selectorInternalHelperShouldStayAny(contextLogic, source, file, selectorExpression, field.Type, functionType, state) {
 			functionType = opaqueInternalHelperFunctionType(functionType)
@@ -4310,6 +4365,9 @@ func selectorInternalHelperShouldStayAny(logic ParsedLogic, source, file, expres
 	if !ok {
 		return false
 	}
+	if parityModeEnabled() && selectorIdentityPropsDependency(expression) && isAnyLikeSelectorHelperType(returnType) {
+		return true
+	}
 	return selectorIdentityPrimitivePropsReturnShouldStayAny(logic, source, file, expression, normalizeInferredTypeText(strings.TrimSpace(returnType)), state)
 }
 
@@ -4324,14 +4382,25 @@ func opaqueInternalHelperFunctionType(functionType string) string {
 	}
 
 	opaque := make([]string, 0, len(params))
-	for _, param := range params {
+	for index, param := range params {
 		rawName, _, ok := splitTopLevelPropertyRaw(param.Text)
 		if !ok {
 			return functionType
 		}
-		opaque = append(opaque, strings.TrimSpace(rawName)+": any")
+		name := strings.TrimSpace(rawName)
+		if name == "" || parityModeEnabled() {
+			name = opaqueInternalHelperParameterName(index)
+		}
+		opaque = append(opaque, name+": any")
 	}
 	return "(" + strings.Join(opaque, ", ") + ") => any"
+}
+
+func opaqueInternalHelperParameterName(index int) string {
+	if index <= 0 {
+		return "arg"
+	}
+	return fmt.Sprintf("arg%d", index+1)
 }
 
 func shouldPreferRecoveredInternalHelperFunctionType(current, candidate string) bool {
@@ -4714,21 +4783,28 @@ func selectorIdentityConcreteDependencyTypeShouldBePreserved(logic ParsedLogic, 
 
 func selectorIdentityPrimitivePropsReturnShouldStayAny(logic ParsedLogic, source, file, expression, typeText string, state *buildState) bool {
 	typeText = normalizeInferredTypeText(strings.TrimSpace(typeText))
-	if typeText == "" || !selectorSourceUsesPropsDependency(expression) || !isPrimitiveLikeKeyType(typeText) {
+	if typeText == "" || !isPrimitiveLikeKeyType(typeText) {
 		return false
 	}
+	dependencyType := selectorIdentityPrimitivePropsDependencyType(logic, source, file, expression, state)
+	return dependencyType != "" && dependencyType == typeText
+}
 
+func selectorIdentityPrimitivePropsDependencyType(logic ParsedLogic, source, file, expression string, state *buildState) string {
+	if !selectorSourceUsesPropsDependency(expression) {
+		return ""
+	}
 	parameterIndex, ok := selectorProjectorIdentityParameterIndex(expression)
 	if !ok {
-		return false
+		return ""
 	}
 	dependencyTypes := sourceSelectorDependencyTypes(logic, source, file, expression, state)
 	if parameterIndex < 0 || parameterIndex >= len(dependencyTypes) {
-		return false
+		return ""
 	}
 	dependencyType := normalizeSourceTypeText(strings.TrimSpace(dependencyTypes[parameterIndex]))
 	if dependencyType == "" {
-		return false
+		return ""
 	}
 	if expanded := expandLocalSourceTypeText(source, dependencyType); expanded != "" {
 		dependencyType = normalizeSourceTypeText(expanded)
@@ -4736,7 +4812,18 @@ func selectorIdentityPrimitivePropsReturnShouldStayAny(logic ParsedLogic, source
 	if expanded := expandIndexedAccessesInTypeText(source, file, dependencyType, state); expanded != "" {
 		dependencyType = normalizeSourceTypeText(expanded)
 	}
-	return isPrimitiveLikeKeyType(dependencyType) && dependencyType == typeText
+	if !isPrimitiveLikeKeyType(dependencyType) {
+		return ""
+	}
+	return dependencyType
+}
+
+func selectorIdentityPropsDependency(expression string) bool {
+	if !selectorSourceUsesPropsDependency(expression) {
+		return false
+	}
+	_, ok := selectorProjectorIdentityParameterIndex(expression)
+	return ok
 }
 
 func selectorImportedAliasPropsIdentityShouldStayAny(logic ParsedLogic, source, file, expression, reportedType string, state *buildState) bool {
@@ -5805,6 +5892,23 @@ func singleCallArgumentExpression(expression string) string {
 		}
 	}
 	return ""
+}
+
+func normalizeSingleCallbackExpression(expression string) string {
+	text := strings.TrimSpace(expression)
+	if text == "" {
+		return ""
+	}
+	if argument := singleCallArgumentExpression(text); argument != "" {
+		argument = strings.TrimSpace(argument)
+		if _, ok := parseSourceArrowInfo(argument); ok {
+			return argument
+		}
+		if strings.HasPrefix(argument, "function") {
+			return argument
+		}
+	}
+	return text
 }
 
 func canonicalizeSourceObjectEntries(
@@ -8536,7 +8640,7 @@ func sourceKeyTypeFromProps(source string, property SourceProperty, propsType st
 }
 
 func recoverUntypedBuilderKeyType(source, file string, property SourceProperty, propsType string, state *buildState) string {
-	expression := sourcePropertyText(source, property)
+	expression := normalizeSingleCallbackExpression(sourcePropertyText(source, property))
 	info, ok := parseSourceArrowInfo(expression)
 	if !ok || strings.TrimSpace(info.ExplicitReturn) != "" {
 		return ""
@@ -8639,7 +8743,7 @@ func sourceKeyBodyUsesTypedParameterMember(source, file, parameters, body, props
 }
 
 func sourceKeyTypeFromSource(source, file string, property SourceProperty, propsType string, state *buildState) string {
-	expression := sourcePropertyText(source, property)
+	expression := normalizeSingleCallbackExpression(sourcePropertyText(source, property))
 	if expression == "" {
 		return ""
 	}
@@ -10482,7 +10586,7 @@ func parseListenersWithSource(
 			return
 		}
 
-		if logic.InputKind != "builders" {
+		if logic.InputKind != "builders" || parityModeEnabled() {
 			if resolved, ok := resolvedExternal[name]; ok {
 				listeners = append(listeners, ParsedListener{
 					Name:        name,
@@ -11624,7 +11728,7 @@ func (s *buildState) sourceNodesForFile(projectID, file string) (sourceFileNodeC
 
 	entry := sourceFileNodeCache{
 		Nodes:         nodes,
-		CanonicalFile: strings.ToLower(file),
+		CanonicalFile: file,
 		OK:            true,
 	}
 	if s.sourceNodesByFile == nil {
@@ -12304,15 +12408,35 @@ func enrichConnectedSections(source, file string, property SourceProperty, liste
 	var imports []TypeImport
 	for _, reference := range references {
 		targetLogic, hasLocalLogic := resolveConnectedLogic(source, file, reference.TargetExpr, state)
+		preferLocalParitySurface := parityModeEnabled() && hasLocalLogic
 
 		switch reference.Kind {
 		case "actions":
+			if parityModeEnabled() && connectedTargetIsBareLocalImport(source, reference.TargetExpr) {
+				continue
+			}
 			var addedTypeTexts []string
 			actionMembers, _ := resolveConnectedSectionMembersBySymbol(source, file, reference, "actions", state)
 			actionCreatorMembers, _ := resolveConnectedSectionMembersBySymbol(source, file, reference, "actionCreators", state)
 			for _, name := range reference.Names {
+				if preferLocalParitySurface {
+					action, found := findParsedAction(targetLogic.Actions, name.SourceName)
+					if !found {
+						continue
+					}
+					copied := action
+					copied.Name = name.LocalName
+					if member, found := findMemberReportInSections(listenerSections, name.LocalName); found {
+						if payload := listenerPayloadTypeFromMember(member); payload != "" && !strings.Contains(payload, "...") && shouldRefineActionPayloadType(copied.PayloadType, payload) {
+							copied.PayloadType = payload
+						}
+					}
+					parsed.Actions = mergeParsedActions(parsed.Actions, copied)
+					addedTypeTexts = append(addedTypeTexts, actionImportTypeTexts(copied)...)
+					continue
+				}
 				if action, ok := synthesizeConnectedActionFromSymbols(name, actionMembers, actionCreatorMembers); ok {
-					if hasLocalLogic {
+					if hasLocalLogic && !preferLocalParitySurface {
 						if parsedAction, found := findParsedAction(targetLogic.Actions, name.SourceName); found && shouldPreferParsedConnectedAction(action, parsedAction) {
 							action = parsedAction
 							action.Name = name.LocalName
@@ -12376,8 +12500,19 @@ func enrichConnectedSections(source, file string, property SourceProperty, liste
 			}
 			targetFields := mergeParsedFields(targetLogic.Reducers, targetLogic.Selectors...)
 			for _, name := range reference.Names {
+				if preferLocalParitySurface {
+					field, found := findParsedField(targetFields, name.SourceName)
+					if !found {
+						continue
+					}
+					copied := field
+					copied.Name = name.LocalName
+					parsed.Selectors = mergeParsedFields(parsed.Selectors, copied)
+					addedTypeTexts = append(addedTypeTexts, copied.Type)
+					continue
+				}
 				if member, found := findMemberReport(valueMembers, name.SourceName); found && strings.TrimSpace(member.TypeString) != "" {
-					if hasLocalLogic {
+					if hasLocalLogic && !preferLocalParitySurface {
 						if field, found := findParsedField(targetFields, name.SourceName); found && shouldPreferParsedConnectedField(member.TypeString, field.Type) {
 							copied := field
 							copied.Name = name.LocalName
@@ -12508,6 +12643,26 @@ func parseConnectedNames(expression string) []connectedName {
 	return names
 }
 
+func connectedTargetIsBareLocalImport(source, expression string) bool {
+	if !isSimpleIdentifier(strings.TrimSpace(expression)) {
+		return false
+	}
+	target, ok := parseConnectedTargetReference(expression)
+	if !ok {
+		return false
+	}
+	if candidate, ok := parseNamedValueImports(source)[target.BaseAlias]; ok {
+		return strings.HasPrefix(strings.TrimSpace(candidate.Path), ".")
+	}
+	if candidate, ok := parseDefaultValueImports(source)[target.BaseAlias]; ok {
+		return strings.HasPrefix(strings.TrimSpace(candidate.Path), ".")
+	}
+	if importPath, ok := parseNamespaceValueImports(source)[target.BaseAlias]; ok {
+		return strings.HasPrefix(strings.TrimSpace(importPath), ".")
+	}
+	return false
+}
+
 func resolveConnectedLogic(source, file, expression string, state *buildState) (ParsedLogic, bool) {
 	if state == nil {
 		return ParsedLogic{}, false
@@ -12545,6 +12700,20 @@ func resolveImportedConnectedLogic(file, importPath, packageLogicName string, st
 		if err == nil {
 			if logic, ok := findConnectedLogic(logics, names...); ok {
 				return logic, true
+			}
+		}
+		if parityModeEnabled() {
+			candidates := append([]string{packageLogicName}, names...)
+			seen := map[string]bool{}
+			for _, candidateName := range candidates {
+				candidateName = strings.TrimSpace(candidateName)
+				if candidateName == "" || seen[candidateName] {
+					continue
+				}
+				seen[candidateName] = true
+				if logic, ok := loadLocalGeneratedLogicType(resolvedFile, candidateName); ok {
+					return logic, true
+				}
 			}
 		}
 	}
@@ -14808,7 +14977,7 @@ func sourceArrowReturnTypeFromLocationProbe(source, file string, property Source
 			state.normalizedPositionForFile(file, property.ValueStart),
 			state.normalizedPositionForFile(file, end),
 			sourceArrowFunctionSyntaxKind,
-			strings.ToLower(filepath.Clean(file)),
+			filepath.Clean(file),
 		)
 	}
 	if _, returnType, ok := state.signatureTypesAtLocation(projectID, location); ok {

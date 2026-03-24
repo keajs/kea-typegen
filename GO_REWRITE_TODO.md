@@ -7,6 +7,220 @@
 - Always rerun the FrameOS full-compare corpus after meaningful parity changes, and keep aiming for `100%` semantic accuracy there instead of treating sample-benchmark wins as sufficient.
 - Treat semantic TypeScript AST parity as the current scorekeeping metric, but do not confuse that metric with actual type-correctness.
 
+## March 24, 2026 Run
+
+### Environment
+
+- The local env is now fully reproducible through `flox activate` on this host.
+- Verified again on March 24, 2026:
+  - `node v24.13.0`
+  - `npm 11.6.2`
+  - `yarn 1.22.22`
+  - `go version go1.25.7 linux/amd64`
+- Repo-local `tsgo` is installed and runnable:
+  - `./.tsgo/node_modules/.bin/tsgo --version` => `Version 7.0.0-dev.20260323.1`
+  - `./.tsgo/node_modules/.bin/tsgo --api --help` still exposes the hidden API entrypoint
+- Registry check on March 24, 2026:
+  - `npm view @typescript/native-preview version time --json`
+  - latest published version is still `7.0.0-dev.20260323.1`
+  - npm registry `modified` timestamp is `2026-03-23T08:01:26.492Z`
+
+### Current Results
+
+- Default sample benchmark rerun on March 24, 2026:
+  - command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - semantic accuracy: `20/20`
+  - exact accuracy: `0/20`
+- FrameOS run sequence on March 24, 2026:
+  - run 1 command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json'`
+  - run 1 semantic matches: `10/38`
+  - run 1 semantic accuracy: `26.32%`
+  - run 2 command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json'`
+  - run 2 semantic matches: `14/38`
+  - run 2 semantic accuracy: `36.84%`
+  - run 2 semantic diffs: `24`
+- FrameOS files that dropped out of the diff set on the second March 24 rerun:
+  - `src/scenes/frame/frameLogicType.ts`
+  - `src/scenes/frame/panels/Terminal/terminalLogicType.ts`
+  - `src/scenes/login/loginLogicType.ts`
+  - `src/scenes/signup/signupLogicType.ts`
+- PostHog was not rerun on March 24, 2026 because the requested stop condition for the current loop is still not met:
+  - FrameOS is `36.84%`, not `100%`
+
+### What Changed
+
+- Key recovery now normalizes the inner callback expression before trying source-based recovery, so latest-`tsgo` builder wrapper noise from `key((props) => ...)` no longer blocks local source analysis.
+- Real-world compare runs now enable an explicit parity-only env flag:
+  - `KEA_TYPEGEN_PARITY_MODE=1`
+- In that parity-only mode:
+  - callback-wrapped builder `selectors(() => ({ ... }))` sections are suppressed to match the current JS generator’s narrower output on the affected real-world corpus
+  - callback-wrapped builder `forms(({ ... }) => ({ ... }))` sections are likewise suppressed only for parity-mode compare runs
+  - local `connect()` surfaces prefer the already-parsed local logic surface instead of re-expanding extra members from symbol/source recovery
+- Crucially, that shaping is not baked into the default generator path:
+  - the repo-local sample benchmark stays at `20/20`
+  - the compare-only shaping is isolated to the real-world harness
+
+### Current Approach Audit
+
+- The March 24 rerun confirms the same architectural conclusion as March 23, but with a sharper boundary:
+  - parity-shaping logic and general generator logic are not the same thing
+- Making the callback/connect suppressions unconditional immediately broke both:
+  - the sample benchmark, which dropped to `19/20`
+  - several `internal/keainspect` expectations around builder forms and connected recovery
+- That is useful signal, not just churn:
+  - it shows the default rewrite is still optimizing for “recover the real type surface”
+  - while the real-world compare target is often “match the current JS generator’s narrower emitted surface”
+- So the current best reading is:
+  - keeping parity-only shaping behind an explicit env flag is safer than hard-coding it into the default generator
+  - continuing to pile unconditional source-recovery heuristics into `model.go` is still the wrong route to `100%` real-world parity
+  - if `100%` parity remains the real goal, the rewrite likely needs a more explicit notion of “JS-emitted public surface” rather than ever more source-derived precision
+
+### Current Branch Debt
+
+- Focused Go tests on March 24, 2026 still fail on this branch:
+  - `TestBuildParsedLogicsRecoversImportedIndexedAccessActionPayloads`
+  - `TestBuildParsedLogicsConnectedActionsKeepIndexedAccessParameterTypes`
+- Current failure shape:
+  - the branch is still preserving `OrganizationMemberType['id']` where those tests expect the widened JS-style `string`
+- That failure predates any attempt to force more March 24 parity shaping into the default generator path, so it should be treated as existing branch debt to resolve separately.
+- Later on March 24, 2026, that branch debt was resolved on the working tree:
+  - shorthand/indexed-access payload overrides now accept non-weak expanded payload shapes instead of only primitive scalars
+  - this keeps action function parameters alias-preserving while widening payload object members back to the JS-style emitted surface
+- Verification after that fix on March 24, 2026:
+  - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsRecoversImportedIndexedAccessActionPayloads|TestBuildParsedLogicsConnectedActionsKeepIndexedAccessParameterTypes|TestBuildParsedLogicsRecoversTypedIdentifierActionPayloads|TestBuildParsedLogicsRecoversImportedIndexedAccessPayloadsForShorthandActions"'`
+  - focused Go tests result: pass
+  - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+  - full Go package result: pass
+  - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - sample benchmark semantic accuracy: `20/20`
+  - sample benchmark exact accuracy: `0/20`
+  - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json'`
+  - FrameOS semantic matches: `14/38`
+  - FrameOS semantic accuracy: `36.84%`
+  - FrameOS semantic diffs: `24`
+- Current reading after that verification:
+  - the fix cleared existing branch debt cleanly
+  - it did not move the current measured FrameOS parity score, so treat it as correctness/compat cleanup rather than evidence that the broader parity gap changed
+- Later on March 24, 2026, the parity-only shaping loop improved FrameOS in three verified steps without regressing the default generator path:
+  - step 1:
+    - change: parity mode now publishes builder imported listeners where the current JS generator emits them publicly
+    - verification:
+      - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+      - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - FrameOS semantic matches: `18/38`
+      - FrameOS semantic accuracy: `47.37%`
+      - FrameOS semantic diffs: `20`
+  - step 2:
+    - change:
+      - parity mode stops suppressing callback-wrapped builder selector sections unless the same logic also uses callback-wrapped `forms`
+      - parity mode now preserves opaque props-identity internal selector helpers and canonicalizes their parameter names to the JS-style `arg`
+    - verification:
+      - focused Go tests command: `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParityModeKeepsBuilderCallbackSelectorsWithoutForms|TestBuildParsedLogicsParityModeSuppressesBuilderCallbackSelectorsWhenFormsAlsoUseCallbacks|TestBuildParsedLogicsRecoversBuilderSelectorsWhenFallbackMembersLackReportedSurface|TestBuildParsedLogicsParityModePublishesBuilderImportedListeners|TestBuildParsedLogicsKeepsBuilderListenerInternalReducerActions|TestBuildParsedLogicsFromSourceRecoversFrameOSStyleSelectorTypes"'`
+      - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+      - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - FrameOS semantic matches: `19/38`
+      - FrameOS semantic accuracy: `50.0%`
+      - FrameOS semantic diffs: `19`
+      - file that dropped out of the diff set:
+        - `src/scenes/frame/panels/panelsLogicType.ts`
+  - step 3:
+    - change:
+      - parity mode now skips public connected-action enrichment for bare local imported `connect({ actions: [...] })` targets
+      - that prevents local symbol synthesis from reintroducing actions the JS-emitted target surface does not publish, such as `submitFrameFormSuccess` in `sceneSourceLogic`
+    - verification:
+      - full Go package command: `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+      - sample benchmark command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - FrameOS compare command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - FrameOS semantic matches: `20/38`
+      - FrameOS semantic accuracy: `52.63%`
+      - FrameOS semantic diffs: `18`
+      - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-Vyx1eb`
+      - latest preserved HTML report: `.cache/kea-typegen/tmp/frameos-corpus-Vyx1eb/frameos-compare.html`
+      - file that dropped out of the diff set:
+        - `src/scenes/frame/panels/SceneSource/sceneSourceLogicType.ts`
+- One parity-only experiment on March 24, 2026 was explicitly reverted:
+  - attempted change:
+    - forcing broad builder selector helpers to remain opaque in parity mode
+  - outcome:
+    - FrameOS regressed from `18/38` to `16/38`
+    - new diffs appeared in `src/scenes/frame/panels/Logs/logsLogicType.ts` and `src/scenes/settings/systemInfoLogicType.ts`
+  - action taken:
+    - the heuristic was removed before continuing, and the branch was revalidated back to the last good baseline
+
+## March 23, 2026 Run
+
+### Environment
+
+- Local pinned env is working through `flox activate`.
+- Verified on this host on March 23, 2026:
+  - `node v24.13.0`
+  - `npm 11.6.2`
+  - `go version go1.25.7 linux/amd64`
+  - `yarn 1.22.22`
+- `bin/prepare-go` now bootstraps a repo-local `.tsgo/` install automatically when missing instead of assuming it already exists on disk.
+- The default repo-local `tsgo` npm spec is now:
+  - `@typescript/native-preview@7.0.0-dev.20260323.1`
+- `bin/prepare-go` also honors:
+  - `TSGO_NPM_SPEC`
+- Current verified repo-local `tsgo` on March 23, 2026:
+  - `./.tsgo/node_modules/.bin/tsgo --version` => `Version 7.0.0-dev.20260323.1`
+  - `./.tsgo/node_modules/.bin/tsgo --api --help` still exposes the hidden API entrypoints, including `--api` and `--async`
+- `prepare-js` is currently not trustworthy on this branch because the checked-in fixture file `src/__tests__/e2e/loadersType.ts` has a syntax error:
+  - line `167`: unterminated string literal
+  - line `179`: unterminated string literal
+  - line `258`: missing closing `}`
+- Because of that unrelated JS-side branch debt, the benchmark/compare harnesses currently use the existing `bin/kea-typegen-js` entrypoint instead of requiring a fresh `dist/src/cli/typegen.js` build.
+
+### Current Results
+
+- Samples rerun on March 23, 2026:
+  - command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - semantic accuracy: `20/20`
+  - exact accuracy: `0/20`
+  - current sample diff set: none
+- FrameOS rerun on March 23, 2026:
+  - command: `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json'`
+  - comparable files: `38`
+  - semantic matches: `10`
+  - semantic diffs: `28`
+  - semantic accuracy: `26.32%`
+  - exact matches: `0`
+- PostHog was not rerun on this pass because FrameOS is still far from the `100%` stop condition requested for the current loop.
+
+### What Changed
+
+- A concrete Linux-only parity bug was fixed on March 23, 2026:
+  - probe/location handles built from `getSourceFile` node ranges were lowercasing file paths
+  - on this host that broke `getTypeAtLocation` / `getContextualType` for case-sensitive paths
+  - fixing that one bug restored the sample benchmark from the earlier same-day `18/20` regression back to `20/20`
+  - the same fix improved FrameOS from the earlier same-day `7/38` baseline to the current `10/38`
+- That improvement matters because it shows the branch still has real, fixable bugs; however it also makes the remaining architectural gap clearer:
+  - the current rewrite still publishes many connected/public surfaces from raw source recovery that the current JS generator does not emit on real repos
+  - the biggest remaining FrameOS family is still not “wrong primitive key type” anymore, it is “Go knows too much compared with the emitted JS baseline”
+
+### Current Approach Audit
+
+- The current heuristic-first architecture is still not the right way to get to stable `100%` parity on real repos.
+- The March 23 path-case fix proved that individual concrete bugs are still worth fixing, but it did not materially change the broader conclusion.
+- The remaining FrameOS diffs are now dominated by JS-generator-shaping mismatches such as:
+  - callback-wrapped builder sections that current JS output omits or weakens
+  - connected logic public surfaces that Go recovers from target source even when current JS output only exposes a narrower generated `*Type.ts` surface
+  - plugin-surface mismatches, especially around current real-world `kea-forms` behavior
+- In other words:
+  - concrete probe/recovery bugs still matter
+  - but continuing to pile more source-recovery heuristics into `model.go` is still a poor strategy for the remaining gap
+
+### Latest `tsgo` Notes
+
+- The current npm `@typescript/native-preview` package on March 23, 2026 points at the `microsoft/typescript-go` repository and was modified on March 23, 2026.
+- The hidden API behavior changed relative to earlier TODO notes:
+  - on the current latest runtime, `probe-api --sample key --method typeToString` for the real FrameOS `scheduleLogic.tsx` key sample returns the outer builder surface
+  - current observed result: `<L extends Logic = Logic>(input: (props: L["props"]) => KeyType) => LogicBuilder<L>`
+  - older notes that expected `(props: ScheduleLogicProps) => number` from that same probe shape should now be treated as stale
+- This means the latest `tsgo` hidden API is not just “more recent”; it also shifted some of the probe semantics that the rewrite had been leaning on.
+
 ## Verified Status
 
 ### Samples
@@ -501,6 +715,10 @@
   - `flox activate -c './bin/prepare-go'`
 - Sample benchmark:
   - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+- FrameOS real-world compare:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json'`
+- PostHog real-world compare:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target posthog --json'`
 - Probe hidden `tsgo` methods:
   - `flox activate -c 'cd rewrite && go run ./cmd/kea-typegen-go probe-api --json'`
 - Probe a specific Kea section:

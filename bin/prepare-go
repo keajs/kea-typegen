@@ -6,6 +6,8 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 TMP_ROOT=${TMPDIR:-/tmp}
 
 TSGO_BIN="$REPO_ROOT/.tsgo/node_modules/.bin/tsgo"
+TSGO_DIR="$REPO_ROOT/.tsgo"
+TSGO_NPM_SPEC=${TSGO_NPM_SPEC:-@typescript/native-preview@7.0.0-dev.20260323.1}
 GO_BIN_DIR="$REPO_ROOT/rewrite/bin"
 GO_BIN="$GO_BIN_DIR/kea-typegen-go"
 ROOT_GO_BIN="$REPO_ROOT/bin/kea-typegen-go"
@@ -18,12 +20,31 @@ clear_macos_xattr() {
     xattr -d com.apple.provenance "$1" 2>/dev/null || true
 }
 
+bootstrap_tsgo_dir() {
+    mkdir -p "$TSGO_DIR"
+
+    if [ -f "$TSGO_DIR/package.json" ]; then
+        return
+    fi
+
+    cat > "$TSGO_DIR/package.json" <<'EOF'
+{
+  "private": true,
+  "name": "kea-typegen-tsgo-runtime",
+  "description": "Repo-local tsgo runtime for kea-typegen Go rewrite",
+  "license": "UNLICENSED"
+}
+EOF
+}
+
 if [ ! -x "$TSGO_BIN" ]; then
+    bootstrap_tsgo_dir
+
     if ! command -v npm >/dev/null 2>&1; then
         echo "npm is required to install the .tsgo runtime dependency." >&2
         exit 1
     fi
-    (cd "$REPO_ROOT/.tsgo" && npm install)
+    (cd "$TSGO_DIR" && npm install --save-exact "$TSGO_NPM_SPEC")
 fi
 
 mkdir -p "$GO_BIN_DIR"

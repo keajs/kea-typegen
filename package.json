@@ -16,6 +16,8 @@
         "samples:write:posthog": "ts-node ./src/cli/typegen.ts write --show-ts-errors -c",
         "bench:samples": "./bin/benchmark",
         "compare:typegen": "node ./scripts/compare-generated-typegen.js",
+        "compare:frameos": "node ./scripts/compare-real-world-typegen.js --target frameos",
+        "compare:posthog": "node ./scripts/compare-real-world-typegen.js --target posthog",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },

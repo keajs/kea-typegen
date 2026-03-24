@@ -213,8 +213,12 @@ function createBenchmarkClone(repoRoot, samplesSource, label) {
 
 function ensurePrepared(repoRoot, options) {
     const preparedJS = path.join(repoRoot, 'dist', 'src', 'cli', 'typegen.js')
+    const tsNode = path.join(repoRoot, 'node_modules', '.bin', 'ts-node')
     const preparedGo = path.join(repoRoot, 'rewrite', 'bin', 'kea-typegen-go')
-    const missing = [preparedJS, preparedGo].filter((item) => !fs.existsSync(item))
+    const missing = [
+        ...(fs.existsSync(preparedJS) || fs.existsSync(tsNode) ? [] : [preparedJS]),
+        ...(fs.existsSync(preparedGo) ? [] : [preparedGo]),
+    ]
 
     if (options.skipPrepare) {
         if (missing.length > 0) {
@@ -375,9 +379,21 @@ function needsParensForArray(elementType) {
 function canonicalParameter(parameter, sourceFile) {
     const prefix = parameter.dotDotDotToken ? '...' : ''
     const optional = parameter.questionToken ? '?' : ''
-    const name = printNode(sourceFile, parameter.name)
+    const name = canonicalBindingName(parameter.name, sourceFile)
     const type = canonicalType(parameter.type, sourceFile)
     return `${prefix}${name}${optional}: ${type}`
+}
+
+function canonicalBindingName(name, sourceFile) {
+    return printNode(sourceFile, name)
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/\{\s*/g, '{ ')
+        .replace(/\s*\}/g, ' }')
+        .replace(/\[\s*/g, '[')
+        .replace(/\s*\]/g, ']')
+        .replace(/,\s*/g, ', ')
+        .replace(/\s+/g, ' ')
+        .trim()
 }
 
 function canonicalType(node, sourceFile) {

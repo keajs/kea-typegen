@@ -4503,6 +4503,7 @@ func TestBuildParsedLogicsRecoversImportedSelectorChainsAcrossSameSectionDepende
 		"import type { FrameType } from './types'",
 		"",
 		"interface FrameLogicProps {",
+		"    id?: any",
 		"    frameId: number",
 		"}",
 		"",
@@ -4639,6 +4640,118 @@ func TestBuildParsedLogicsRecoversBuilderSelectorsWhenFallbackMembersLackReporte
 		"        frames: {} as Record<number, FrameType>,",
 		"    }),",
 		"    selectors(() => ({",
+		"        id: [",
+		"            () => [(_, props) => props.id],",
+		"            (id) => id,",
+		"        ],",
+		"        frameId: [",
+		"            () => [(_, props) => props.frameId],",
+		"            (frameId) => frameId,",
+		"        ],",
+		"        frame: [",
+		"            (s) => [s.frames, s.frameId],",
+		"            (frames, frameId) => frames[frameId] || null,",
+		"        ],",
+		"        defaultScene: [",
+		"            (s) => [s.frame],",
+		"            (frame) => frame?.scenes?.[0]?.id ?? null,",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: tempDir,
+		File:       filepath.Join(tempDir, "frameLogic.ts"),
+		Logics: []LogicReport{
+			{
+				Name:      "frameLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "FrameLogicProps",
+					},
+					{
+						Name: "defaults",
+						Members: []MemberReport{
+							{Name: "frames", TypeString: "Record<number, FrameType>"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:       "id",
+								TypeString: "[() => [(_: any, props: any) => any], (id: any) => any]",
+							},
+							{
+								Name:       "frameId",
+								TypeString: "[() => [(_: any, props: any) => any], (frameId: any) => any]",
+							},
+							{Name: "frame"},
+							{Name: "defaultScene"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "frame"); !ok || selector.Type != "FrameType" {
+		t.Fatalf("expected recovered frame selector type %q, got %+v", "FrameType", logic.Selectors)
+	}
+	if _, ok := findParsedField(logic.Selectors, "defaultScene"); !ok {
+		t.Fatalf("expected recovered defaultScene selector to remain present, got %+v", logic.Selectors)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsBuilderCallbackSelectorsWithoutForms(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir := t.TempDir()
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte(strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    scenes?: FrameScene[]",
+			"}",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	source := strings.Join([]string{
+		"import { defaults, kea, path, props, selectors } from 'kea'",
+		"",
+		"import type { FrameType } from './types'",
+		"",
+		"interface FrameLogicProps {",
+		"    frameId: number",
+		"}",
+		"",
+		"export const frameLogic = kea([",
+		"    path(['frameLogic']),",
+		"    props({} as FrameLogicProps),",
+		"    defaults({",
+		"        frames: {} as Record<number, FrameType>,",
+		"    }),",
+		"    selectors(() => ({",
 		"        frameId: [",
 		"            () => [(_, props) => props.frameId],",
 		"            (frameId) => frameId,",
@@ -4696,10 +4809,80 @@ func TestBuildParsedLogicsRecoversBuilderSelectorsWhenFallbackMembersLackReporte
 
 	logic := logics[0]
 	if selector, ok := findParsedField(logic.Selectors, "frame"); !ok || selector.Type != "FrameType" {
-		t.Fatalf("expected recovered frame selector type %q, got %+v", "FrameType", logic.Selectors)
+		t.Fatalf("expected parity-mode frame selector type %q, got %+v", "FrameType", logic.Selectors)
 	}
 	if _, ok := findParsedField(logic.Selectors, "defaultScene"); !ok {
-		t.Fatalf("expected recovered defaultScene selector to remain present, got %+v", logic.Selectors)
+		t.Fatalf("expected parity-mode defaultScene selector to remain present without callback forms, got %+v", logic.Selectors)
+	}
+}
+
+func TestBuildParsedLogicsParityModeSuppressesBuilderCallbackSelectorsWhenFormsAlsoUseCallbacks(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea, path, props, selectors } from 'kea'",
+		"import { forms } from 'kea-forms'",
+		"",
+		"interface FrameScene {",
+		"    id: string",
+		"}",
+		"",
+		"interface FrameLogicProps {",
+		"    frameId: number",
+		"}",
+		"",
+		"export const frameLogic = kea([",
+		"    path(['frameLogic']),",
+		"    props({} as FrameLogicProps),",
+		"    forms(() => ({",
+		"        frameForm: {",
+		"            defaults: {} as { scenes?: FrameScene[] },",
+		"            submit: async () => {},",
+		"        },",
+		"    })),",
+		"    selectors(() => ({",
+		"        defaultScene: [",
+		"            (s) => [s.frameForm],",
+		"            (frameForm) => frameForm?.scenes?.[0]?.id ?? null,",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/frameLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "frameLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name:                "props",
+						EffectiveTypeString: "FrameLogicProps",
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{Name: "defaultScene"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if _, ok := findParsedField(logic.Selectors, "defaultScene"); ok {
+		t.Fatalf("did not expect parity-mode callback selector recovery when callback forms are present, got %+v", logic.Selectors)
 	}
 }
 
@@ -12698,6 +12881,79 @@ func TestBuildParsedLogicsKeepsBuilderListenerInternalReducerActions(t *testing.
 	}
 	if strings.Contains(rendered, "'new log (src.socketLogic)': ((action:") {
 		t.Fatalf("did not expect builder imported listener to appear in public listeners:\n%s", rendered)
+	}
+}
+
+func TestBuildParsedLogicsParityModePublishesBuilderImportedListeners(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logics := inspectTempLogicFile(t, map[string]string{
+		"src/types.ts": strings.Join([]string{
+			"export interface LogType {",
+			"    id: number",
+			"}",
+		}, "\n"),
+		"src/socketLogic.ts": strings.Join([]string{
+			"import { kea, actions, path } from 'kea'",
+			"import type { LogType } from './types'",
+			"",
+			"export const socketLogic = kea([",
+			"    path(['src', 'socketLogic']),",
+			"    actions({",
+			"        newLog: (log: LogType) => ({ log }),",
+			"        updateLog: (log: LogType) => ({ log }),",
+			"    }),",
+			"])",
+		}, "\n"),
+		"src/controlLogic.ts": strings.Join([]string{
+			"import { kea, listeners, path, reducers } from 'kea'",
+			"import { socketLogic } from './socketLogic'",
+			"import type { LogType } from './types'",
+			"",
+			"export const controlLogic = kea([",
+			"    path(['src', 'controlLogic']),",
+			"    reducers(() => ({",
+			"        logs: [",
+			"            [] as LogType[],",
+			"            {",
+			"                [socketLogic.actionTypes.updateLog]: (state, { log }) => [...state, log],",
+			"            },",
+			"        ],",
+			"    })),",
+			"    listeners(() => ({",
+			"        [socketLogic.actionTypes.newLog]: ({ log }) => {",
+			"            console.log(log)",
+			"        },",
+			"    })),",
+			"])",
+		}, "\n"),
+	}, "src/controlLogic.ts")
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	listener, ok := findParsedListener(logic.Listeners, "new log (src.socketLogic)")
+	if !ok {
+		t.Fatalf("expected builder imported listener to become public in parity mode, got %+v", logic.Listeners)
+	}
+	if listener.PayloadType != "{ log: LogType; }" {
+		t.Fatalf("expected parity-mode listener payload { log: LogType; }, got %+v", listener)
+	}
+	for _, expected := range []struct {
+		name         string
+		functionType string
+	}{
+		{name: "new log (src.socketLogic)", functionType: "(log: LogType) => { log: LogType; }"},
+		{name: "update log (src.socketLogic)", functionType: "(log: LogType) => { log: LogType; }"},
+	} {
+		internalAction, ok := findParsedAction(logic.InternalReducerActions, expected.name)
+		if !ok {
+			t.Fatalf("expected parity-mode builder listener logic to keep internal reducer action %s, got %+v", expected.name, logic.InternalReducerActions)
+		}
+		if internalAction.FunctionType != expected.functionType {
+			t.Fatalf("expected parity-mode internal reducer action type %q for %s, got %+v", expected.functionType, expected.name, internalAction)
+		}
 	}
 }
 
