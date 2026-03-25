@@ -464,6 +464,38 @@
     - before more Go-side parity shaping on the `Scenes` family, the compare harness needs a stable reading of what the current JS generator is actually emitting
     - the next practical move is to audit or pin the JS entrypoint used by `bin/kea-typegen-js`, specifically around current `kea-forms` companion-surface emission, before treating old `25/38` artifacts as the live score
     - until that is clarified, treat `.cache/kea-typegen/tmp/frameos-corpus-XkF3cX` as the current reproducible checkpoint, not `.cache/kea-typegen/tmp/frameos-corpus-dmFDR2`
+- Later on March 24, 2026, that JS-baseline audit was wired into the compare harness:
+  - change:
+    - `bin/kea-typegen-js` now accepts `KEA_TYPEGEN_JS_MODE=auto|dist|source`, so compare runs can pin the JS entrypoint instead of silently taking whichever path exists locally
+    - `scripts/compare-real-world-typegen.js` now defaults to `--js-mode source`, writes a baseline manifest next to the HTML compare report, and records:
+      - the requested/selected JS mode
+      - SHA-256 + path metadata for the JS wrapper, selected JS CLI, optional `ts-node` runner, and Go binary
+      - the actual JS plugin/typebuilder manifest emitted during the JS run
+  - verification:
+    - wrapper checks:
+      - `KEA_TYPEGEN_JS_MODE=source ./bin/kea-typegen-js --help`
+      - `KEA_TYPEGEN_JS_MODE=dist ./bin/kea-typegen-js --help`
+    - FrameOS compare command:
+      - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+    - FrameOS semantic matches:
+      - `17/38`
+    - FrameOS semantic accuracy:
+      - `44.74%`
+    - latest preserved worktree root:
+      - `.cache/kea-typegen/tmp/frameos-corpus-x9jM0Y`
+    - latest preserved HTML report:
+      - `.cache/kea-typegen/tmp/frameos-corpus-x9jM0Y/frameos-compare.html`
+    - latest preserved baseline manifest:
+      - `.cache/kea-typegen/tmp/frameos-corpus-x9jM0Y/frameos-baseline.json`
+  - key audit finding:
+    - on that pinned source-mode run, the JS helper/typebuilder manifest shows `forms` loading from this repo's installed package surface:
+      - `/home/ubuntu/Projects/kea-typegen/node_modules/kea-forms/lib/index.d.ts`
+    - likewise, `loaders`, `urlToAction`, and the core builder helpers also resolve through this repo's installed packages under `/home/ubuntu/Projects/kea-typegen/node_modules/...`
+    - so the compare baseline is not just “FrameOS commit + JS CLI path”; it is also a function of the local kea/kea-forms/kea-loaders/kea-router install in this repo
+  - current reading:
+    - this does not improve parity on its own, but it removes the ambiguity about what produced the current `17/38`
+    - before resuming Go-side parity work, future compare checkpoints should cite the saved baseline manifest, not just the HTML report and semantic score
+    - if the team wants historical compare numbers to stay comparable across machines, the next pinning step is likely to freeze or vendor the JS-side plugin/typebuilder package set used by the harness, not just the CLI entrypoint mode
 
 ## March 23, 2026 Run
 

@@ -4,9 +4,33 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 COMPILED_CLI="$REPO_ROOT/dist/src/cli/typegen.js"
+SOURCE_CLI="$REPO_ROOT/src/cli/typegen.ts"
+TS_NODE="$REPO_ROOT/node_modules/.bin/ts-node"
+MODE=${KEA_TYPEGEN_JS_MODE:-auto}
 
-if [ -f "$COMPILED_CLI" ]; then
-    exec node "$COMPILED_CLI" "$@"
-fi
-
-exec "$REPO_ROOT/node_modules/.bin/ts-node" "$REPO_ROOT/src/cli/typegen.ts" "$@"
+case "$MODE" in
+    auto)
+        if [ -f "$COMPILED_CLI" ]; then
+            exec node "$COMPILED_CLI" "$@"
+        fi
+        exec "$TS_NODE" "$SOURCE_CLI" "$@"
+        ;;
+    dist)
+        if [ ! -f "$COMPILED_CLI" ]; then
+            echo "Compiled JS CLI not found: $COMPILED_CLI" >&2
+            exit 1
+        fi
+        exec node "$COMPILED_CLI" "$@"
+        ;;
+    source)
+        if [ ! -x "$TS_NODE" ]; then
+            echo "ts-node not found: $TS_NODE" >&2
+            exit 1
+        fi
+        exec "$TS_NODE" "$SOURCE_CLI" "$@"
+        ;;
+    *)
+        echo "Unknown KEA_TYPEGEN_JS_MODE: $MODE" >&2
+        exit 1
+        ;;
+esac

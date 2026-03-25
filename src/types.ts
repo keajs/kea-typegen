@@ -60,6 +60,7 @@ export interface AppOptions {
     sourceFilePath?: string
     rootPath?: string
     typesPath?: string
+    debugPluginManifestPath?: string
     write?: boolean
     watch?: boolean
     quiet?: boolean

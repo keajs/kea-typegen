@@ -68,6 +68,8 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
         }
     }
 
+    writeDebugPluginManifest(appOptions, pluginModules, typeBuilderModules)
+
     if (appOptions?.delete) {
         const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.mjsx']
         for (const sourceFile of program.getSourceFiles()) {
@@ -80,6 +82,31 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
         }
     }
     return parsedLogics
+}
+
+function writeDebugPluginManifest(
+    appOptions: AppOptions | undefined,
+    pluginModules: PluginModule[],
+    typeBuilderModules: TypeBuilderModule[],
+) {
+    const manifestPath = appOptions?.debugPluginManifestPath
+    if (!manifestPath) {
+        return
+    }
+
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true })
+    fs.writeFileSync(
+        manifestPath,
+        JSON.stringify(
+            {
+                cwd: process.cwd(),
+                pluginModules: pluginModules.map(({ name, file }) => ({ name, file })),
+                typeBuilderModules: typeBuilderModules.map(({ name, file }) => ({ name, file })),
+            },
+            null,
+            2,
+        ),
+    )
 }
 
 export function visitResetContext(checker: ts.TypeChecker, pluginModules: PluginModule[]) {

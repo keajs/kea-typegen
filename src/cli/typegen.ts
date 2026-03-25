@@ -65,6 +65,7 @@ function parsedToAppOptions(parsedOptions) {
         typesPath: types,
         tsConfigPath: config,
         sourceFilePath: file,
+        debugPluginManifestPath: process.env.KEA_TYPEGEN_DEBUG_PLUGIN_MANIFEST,
         ...rest,
         log: parsedOptions.quiet ? () => null : console.log.bind(console),
     }
