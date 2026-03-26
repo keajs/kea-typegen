@@ -291,9 +291,6 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 	}
 	for index, section := range sections["forms"] {
 		property := sourcePropertyAt(properties["forms"], index)
-		if parityModeEnabled() && logicReport.InputKind == "builders" && sectionUsesBuilderCallback(source, property) {
-			continue
-		}
 		formActions, formReducers, formSelectors, formImports := parseFormsPluginSectionWithSource(
 			section,
 			source,
@@ -382,6 +379,7 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.Listeners = mergeParsedListeners(parsed.Listeners, listeners...)
 		parsed.Imports = mergeTypeImports(parsed.Imports, listenerImports)
 	}
+	parsed = reorderParsedLogicForSourceProperties(source, sourceLogic, sections, properties, parsed, report.File, state)
 
 	parsed.Imports = mergeTypeImports(parsed.Imports, collectTypeImports(source, report.File, parsed, state))
 	return parsed, nil
@@ -506,32 +504,10 @@ func parseActionsWithSource(
 	sourceMembers := sectionSourceProperties(source, property)
 	sourceEntries := sourceEntriesByName(sectionSourceEntries(source, property))
 	memberByName := map[string]MemberReport{}
-	orderedNames := make([]string, 0, len(section.Members)+len(sourceMembers)+len(sourceEntries))
-	seenNames := map[string]bool{}
-	appendName := func(name string) {
-		name = strings.TrimSpace(name)
-		if name == "" || seenNames[name] {
-			return
-		}
-		seenNames[name] = true
-		orderedNames = append(orderedNames, name)
-	}
-
 	for _, member := range section.Members {
 		memberByName[member.Name] = member
-		appendName(member.Name)
 	}
-	for _, name := range orderedSourcePropertyNames(sourceMembers) {
-		appendName(name)
-	}
-	sourceEntryNames := make([]string, 0, len(sourceEntries))
-	for name := range sourceEntries {
-		sourceEntryNames = append(sourceEntryNames, name)
-	}
-	sort.Strings(sourceEntryNames)
-	for _, name := range sourceEntryNames {
-		appendName(name)
-	}
+	orderedNames := sourceOrderedSectionMemberNames(source, property, section.Members)
 
 	actions := make([]ParsedAction, 0, len(orderedNames))
 	for _, name := range orderedNames {
@@ -1213,7 +1189,7 @@ func normalizedActionPayloadObjectMemberName(rawName string) (string, bool) {
 
 func renderActionPayloadObjectMembers(properties map[string]actionPayloadObjectMember) string {
 	if len(properties) == 0 {
-		return ""
+		return "{}"
 	}
 	names := make([]string, 0, len(properties))
 	for name := range properties {
@@ -1339,14 +1315,23 @@ func parseReducers(section SectionReport) []ParsedField {
 func parseReducersWithSource(section SectionReport, source string, property SourceProperty, file string, state *buildState) []ParsedField {
 	sourceMembers := sectionSourceProperties(source, property)
 	sourceEntries := sourceEntriesByName(sectionSourceEntries(source, property))
-	reducers := make([]ParsedField, 0, len(section.Members))
+	memberByName := map[string]MemberReport{}
 	for _, member := range section.Members {
+		memberByName[member.Name] = member
+	}
+	orderedNames := sourceOrderedSectionMemberNames(source, property, section.Members)
+	reducers := make([]ParsedField, 0, len(orderedNames))
+	for _, name := range orderedNames {
+		member, ok := memberByName[name]
+		if !ok {
+			continue
+		}
 		stateType := "any"
-		if nested, ok := sourceMembers[member.Name]; ok {
+		if nested, ok := sourceMembers[name]; ok {
 			if hinted := sourceReducerStateTypeFromProperty(source, file, nested, state); hinted != "" {
 				stateType = hinted
 			}
-		} else if entry, ok := sourceEntries[member.Name]; ok {
+		} else if entry, ok := sourceEntries[name]; ok {
 			if hinted := sourceReducerStateTypeWithContext(source, file, entry.Value, state); hinted != "" {
 				stateType = hinted
 			}
@@ -1354,7 +1339,12 @@ func parseReducersWithSource(section SectionReport, source string, property Sour
 		if parsed, ok := parseReducerStateType(member.TypeString); ok {
 			stateType = preferredReducerStateType(stateType, parsed)
 		}
-		reducers = append(reducers, ParsedField{Name: member.Name, Type: stateType})
+		if nested, ok := sourceMembers[name]; ok {
+			if asserted := sourceAssertedType(firstTopLevelArrayElement(sourcePropertyText(source, nested))); asserted != "" {
+				stateType = preferredAssertedReducerStateType(stateType, asserted)
+			}
+		}
+		reducers = append(reducers, ParsedField{Name: name, Type: stateType})
 	}
 	return reducers
 }
@@ -1365,10 +1355,19 @@ func parseDefaultFields(section SectionReport) []ParsedField {
 
 func parseDefaultFieldsWithSource(section SectionReport, source string, property SourceProperty, file string, state *buildState) []ParsedField {
 	sourceMembers := sectionSourceProperties(source, property)
-	fields := make([]ParsedField, 0, len(section.Members))
+	memberByName := map[string]MemberReport{}
 	for _, member := range section.Members {
+		memberByName[member.Name] = member
+	}
+	orderedNames := sourceOrderedSectionMemberNames(source, property, section.Members)
+	fields := make([]ParsedField, 0, len(orderedNames))
+	for _, name := range orderedNames {
+		member, ok := memberByName[name]
+		if !ok {
+			continue
+		}
 		fieldType := strings.TrimSpace(preferredMemberTypeText(member))
-		if nested, ok := sourceMembers[member.Name]; ok {
+		if nested, ok := sourceMembers[name]; ok {
 			expression := sourcePropertyText(source, nested)
 			if hinted := sourceAssertedType(expression); hinted != "" {
 				fieldType = hinted
@@ -1388,7 +1387,7 @@ func parseDefaultFieldsWithSource(section SectionReport, source string, property
 		if fieldType == "" {
 			continue
 		}
-		fields = append(fields, ParsedField{Name: member.Name, Type: fieldType})
+		fields = append(fields, ParsedField{Name: name, Type: fieldType})
 	}
 	return fields
 }
@@ -1440,9 +1439,16 @@ func parseFormsPluginSectionWithSource(
 	reducers := make([]ParsedField, 0, len(section.Members)*6)
 	selectors := make([]ParsedField, 0, len(section.Members)*6)
 	sourceMembers := sectionSourceProperties(source, property)
-
+	memberByName := map[string]MemberReport{}
 	for _, member := range section.Members {
-		formName := strings.TrimSpace(member.Name)
+		memberByName[member.Name] = member
+	}
+	for _, formName := range sourceOrderedSectionMemberNames(source, property, section.Members) {
+		member, ok := memberByName[formName]
+		if !ok {
+			continue
+		}
+		formName = strings.TrimSpace(formName)
 		if formName == "" {
 			continue
 		}
@@ -2795,22 +2801,11 @@ func parseLoadersWithSource(section SectionReport, source string, property Sourc
 	sourceEntries := sectionSourceEntries(source, property)
 	entryByName := sourceEntriesByName(sourceEntries)
 	memberByName := map[string]MemberReport{}
-	orderedNames := make([]string, 0, len(section.Members)+len(sourceEntries))
-	seenNames := map[string]bool{}
 
 	for _, member := range section.Members {
 		memberByName[member.Name] = member
-		if !seenNames[member.Name] {
-			seenNames[member.Name] = true
-			orderedNames = append(orderedNames, member.Name)
-		}
 	}
-	for _, entry := range sourceEntries {
-		if !seenNames[entry.Name] {
-			seenNames[entry.Name] = true
-			orderedNames = append(orderedNames, entry.Name)
-		}
-	}
+	orderedNames := sourceOrderedSectionMemberNames(source, property, section.Members)
 
 	for _, name := range orderedNames {
 		member, hasMember := memberByName[name]
@@ -2886,22 +2881,11 @@ func parseLazyLoadersWithSource(section SectionReport, source string, property S
 	sourceEntries := sectionSourceEntries(source, property)
 	entryByName := sourceEntriesByName(sourceEntries)
 	memberByName := map[string]MemberReport{}
-	orderedNames := make([]string, 0, len(section.Members)+len(sourceEntries))
-	seenNames := map[string]bool{}
 
 	for _, member := range section.Members {
 		memberByName[member.Name] = member
-		if !seenNames[member.Name] {
-			seenNames[member.Name] = true
-			orderedNames = append(orderedNames, member.Name)
-		}
 	}
-	for _, entry := range sourceEntries {
-		if !seenNames[entry.Name] {
-			seenNames[entry.Name] = true
-			orderedNames = append(orderedNames, entry.Name)
-		}
-	}
+	orderedNames := sourceOrderedSectionMemberNames(source, property, section.Members)
 
 	for _, name := range orderedNames {
 		member, hasMember := memberByName[name]
@@ -4065,6 +4049,12 @@ func parseSelectorsWithSource(
 		}
 		reportedSelectorType := resolveReportedSelectorType(preferredMemberReturnType, parsedMemberReturnType)
 		keepParityReportedSelectorType := hasMember && parityModeKeepsLooseReportedSelectorType(logic, seenNames, selectorExpression, reportedSelectorType, member.TypeString)
+		keepParityTupleProjectorSurfaceLoose := hasMember && parityModeTupleProjectorSelectorSurfaceShouldStayLoose(contextLogic, source, file, selectorExpression, member, parsedMemberReturnType, state)
+		if keepParityTupleProjectorSurfaceLoose {
+			keepParityReportedSelectorType = true
+			reportedSelectorType = "any"
+			parsedMemberReturnType = ""
+		}
 		reportedIsConstructor := strings.HasSuffix(normalizeInferredTypeText(strings.TrimSpace(reportedSelectorType)), "Constructor")
 		allowConstructorRecovery := !reportedIsConstructor || selectorSourceHasRecoverableConstructor(selectorExpression)
 		if logic.InputKind == "builders" &&
@@ -4191,7 +4181,7 @@ func parseSelectorsWithSource(
 				selectorType = preferredMemberReturnType
 			}
 		}
-		if selectorType == "" && hasMember {
+		if selectorType == "" && hasMember && !keepParityTupleProjectorSurfaceLoose {
 			if returnType, ok := parseSelectorReturnType(member.TypeString); ok {
 				selectorType = returnType
 			}
@@ -4339,21 +4329,21 @@ func parseInternalSelectorTypesWithSource(
 			}
 			if recovered := sourceInternalSelectorFunctionTypeWithFallbackReturn(contextLogic, source, file, expression, fallbackReturnType, state); recovered != "" {
 				sourceSupportsInternalHelper = true
-				recovered = parityModeRecoveredInternalHelperFunctionType(functionType, recovered, keepParityReportedSelectorType)
+				recovered = parityModeRecoveredInternalHelperFunctionType(selectorExpression, functionType, recovered, keepParityReportedSelectorType)
 				if shouldPreferRecoveredInternalHelperFunctionType(functionType, recovered) {
 					functionType = recovered
 				}
 			}
 			if probed := sourceSelectorProjectorFunctionTypeFromTypeProbe(contextLogic, source, file, nested, state); probed != "" {
 				sourceSupportsInternalHelper = true
-				probed = parityModeRecoveredInternalHelperFunctionType(functionType, probed, keepParityReportedSelectorType)
+				probed = parityModeRecoveredInternalHelperFunctionType(selectorExpression, functionType, probed, keepParityReportedSelectorType)
 				if shouldPreferRecoveredInternalHelperFunctionType(functionType, probed) {
 					functionType = probed
 				}
 			}
 		} else if entry, ok := entryByName[name]; ok {
 			if recovered := sourceInternalSelectorFunctionType(contextLogic, source, file, entry.Value, state); recovered != "" {
-				recovered = parityModeRecoveredInternalHelperFunctionType(functionType, recovered, keepParityReportedSelectorType)
+				recovered = parityModeRecoveredInternalHelperFunctionType(selectorExpression, functionType, recovered, keepParityReportedSelectorType)
 				functionType = recovered
 				sourceSupportsInternalHelper = true
 			}
@@ -4499,7 +4489,8 @@ func opaqueInternalHelperParameterName(index int) string {
 	return fmt.Sprintf("arg%d", index+1)
 }
 
-func parityModeRecoveredInternalHelperFunctionType(current, recovered string, keepReportedLoose bool) string {
+func parityModeRecoveredInternalHelperFunctionType(expression, current, recovered string, keepReportedLoose bool) string {
+	recovered = parityModeRecoveredInternalHelperParameterTypes(expression, current, recovered)
 	if !keepReportedLoose {
 		return recovered
 	}
@@ -4524,6 +4515,66 @@ func parityModeRecoveredInternalHelperFunctionType(current, recovered string, ke
 		return recovered
 	}
 	return recoveredParameters + " => " + currentReturnType
+}
+
+func parityModeRecoveredInternalHelperParameterTypes(expression, current, recovered string) string {
+	if !parityModeEnabled() {
+		return recovered
+	}
+
+	currentParameters, _, ok := splitFunctionType(current)
+	if !ok {
+		return recovered
+	}
+	recoveredParameters, recoveredReturnType, ok := splitFunctionType(recovered)
+	if !ok {
+		return recovered
+	}
+
+	currentParams, ok := parseFunctionParameters(currentParameters)
+	if !ok {
+		return recovered
+	}
+	recoveredParams, ok := parseFunctionParameters(recoveredParameters)
+	if !ok || len(currentParams) != len(recoveredParams) {
+		return recovered
+	}
+
+	dependencyNames := sourceSelectorDependencyNames(expression)
+	if len(dependencyNames) != len(recoveredParams) {
+		return recovered
+	}
+
+	rebuilt := make([]string, 0, len(recoveredParams))
+	changed := false
+	for index, param := range recoveredParams {
+		rawName, _, ok := splitTopLevelPropertyRaw(param.Text)
+		if !ok {
+			return recovered
+		}
+
+		paramType := normalizeInferredTypeText(strings.TrimSpace(param.Type))
+		if strings.TrimSpace(dependencyNames[index]) == "" {
+			currentType := normalizeInferredTypeText(strings.TrimSpace(currentParams[index].Type))
+			if isAnyLikeType(currentType) || isLooselyTypedType(currentType) {
+				paramType = currentType
+			} else {
+				paramType = "any"
+			}
+			if paramType != normalizeInferredTypeText(strings.TrimSpace(param.Type)) {
+				changed = true
+			}
+		}
+		if paramType == "" {
+			return recovered
+		}
+
+		rebuilt = append(rebuilt, fmt.Sprintf("%s: %s", strings.TrimSpace(rawName), paramType))
+	}
+	if !changed {
+		return recovered
+	}
+	return "(" + strings.Join(rebuilt, ", ") + ") => " + normalizeInferredTypeText(strings.TrimSpace(recoveredReturnType))
 }
 
 func shouldPreferRecoveredInternalHelperFunctionType(current, candidate string) bool {
@@ -4813,6 +4864,23 @@ func parityModeKeepsLooseReportedSelectorType(logic ParsedLogic, currentSectionN
 	return false
 }
 
+func parityModeTupleProjectorSelectorSurfaceShouldStayLoose(logic ParsedLogic, source, file, expression string, member MemberReport, parsedReturnType string, state *buildState) bool {
+	if !parityModeEnabled() || strings.TrimSpace(expression) == "" || sourceSelectorReturnType(expression) != "" {
+		return false
+	}
+	parsedReturnType = normalizeInferredTypeText(strings.TrimSpace(parsedReturnType))
+	if parsedReturnType == "" || isAnyLikeType(parsedReturnType) || isLooselyTypedType(parsedReturnType) {
+		return false
+	}
+	if selectorReportedMemberReturnTypeText(member) != "" {
+		return false
+	}
+	if !selectorMemberTypeTextSupportsInternalHelper(preferredMemberTypeText(member)) {
+		return false
+	}
+	return !selectorDependencyTypesLookConcrete(logic, source, file, expression, state)
+}
+
 func parityModeSelectorPropertyFallbackShouldStayAny(logic ParsedLogic, source, file, expression, inferred string, state *buildState) bool {
 	if !parityModeEnabled() {
 		return false
@@ -4865,11 +4933,14 @@ func parityModeSelectorPropertyFallbackShouldStayAny(logic ParsedLogic, source, 
 
 	dependencyTypes := sourceSelectorDependencyTypes(logic, source, file, expression, state)
 	if leftParam >= len(dependencyTypes) || rightParam >= len(dependencyTypes) {
+		dependencyTypes = sourceSelectorDependencyTypesWithPlaceholders(logic, source, file, expression, state)
+	}
+	if leftParam >= len(dependencyTypes) || rightParam >= len(dependencyTypes) {
 		return false
 	}
 	for _, index := range []int{leftParam, rightParam} {
 		typeText := normalizeInferredTypeText(strings.TrimSpace(dependencyTypes[index]))
-		if typeText != "" && (isAnyLikeType(typeText) || isLooselyTypedType(typeText) || typeText == "null" || typeText == "undefined") {
+		if typeText == "" || isAnyLikeType(typeText) || isLooselyTypedType(typeText) || typeText == "null" || typeText == "undefined" {
 			return true
 		}
 	}
@@ -5494,14 +5565,19 @@ func shouldPreferStrongRecoveredSelectorType(current, recovered string) bool {
 }
 
 func selectorTypeIsLiteralUnionOfKind(typeText, kind string) bool {
-	parts, err := splitTopLevelUnion(typeText)
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" {
+		return false
+	}
+
+	parts, err := splitTopLevelUnion(text)
 	if err != nil || len(parts) == 0 {
-		parts = []string{typeText}
+		parts = []string{text}
 	}
 
 	sawLiteral := false
 	for _, part := range parts {
-		part = normalizeInferredTypeText(strings.TrimSpace(part))
+		part = normalizeSourceTypeText(strings.TrimSpace(part))
 		switch kind {
 		case "string":
 			if !isQuotedString(part) {
@@ -5521,6 +5597,39 @@ func selectorTypeIsLiteralUnionOfKind(typeText, kind string) bool {
 		sawLiteral = true
 	}
 	return sawLiteral
+}
+
+func sortLiteralUnionMembers(typeText string) string {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" {
+		return ""
+	}
+
+	parts, err := splitTopLevelUnion(text)
+	if err != nil || len(parts) < 2 {
+		return text
+	}
+
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = normalizeSourceTypeText(strings.TrimSpace(part))
+		if part == "" {
+			return text
+		}
+		if !isQuotedString(part) && !isNumericLiteralType(part) && !isBooleanLiteralType(part) {
+			return text
+		}
+		normalized = append(normalized, part)
+	}
+
+	sorted := append([]string(nil), normalized...)
+	sort.Strings(sorted)
+	for index := range normalized {
+		if normalized[index] != sorted[index] {
+			return strings.Join(sorted, " | ")
+		}
+	}
+	return text
 }
 
 func selectorTypeLooksLessInformative(typeText string) bool {
@@ -5668,6 +5777,9 @@ func internalHelperReturnCanRefineOpaqueSelector(functionType, returnType string
 	for _, param := range params {
 		paramType := normalizeInferredTypeText(strings.TrimSpace(param.Type))
 		if paramType == "" || isAnyLikeType(paramType) || isLooselyTypedType(paramType) {
+			if parityModeEnabled() {
+				return false
+			}
 			continue
 		}
 		sawInformativeParameter = true
@@ -5961,7 +6073,8 @@ func sourceInternalSelectorFunctionTypeWithFallbackReturn(logic ParsedLogic, sou
 	if returnType == "" {
 		inferredReturnType := sourceSelectorInferredType(logic, source, file, expression, state)
 		fallbackReturnType = normalizeInferredTypeText(strings.TrimSpace(fallbackReturnType))
-		if internalHelperOpaqueComplexFallbackReturnShouldStayAny(info.Body, info.BlockBody, fallbackReturnType, inferredReturnType, dependencyTypes) {
+		if internalHelperOpaqueComplexFallbackReturnShouldStayAny(info.Body, info.BlockBody, fallbackReturnType, inferredReturnType, dependencyTypes) ||
+			internalHelperOpaqueTemplateStringReturnShouldStayAny(info.Body, info.BlockBody, fallbackReturnType, inferredReturnType, dependencyTypes) {
 			returnType = fallbackReturnType
 		} else {
 			returnType = inferredReturnType
@@ -5978,6 +6091,9 @@ func sourceInternalSelectorFunctionTypeWithFallbackReturn(logic ParsedLogic, sou
 	preserveNullableParameterTypes := true
 	for index, name := range parameterNames {
 		parameterTypeText := dependencyTypes[index]
+		if parityModeEnabled() && index < len(dependencyNames) && strings.TrimSpace(dependencyNames[index]) == "" {
+			parameterTypeText = "any"
+		}
 		if parityModeEnabled() && strings.TrimSpace(parameterTypeText) == "" {
 			parameterTypeText = "any"
 		}
@@ -6019,6 +6135,38 @@ func internalHelperOpaqueComplexFallbackReturnShouldStayAny(body string, blockBo
 		return false
 	}
 	if findLastTopLevelOperator(expression, "??") == -1 && findLastTopLevelOperator(expression, "||") == -1 {
+		return false
+	}
+
+	for _, dependencyType := range dependencyTypes {
+		dependencyType = normalizeInferredTypeText(strings.TrimSpace(dependencyType))
+		if dependencyType == "" ||
+			isAnyLikeType(dependencyType) ||
+			isLooselyTypedType(dependencyType) ||
+			dependencyType == "null" ||
+			dependencyType == "undefined" {
+			return true
+		}
+	}
+	return false
+}
+
+func internalHelperOpaqueTemplateStringReturnShouldStayAny(body string, blockBody bool, fallbackReturnType, inferredReturnType string, dependencyTypes []string) bool {
+	fallbackReturnType = normalizeInferredTypeText(strings.TrimSpace(fallbackReturnType))
+	inferredReturnType = normalizeInferredTypeText(strings.TrimSpace(inferredReturnType))
+	if (!isAnyLikeType(fallbackReturnType) && !isLooselyTypedType(fallbackReturnType)) || inferredReturnType != "string" {
+		return false
+	}
+
+	expression := strings.TrimSpace(body)
+	if blockBody {
+		expression = singleReturnExpression(body)
+		if expression == "" {
+			expression = blockReturnExpression(body)
+		}
+	}
+	expression = strings.TrimSpace(expression)
+	if expression == "" || !strings.Contains(expression, "`") {
 		return false
 	}
 
@@ -6488,11 +6636,39 @@ func sourceActionPayloadTypeFromSource(source, file, expression string, state *b
 	if body == "" {
 		return ""
 	}
+	if sourceExpressionIsEmptyObjectLiteral(body) {
+		return "{}"
+	}
 	hints := sourceActionParameterTypeHintsWithContext(source, file, info.Parameters, state)
 	if objectType := sourceObjectLiteralTypeTextWithHints(source, body, hints); objectType != "" {
 		return objectType
 	}
 	return normalizeActionPayloadType(sourceExpressionTypeTextWithContext(source, file, body, hints, state))
+}
+
+func sourceExpressionIsEmptyObjectLiteral(expression string) bool {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	if text == "" {
+		text = strings.TrimSpace(expression)
+	}
+	if text == "" {
+		return false
+	}
+
+	objectStart, objectEnd, ok, err := FindInspectableObjectLiteral(text, 0, len(text))
+	if err != nil || !ok {
+		return false
+	}
+	segments, err := splitTopLevelSourceSegments(text, objectStart+1, objectEnd)
+	if err != nil {
+		return false
+	}
+	for _, segment := range segments {
+		if strings.TrimSpace(segment.Text) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func sourceParameterTypeHints(source, parameters string) map[string]string {
@@ -7067,7 +7243,7 @@ func sourceExpressionTypeTextWithContext(source, file, expression string, hints 
 	if awaitedType := sourceAwaitExpressionTypeTextWithContext(source, file, text, hints, state); awaitedType != "" {
 		return awaitedType
 	}
-	if functionType := sourceArrowFunctionTypeTextWithContext(source, file, text, state); functionType != "" {
+	if functionType := sourceArrowFunctionTypeTextWithOuterHints(source, file, text, hints, state); functionType != "" {
 		return functionType
 	}
 	if callType := sourceCallExpressionTypeTextWithContext(source, file, text, hints, state); callType != "" {
@@ -7084,6 +7260,9 @@ func sourceExpressionTypeTextWithContext(source, file, expression string, hints 
 	}
 	if logicalType := sourceLogicalExpressionTypeTextWithContext(source, file, text, hints, state); logicalType != "" {
 		return logicalType
+	}
+	if binaryType := sourceBinaryExpressionTypeTextWithContext(source, file, text, hints, state); binaryType != "" {
+		return binaryType
 	}
 	if comparisonType := sourceComparisonExpressionTypeText(text); comparisonType != "" {
 		return comparisonType
@@ -7186,6 +7365,10 @@ func sourceLocalValueTypeFromTypeProbe(source, file, identifier string, state *b
 }
 
 func sourceArrowFunctionTypeTextWithContext(source, file, expression string, state *buildState) string {
+	return sourceArrowFunctionTypeTextWithOuterHints(source, file, expression, nil, state)
+}
+
+func sourceArrowFunctionTypeTextWithOuterHints(source, file, expression string, hints map[string]string, state *buildState) string {
 	info, ok := parseSourceArrowInfo(expression)
 	if !ok {
 		return ""
@@ -7197,6 +7380,23 @@ func sourceArrowFunctionTypeTextWithContext(source, file, expression string, sta
 			if info.Async {
 				returnType = unwrapPromiseType(returnType)
 			}
+		} else if len(hints) > 0 {
+			bodyHints := mergeSourceTypeHints(hints, sourceParameterTypeHintsWithContext(source, file, info.Parameters, state))
+			body := strings.TrimSpace(info.Body)
+			if info.BlockBody {
+				body = singleReturnExpression(body)
+				if body == "" {
+					body = blockReturnExpression(info.Body)
+				}
+			}
+			if body != "" {
+				if inferred := sourceExpressionTypeTextWithContext(source, file, body, bodyHints, state); inferred != "" {
+					returnType = normalizeInferredTypeText(inferred)
+					if info.Async {
+						returnType = unwrapPromiseType(returnType)
+					}
+				}
+			}
 		}
 	}
 	if returnType == "" {
@@ -7206,6 +7406,26 @@ func sourceArrowFunctionTypeTextWithContext(source, file, expression string, sta
 		returnType = promiseTypeText(returnType)
 	}
 	return info.Parameters + " => " + returnType
+}
+
+func mergeSourceTypeHints(base, extra map[string]string) map[string]string {
+	if len(base) == 0 {
+		return extra
+	}
+	if len(extra) == 0 {
+		return base
+	}
+	merged := make(map[string]string, len(base)+len(extra))
+	for name, typeText := range base {
+		merged[name] = typeText
+	}
+	for name, typeText := range extra {
+		if strings.TrimSpace(typeText) == "" {
+			continue
+		}
+		merged[name] = typeText
+	}
+	return merged
 }
 
 func sourceAwaitExpressionTypeTextWithContext(source, file, expression string, hints map[string]string, state *buildState) string {
@@ -7663,6 +7883,41 @@ func sourceLogicalExpressionTypeTextWithContext(source, file, expression string,
 		}
 	}
 	return ""
+}
+
+func sourceBinaryExpressionTypeTextWithContext(source, file, expression string, hints map[string]string, state *buildState) string {
+	text := strings.TrimSpace(unwrapWrappedExpression(expression))
+	if text == "" {
+		return ""
+	}
+	for _, operator := range []string{"*", "/", "%", "-", "+"} {
+		index := findLastTopLevelOperator(text, operator)
+		if index == -1 {
+			continue
+		}
+		left := normalizeInferredTypeText(sourceExpressionTypeTextWithContext(source, file, strings.TrimSpace(text[:index]), hints, state))
+		right := normalizeInferredTypeText(sourceExpressionTypeTextWithContext(source, file, strings.TrimSpace(text[index+len(operator):]), hints, state))
+		if left == "" || right == "" {
+			continue
+		}
+		if operator == "+" && (sourceExpressionTypeLooksStringLike(left) || sourceExpressionTypeLooksStringLike(right)) {
+			return "string"
+		}
+		if sourceExpressionTypeLooksNumeric(left) && sourceExpressionTypeLooksNumeric(right) {
+			return "number"
+		}
+	}
+	return ""
+}
+
+func sourceExpressionTypeLooksNumeric(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	return text == "number" || isNumericLiteralType(text) || selectorTypeIsLiteralUnionOfKind(text, "number")
+}
+
+func sourceExpressionTypeLooksStringLike(typeText string) bool {
+	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	return text == "string" || isQuotedString(text) || selectorTypeIsLiteralUnionOfKind(text, "string")
 }
 
 func sourceComparisonExpressionTypeText(expression string) string {
@@ -8420,6 +8675,14 @@ func sourceMemberPathSegmentTypeTextOptions(
 	for _, part := range parts {
 		current := normalizeSourceTypeText(strings.TrimSpace(part))
 		if current == "" || current == "null" || current == "undefined" {
+			continue
+		}
+		if segment == "length" && (isArrayLikeType(current) || current == "string" || isQuotedString(current) || selectorTypeIsLiteralUnionOfKind(current, "string")) {
+			if resolved == "" {
+				resolved = "number"
+			} else {
+				resolved = mergeNormalizedTypeUnion(resolved, "number")
+			}
 			continue
 		}
 		if expanded := expandLocalSourceTypeText(source, current); expanded != "" {
@@ -9435,7 +9698,7 @@ func normalizeRecoveredSelectorType(source, file, typeText string) string {
 }
 
 func collapseBooleanLiteralUnion(typeText string) string {
-	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
 	if text == "" {
 		return ""
 	}
@@ -9447,7 +9710,7 @@ func collapseBooleanLiteralUnion(typeText string) string {
 	sawTrue := false
 	sawFalse := false
 	for _, part := range parts {
-		part = normalizeInferredTypeText(strings.TrimSpace(part))
+		part = normalizeSourceTypeText(strings.TrimSpace(part))
 		switch part {
 		case "", "true":
 			if part == "true" {
@@ -11847,6 +12110,26 @@ func parseEventNamesWithSource(section SectionReport, source string, property So
 	return names
 }
 
+func sourceOrderedSectionMemberNames(source string, property SourceProperty, members []MemberReport) []string {
+	seen := map[string]bool{}
+	names := make([]string, 0, len(members))
+	appendName := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	for _, name := range sectionSourceMemberNames(source, property) {
+		appendName(name)
+	}
+	for _, member := range members {
+		appendName(member.Name)
+	}
+	return names
+}
+
 func mergeParsedFields(existing []ParsedField, extra ...ParsedField) []ParsedField {
 	indexByName := make(map[string]int, len(existing))
 	merged := append([]ParsedField(nil), existing...)
@@ -12013,6 +12296,225 @@ func mergeParsedActionsPreferLoaderRecovery(existing []ParsedAction, extra ...Pa
 		merged = append(merged, action)
 	}
 	return merged
+}
+
+func reorderParsedLogicForSourceProperties(
+	source string,
+	sourceLogic SourceLogic,
+	sections map[string][]SectionReport,
+	properties map[string][]SourceProperty,
+	parsed ParsedLogic,
+	file string,
+	state *buildState,
+) ParsedLogic {
+	if source == "" || len(sourceLogic.Properties) == 0 {
+		return parsed
+	}
+
+	var actionOrder []string
+	var reducerOrder []string
+	var selectorOrder []string
+	propertyIndexes := map[string]int{}
+	nextPropertyIndex := func(name string) int {
+		index := propertyIndexes[name]
+		propertyIndexes[name] = index + 1
+		return index
+	}
+	appendActionOrder := func(actions []ParsedAction) {
+		for _, action := range actions {
+			actionOrder = append(actionOrder, action.Name)
+		}
+	}
+	appendReducerOrder := func(fields []ParsedField) {
+		for _, field := range fields {
+			reducerOrder = append(reducerOrder, field.Name)
+		}
+	}
+
+	for _, property := range sourceLogic.Properties {
+		index := nextPropertyIndex(property.Name)
+		switch property.Name {
+		case "connect":
+			references, err := parseConnectedReferences(source, property)
+			if err != nil {
+				continue
+			}
+			for _, reference := range references {
+				switch reference.Kind {
+				case "actions":
+					for _, name := range reference.Names {
+						actionOrder = append(actionOrder, name.LocalName)
+					}
+				case "values", "props":
+					for _, name := range reference.Names {
+						selectorOrder = append(selectorOrder, name.LocalName)
+					}
+				}
+			}
+		case "actions":
+			if index < len(sections["actions"]) {
+				appendActionOrder(parseActionsWithSource(sections["actions"][index], source, property, parsed.InputKind, file, state))
+			}
+		case "defaults":
+			if index < len(sections["defaults"]) {
+				appendReducerOrder(parseDefaultFieldsWithSource(sections["defaults"][index], source, property, file, state))
+			}
+		case "reducers":
+			if index < len(sections["reducers"]) {
+				appendReducerOrder(parseReducersWithSource(sections["reducers"][index], source, property, file, state))
+			}
+		case "windowValues":
+			if index < len(sections["windowValues"]) {
+				appendReducerOrder(parseWindowValues(sections["windowValues"][index]))
+			}
+		case "form":
+			if index < len(sections["form"]) {
+				formActions, formReducers, _ := parseFormPluginSection(sections["form"][index])
+				appendActionOrder(formActions)
+				appendReducerOrder(formReducers)
+			}
+		case "forms":
+			if index < len(sections["forms"]) {
+				formActions, formReducers, formSelectors, _ := parseFormsPluginSectionWithSource(
+					sections["forms"][index],
+					source,
+					property,
+					file,
+					state,
+				)
+				appendActionOrder(formActions)
+				appendReducerOrder(formReducers)
+				for _, field := range formSelectors {
+					selectorOrder = append(selectorOrder, field.Name)
+				}
+			}
+		case "loaders":
+			if index < len(sections["loaders"]) {
+				loaderActions, loaderReducers := parseLoadersWithSource(sections["loaders"][index], source, property, file, state)
+				appendActionOrder(loaderActions)
+				appendReducerOrder(loaderReducers)
+			}
+		case "lazyLoaders":
+			if index < len(sections["lazyLoaders"]) {
+				loaderActions, loaderReducers := parseLazyLoadersWithSource(sections["lazyLoaders"][index], source, property, file, state)
+				appendActionOrder(loaderActions)
+				appendReducerOrder(loaderReducers)
+			}
+		case "selectors":
+			if index < len(sections["selectors"]) {
+				selectorOrder = append(selectorOrder, sourceOrderedSectionMemberNames(source, property, sections["selectors"][index].Members)...)
+			}
+		}
+	}
+
+	parsed.Actions = reorderParsedActionsByName(parsed.Actions, actionOrder)
+	parsed.Reducers = reorderParsedFieldsByName(parsed.Reducers, reducerOrder)
+	parsed.Selectors = reorderParsedFieldsByName(parsed.Selectors, selectorOrder)
+	parsed.InternalSelectorTypes = reorderParsedFunctionsByName(parsed.InternalSelectorTypes, selectorOrder)
+	if len(parsed.InternalReducerActions) > 0 {
+		internalActions := parseInternalReducerActions(
+			source,
+			file,
+			parsed.InputKind,
+			properties["reducers"],
+			properties["listeners"],
+			state,
+		)
+		parsed.InternalReducerActions = reorderParsedActionsByName(parsed.InternalReducerActions, parsedActionNames(internalActions))
+	}
+	return parsed
+}
+
+func reorderParsedActionsByName(actions []ParsedAction, order []string) []ParsedAction {
+	if len(actions) == 0 || len(order) == 0 {
+		return actions
+	}
+	indexByName := map[string]int{}
+	for index, action := range actions {
+		indexByName[action.Name] = index
+	}
+	used := map[string]bool{}
+	reordered := make([]ParsedAction, 0, len(actions))
+	for _, name := range order {
+		index, ok := indexByName[name]
+		if !ok || used[name] {
+			continue
+		}
+		used[name] = true
+		reordered = append(reordered, actions[index])
+	}
+	for _, action := range actions {
+		if used[action.Name] {
+			continue
+		}
+		reordered = append(reordered, action)
+	}
+	return reordered
+}
+
+func reorderParsedFieldsByName(fields []ParsedField, order []string) []ParsedField {
+	if len(fields) == 0 || len(order) == 0 {
+		return fields
+	}
+	indexByName := map[string]int{}
+	for index, field := range fields {
+		indexByName[field.Name] = index
+	}
+	used := map[string]bool{}
+	reordered := make([]ParsedField, 0, len(fields))
+	for _, name := range order {
+		index, ok := indexByName[name]
+		if !ok || used[name] {
+			continue
+		}
+		used[name] = true
+		reordered = append(reordered, fields[index])
+	}
+	for _, field := range fields {
+		if used[field.Name] {
+			continue
+		}
+		reordered = append(reordered, field)
+	}
+	return reordered
+}
+
+func reorderParsedFunctionsByName(functions []ParsedFunction, order []string) []ParsedFunction {
+	if len(functions) == 0 || len(order) == 0 {
+		return functions
+	}
+	indexByName := map[string]int{}
+	for index, fn := range functions {
+		indexByName[fn.Name] = index
+	}
+	used := map[string]bool{}
+	reordered := make([]ParsedFunction, 0, len(functions))
+	for _, name := range order {
+		index, ok := indexByName[name]
+		if !ok || used[name] {
+			continue
+		}
+		used[name] = true
+		reordered = append(reordered, functions[index])
+	}
+	for _, fn := range functions {
+		if used[fn.Name] {
+			continue
+		}
+		reordered = append(reordered, fn)
+	}
+	return reordered
+}
+
+func parsedActionNames(actions []ParsedAction) []string {
+	if len(actions) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(actions))
+	for _, action := range actions {
+		names = append(names, action.Name)
+	}
+	return names
 }
 
 func shouldPreferRecoveredLoaderAction(current, candidate ParsedAction) bool {
@@ -12939,9 +13441,6 @@ func enrichConnectedSections(source, file string, property SourceProperty, liste
 
 		switch reference.Kind {
 		case "actions":
-			if parityModeEnabled() && connectedTargetIsBareLocalImport(source, reference.TargetExpr) {
-				continue
-			}
 			var addedTypeTexts []string
 			actionMembers, _ := resolveConnectedSectionMembersBySymbol(source, file, reference, "actions", state)
 			actionCreatorMembers, _ := resolveConnectedSectionMembersBySymbol(source, file, reference, "actionCreators", state)
@@ -13229,18 +13728,16 @@ func resolveImportedConnectedLogic(file, importPath, packageLogicName string, st
 				return logic, true
 			}
 		}
-		if parityModeEnabled() {
-			candidates := append([]string{packageLogicName}, names...)
-			seen := map[string]bool{}
-			for _, candidateName := range candidates {
-				candidateName = strings.TrimSpace(candidateName)
-				if candidateName == "" || seen[candidateName] {
-					continue
-				}
-				seen[candidateName] = true
-				if logic, ok := loadLocalGeneratedLogicType(resolvedFile, candidateName); ok {
-					return logic, true
-				}
+		candidates := append([]string{packageLogicName}, names...)
+		seen := map[string]bool{}
+		for _, candidateName := range candidates {
+			candidateName = strings.TrimSpace(candidateName)
+			if candidateName == "" || seen[candidateName] {
+				continue
+			}
+			seen[candidateName] = true
+			if logic, ok := loadLocalGeneratedLogicType(resolvedFile, candidateName); ok {
+				return logic, true
 			}
 		}
 	}
@@ -13478,10 +13975,60 @@ func rebaseTypeImports(imports []TypeImport, fromFile, toFile string) []TypeImpo
 					path = importPath
 				}
 			}
+		} else if resolvedFile, ok := resolveImportFile(fromFile, path, nil); ok {
+			rootName, subpath := splitPackageImportPath(path)
+			if rootName != "" && subpath == "" && resolvedImportLivesInAnyNodeModules(resolvedFile) && !sourceFileDirectlyImportsPath(toFile, path, nil) {
+				if importPath, ok := relativeImportPath(toFile, resolvedFile); ok {
+					path = importPath
+				}
+			}
 		}
 		rebased = append(rebased, TypeImport{Path: path, Names: append([]string(nil), item.Names...)})
 	}
 	return rebased
+}
+
+func resolvedImportLivesInAnyNodeModules(resolvedFile string) bool {
+	if resolvedFile == "" {
+		return false
+	}
+	resolvedFile = filepath.Clean(resolvedFile)
+	return strings.Contains(resolvedFile, string(os.PathSeparator)+"node_modules"+string(os.PathSeparator))
+}
+
+func sourceFileDirectlyImportsPath(file, importPath string, state *buildState) bool {
+	file = filepath.Clean(file)
+	importPath = strings.TrimSpace(importPath)
+	if file == "" || importPath == "" {
+		return false
+	}
+
+	sourceBytes, err := os.ReadFile(file)
+	if err != nil {
+		return false
+	}
+	source := string(sourceBytes)
+
+	for _, candidate := range parseNamedValueImports(source) {
+		if strings.TrimSpace(candidate.Path) == importPath {
+			return true
+		}
+	}
+	for _, candidate := range parseDefaultValueImports(source) {
+		if strings.TrimSpace(candidate.Path) == importPath {
+			return true
+		}
+	}
+	for _, candidatePath := range parseNamespaceValueImports(source) {
+		if strings.TrimSpace(candidatePath) == importPath {
+			return true
+		}
+	}
+
+	return strings.Contains(source, "from '"+importPath+"'") ||
+		strings.Contains(source, `from "`+importPath+`"`) ||
+		strings.Contains(source, "import '"+importPath+"'") ||
+		strings.Contains(source, `import "`+importPath+`"`)
 }
 
 func relativeImportPath(fromFile, toFile string) (string, bool) {
@@ -13494,7 +14041,11 @@ func relativeImportPath(fromFile, toFile string) (string, bool) {
 		return "", false
 	}
 	relative = filepath.ToSlash(relative)
-	relative = strings.TrimSuffix(relative, filepath.Ext(relative))
+	relative = strings.TrimSuffix(relative, ".d.ts")
+	relative = strings.TrimSuffix(relative, ".ts")
+	relative = strings.TrimSuffix(relative, ".tsx")
+	relative = strings.TrimSuffix(relative, ".js")
+	relative = strings.TrimSuffix(relative, ".jsx")
 	if !strings.HasPrefix(relative, ".") {
 		relative = "./" + relative
 	}
@@ -15135,6 +15686,30 @@ func preferredReducerStateType(current, parsed string) string {
 	}
 }
 
+func preferredAssertedReducerStateType(current, asserted string) string {
+	current = normalizeInferredTypeText(current)
+	asserted = normalizeInferredTypeText(asserted)
+
+	switch {
+	case asserted == "":
+		return current
+	case current == "":
+		return asserted
+	case current == asserted:
+		return current
+	case isAnyLikeType(current):
+		return asserted
+	case current == "string" && selectorTypeIsLiteralUnionOfKind(asserted, "string"):
+		return asserted
+	case current == "number" && selectorTypeIsLiteralUnionOfKind(asserted, "number"):
+		return asserted
+	case current == "boolean" && selectorTypeIsLiteralUnionOfKind(asserted, "boolean"):
+		return asserted
+	default:
+		return current
+	}
+}
+
 func widenReducerStateTypeFromHandlers(stateType, handlersText string) string {
 	if !isBooleanLiteralType(stateType) {
 		return ""
@@ -15171,6 +15746,8 @@ func widenReducerStateTypeFromHandlers(stateType, handlersText string) string {
 
 func normalizeInferredTypeText(typeText string) string {
 	text := normalizeSourceTypeText(typeText)
+	text = sortLiteralUnionMembers(text)
+	text = collapseBooleanLiteralUnion(text)
 	switch text {
 	case "never[]":
 		return "any[]"
@@ -15186,7 +15763,11 @@ func normalizeInferredTypeText(typeText string) string {
 }
 
 func normalizeActionPayloadType(typeText string) string {
-	return normalizeInferredTypeText(typeText)
+	text := normalizeInferredTypeText(typeText)
+	if members, ok := parseActionPayloadObjectMembers(text); ok {
+		return renderActionPayloadObjectMembers(members)
+	}
+	return text
 }
 
 func stripNullableActionPayloadProperties(typeText string) string {
@@ -16503,6 +17084,9 @@ func collectTypeImportsForTypeTexts(source, file string, typeTexts []string, sta
 	exportCache := map[string]map[string]bool{}
 	packageExportCache := map[string]map[string]importCandidate{}
 	usedReferences := collectUsedTypeReferences(typeTexts)
+	for identifier := range collectExplicitImportableBareIdentifiers(typeTexts, importsByAlias) {
+		usedReferences.BareIdentifiers[identifier] = true
+	}
 
 	grouped := map[string]map[string]bool{}
 	for identifier := range usedReferences.QualifiedOwners {
@@ -17028,6 +17612,7 @@ func resolvePackageTypesEntryFile(rootDir, subpath string) (string, bool) {
 		var packageJSON struct {
 			Types   string `json:"types"`
 			Typings string `json:"typings"`
+			Main    string `json:"main"`
 		}
 		if err := json.Unmarshal(packageJSONBytes, &packageJSON); err == nil {
 			for _, candidate := range []string{packageJSON.Types, packageJSON.Typings} {
@@ -17035,6 +17620,11 @@ func resolvePackageTypesEntryFile(rootDir, subpath string) (string, bool) {
 					continue
 				}
 				if resolved, ok := resolvePackageModuleFile(rootDir, candidate); ok {
+					return resolved, true
+				}
+			}
+			if strings.TrimSpace(packageJSON.Main) != "" {
+				if resolved, ok := resolvePackageModuleFile(rootDir, packageJSON.Main); ok {
 					return resolved, true
 				}
 			}
@@ -17047,6 +17637,8 @@ func resolvePackageTypesEntryFile(rootDir, subpath string) (string, bool) {
 func resolvePackageModuleFile(rootDir, modulePath string) (string, bool) {
 	modulePath = strings.TrimSuffix(modulePath, ".d.ts")
 	modulePath = strings.TrimSuffix(modulePath, ".ts")
+	modulePath = strings.TrimSuffix(modulePath, ".js")
+	modulePath = strings.TrimSuffix(modulePath, ".jsx")
 	basePath := filepath.Join(rootDir, filepath.FromSlash(modulePath))
 	candidates := []string{
 		basePath,
@@ -17468,6 +18060,71 @@ func collectUsedTypeReferences(typeTexts []string) usedTypeReferences {
 		collectUsedTypeReferencesInto(typeText, references)
 	}
 	return references
+}
+
+func collectExplicitImportableBareIdentifiers(typeTexts []string, candidates map[string]importCandidate) map[string]bool {
+	used := map[string]bool{}
+	if len(typeTexts) == 0 || len(candidates) == 0 {
+		return used
+	}
+	for _, typeText := range typeTexts {
+		collectExplicitImportableBareIdentifiersInto(typeText, candidates, used)
+	}
+	return used
+}
+
+func collectExplicitImportableBareIdentifiersInto(typeText string, candidates map[string]importCandidate, used map[string]bool) {
+	for i := 0; i < len(typeText); {
+		switch typeText[i] {
+		case '\'':
+			end, err := skipQuoted(typeText, i, '\'')
+			if err != nil {
+				return
+			}
+			i = end + 1
+			continue
+		case '"':
+			end, err := skipQuoted(typeText, i, '"')
+			if err != nil {
+				return
+			}
+			i = end + 1
+			continue
+		case '`':
+			end, err := skipTemplate(typeText, i)
+			if err != nil {
+				return
+			}
+			i = end + 1
+			continue
+		}
+		if !isIdentifierStart(typeText[i]) {
+			i++
+			continue
+		}
+		start := i
+		i++
+		for i < len(typeText) && isIdentifierPart(typeText[i]) {
+			i++
+		}
+		identifier := typeText[start:i]
+		candidate, ok := candidates[identifier]
+		if !ok || candidate.Path == "" || candidate.Name == "" {
+			continue
+		}
+		previous := previousNonWhitespaceByte(typeText, start)
+		next := nextNonWhitespaceByte(typeText, i)
+		if previous == '.' || next == '.' {
+			continue
+		}
+		if next == ':' {
+			continue
+		}
+		if next == '?' && nextNonWhitespaceByte(typeText, i+1) == ':' {
+			continue
+		}
+		used[identifier] = true
+	}
 }
 
 func shouldImportIdentifier(identifier string) bool {
