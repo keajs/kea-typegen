@@ -502,6 +502,165 @@
       - the remaining `Diagram` family
       - `sceneStateLogicType.ts` / `scenesLogicType.ts`
       - the `Templates` helper-surface files
+- A later March 26, 2026 explicitly-typed unnamed-helper follow-up was kept as a safe-but-neutral hardening step:
+  - what changed in `rewrite/internal/keainspect/model.go`:
+    - parity-mode internal selector helper recovery now has a narrow escape hatch for explicitly typed unnamed dependency callbacks
+    - that means selectors shaped like:
+      - `() => [(_, props: TemplateRowLogicProps) => props.template?.scenes]`
+      - can keep their recovered helper candidate instead of being rejected solely because the current helper surface was still `(…: any) => any`
+    - the new placeholder-name logic was also tightened so empty dependency arrays like `() => []` still count as zero dependencies instead of inventing bogus `arg: any[]` helper slots
+    - added focused regression coverage:
+      - `TestSourceInternalSelectorFunctionTypeWithFallbackReturnParityKeepsExplicitlyTypedUnnamedDependencyConcrete`
+      - `TestParityModeExplicitlyTypedUnnamedDependencyHelperPrefersRecoveredType`
+      - kept the existing guard:
+        - `TestBuildParsedLogicsParityModeKeepsExpandedSceneHelperSurfaceLoose`
+      - and re-ran the non-parity sample guard that caught the first over-broad placeholder attempt:
+        - `TestBuildParsedLogicsAutoImportRichTypes`
+  - verification on this host:
+    - focused regression tests pass:
+      - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestSourceInternalSelectorFunctionTypeWithFallbackReturnParityKeepsExplicitlyTypedUnnamedDependencyConcrete|TestParityModeExplicitlyTypedUnnamedDependencyHelperPrefersRecoveredType|TestBuildParsedLogicsParityModeKeepsExpandedSceneHelperSurfaceLoose|TestBuildParsedLogicsAutoImportRichTypes" -count=1'`
+    - package tests pass:
+      - `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - rebuilt Go binary:
+      - `flox activate -c './bin/prepare-go'`
+    - sample benchmark remains clean:
+      - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - semantic accuracy: `20/20`
+      - semantic diffs: `0`
+      - Go runtime: `3845.1 ms`
+      - TypeScript runtime: `10127.2 ms`
+    - fresh FrameOS compare command:
+      - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - FrameOS semantic matches: `29/38`
+      - FrameOS semantic accuracy: `76.32%`
+      - FrameOS semantic diffs: `9`
+      - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-TsHP2C`
+      - latest preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-TsHP2C/frameos-baseline.json`
+  - current reading:
+    - this hardens the parity-only helper preference path and keeps the package/sample baseline green, but it did not move the measured FrameOS score
+    - that means the remaining `Templates` / `SceneState` / `EditApp` mismatches are not blocked only by the late `(…: any) => any` helper-preference check
+    - the next real target should stay in the remaining public/helper shaping lane visible in the preserved compare worktree:
+      - `templateRowLogicType.ts`
+      - `templatesLogicType.ts`
+      - `sceneStateLogicType.ts`
+      - `editAppLogicType.ts`
+      - plus the unchanged `Chat` / `Diagram` / `Scenes` family
+
+- A later March 26, 2026 nullable-lookup / boolean-return / `SceneState` helper follow-up moved the FrameOS corpus by one more file:
+  - what changed in `rewrite/internal/keainspect/model.go`:
+    - parity mode now keeps nullable lookup selectors concrete when the lookup container side is concrete and only the lookup key slot stayed opaque
+    - that landed real output in the remaining `Diagram` family before the file-level score moved:
+      - `diagramLogicType.ts` now keeps `scene: FrameScene | null`
+      - `newNodePickerLogicType.ts` now keeps `scene: FrameScene | null`
+      - `editAppLogicType.ts` now keeps `scene: FrameScene | null`
+    - recovered boolean selector/helper returns now beat misreported object or literal surfaces when the selector body is clearly boolean-shaped
+    - that fixed the remaining boolean leaks in the preserved real-world outputs:
+      - `diagramLogicType.ts` now emits `canUndo: boolean` and `canRedo: boolean`
+      - `editAppLogicType.ts` now emits `hasChanges: boolean`
+    - parity mode also now omits the narrow `Object.fromEntries(...) => Record<string, boolean>` internal helper shape that JS source mode still drops when it is driven by a `DeepPartialMap<...>` dependency
+    - that removes the extra `fieldsWithErrors` helper from `sceneStateLogicType.ts`
+  - focused regression coverage added in `rewrite/internal/keainspect/model_test.go`:
+    - `TestSelectorRecoveredBooleanShouldBeatCurrent`
+    - `TestHelperBooleanRecoveryShouldPreferRecovered`
+    - `TestBuildParsedLogicsWithStateSkipsUnprintableSelectorInputTupleHelpers`
+    - kept the earlier nullable-lookup coverage:
+      - `TestSelectorOpaqueNullableLookupRecoveryShouldStayConcrete`
+      - `TestBuildParsedLogicsParityRecoversNullableLookupSelectorWithOpaqueKey`
+  - verification on this host:
+    - focused regression tests pass:
+      - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsWithStateSkipsUnprintableSelectorInputTupleHelpers|TestSelectorRecoveredBooleanShouldBeatCurrent|TestHelperBooleanRecoveryShouldPreferRecovered|TestSelectorOpaqueNullableLookupRecoveryShouldStayConcrete|TestBuildParsedLogicsParityRecoversNullableLookupSelectorWithOpaqueKey|TestInternalHelperOpaqueComplexFallbackReturnShouldStayAny|TestParseInternalSelectorTypesWithStateKeepsRecoveredConnectedHelperParameterTypes" -count=1'`
+    - package tests pass:
+      - `flox activate -c 'cd rewrite && go test ./internal/keainspect'`
+    - rebuilt Go binary:
+      - `flox activate -c './bin/prepare-go'`
+    - sample benchmark remains clean:
+      - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - semantic accuracy: `20/20`
+      - semantic diffs: `0`
+      - Go runtime: `3461.7 ms`
+      - TypeScript runtime: `8755.6 ms`
+    - fresh FrameOS compare command:
+      - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - FrameOS semantic matches: `30/38`
+      - FrameOS semantic accuracy: `78.95%`
+      - FrameOS semantic diffs: `8`
+      - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-ej3qce`
+      - latest preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-ej3qce/frameos-baseline.json`
+  - files removed from the diff set:
+    - `src/scenes/frame/panels/SceneState/sceneStateLogicType.ts`
+  - current reading:
+    - this is a real corpus win, not only another safe hardening pass:
+      - `SceneState` is now out of the semantic diff set
+      - the nullable-lookup and boolean-return fixes also landed concrete surface improvements inside still-diffing `Diagram` / `EditApp` files
+    - the remaining `8` FrameOS semantic diffs are now:
+      - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/diagramLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/newNodePickerLogicType.ts`
+      - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+      - `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templateRowLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templatesLogicType.ts`
+    - the next target should stay in that remaining public/helper shaping lane:
+      - `appNodeLogicType.ts` still leaks too much `any`
+      - `diagramLogicType.ts` and `editAppLogicType.ts` still have non-boolean helper/public-surface mismatches even after the boolean fixes
+      - `newNodePickerLogicType.ts`, `scenesLogicType.ts`, and the `Templates` pair are still the next concrete parity buckets after that
+      - `chatLogicType.ts` remains the other unchanged outlier
+
+- A later March 26, 2026 literal-boolean/public-selector plus ReactFlow-import parity follow-up removed `EditApp` from the FrameOS diff set:
+  - what changed in `rewrite/internal/keainspect/model.go`:
+    - public selector refinement from internal helpers now has a narrow literal-boolean escape hatch:
+      - when the current public selector surface is only `false` or `true`
+      - and the recovered helper return is `boolean`
+      - the helper return now wins, similar to the earlier literal-nullish refinement
+    - parity-mode import collection now intentionally omits `reactflow` / `@reactflow/core/...` type imports to match the current JS generator’s emitted surface
+    - that suppression stays narrow:
+      - it is parity-only
+      - and it does not suppress unrelated package imports like `kea-forms`
+  - focused regression coverage added in `rewrite/internal/keainspect/model_test.go`:
+    - `TestSelectorLiteralBooleanShouldYieldToInternalHelper`
+    - `TestRefineSelectorTypesFromInternalHelpersPrefersBooleanOverLiteralFallback`
+    - `TestCollectTypeImportsForTypeTextsParityOmitsReactFlowImports`
+  - verification on this host:
+    - focused regression tests pass:
+      - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestCollectTypeImportsForTypeTextsParityOmitsReactFlowImports|TestSelectorLiteralBooleanShouldYieldToInternalHelper|TestRefineSelectorTypesFromInternalHelpersPrefersBooleanOverLiteralFallback|TestSelectorRecoveredBooleanShouldBeatCurrent|TestHelperBooleanRecoveryShouldPreferRecovered" -count=1'`
+    - package tests pass:
+      - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+    - rebuilt Go binary:
+      - `flox activate -c './bin/prepare-go'`
+    - sample benchmark remains clean:
+      - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+      - semantic accuracy: `20/20`
+      - semantic diffs: `0`
+      - Go runtime: `3668.8 ms`
+      - TypeScript runtime: `9013.2 ms`
+    - fresh FrameOS compare command:
+      - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+      - FrameOS semantic matches: `31/38`
+      - FrameOS semantic accuracy: `81.58%`
+      - FrameOS semantic diffs: `7`
+      - latest preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-oNynRM`
+      - latest preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-oNynRM/frameos-baseline.json`
+  - files removed from the diff set:
+    - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+  - current reading:
+    - this is another real corpus win:
+      - `editApp.hasChanges` now matches the JS public/helper boolean surface
+      - and the remaining explicit ReactFlow import blocker is gone from `editAppLogicType.ts`
+    - parity-mode Go outputs in the preserved worktree now emit no `reactflow` / `@reactflow/core` imports for the remaining Diagram/EditApp files, so that import-family noise is no longer the main blocker there
+    - the remaining `7` FrameOS semantic diffs are now:
+      - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/diagramLogicType.ts`
+      - `src/scenes/frame/panels/Diagram/newNodePickerLogicType.ts`
+      - `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templateRowLogicType.ts`
+      - `src/scenes/frame/panels/Templates/templatesLogicType.ts`
+    - the next target should stay on the actual remaining type-surface gaps:
+      - `appNodeLogicType.ts` still leaks `currentScene`, `nodeId`, `codeArgs`, and `nodeOutputFields` as `any`
+      - `diagramLogicType.ts` and `newNodePickerLogicType.ts` still differ even after the ReactFlow import parity cleanup, so the remaining gap there is inside the emitted member types rather than import collection
+      - `scenesLogicType.ts` plus the `Templates` pair remain the next non-Diagram parity buckets after that
+      - `chatLogicType.ts` is still the unchanged outlier
 
 ## March 24, 2026 Run
 
@@ -1539,6 +1698,296 @@
   - `flox activate -c './bin/kea-typegen-go probe-api --sample listeners --member updateName --method signatureDetails --json'` now emits `declaredType` for every listener callback parameter too, and the sampled listener parameters currently all show `declaredType: any` even when the resolved `type` is richer.
   - Those same `signatureDetails` results now also carry readable parameter names recovered from the declaration text itself: `filter` on `combinedA6Action`, and `payload`, `breakpoint`, `action`, `previousState` on the listener sample.
   - They now also carry the original signature snippet under `declarationText`, such as source-authored `(filter: A5) => ({ a6: filter.a6, bla: filter.bla })` on the auto-import action sample and the generated listener callback surface from `logicType.ts`.
+
+## March 26, 2026 Follow-Up
+
+### What Changed
+
+- Fixed the sample-benchmark regression introduced while tightening selector/helper recovery for the FrameOS `Templates` lane:
+  - when reducer source recovery infers a pure handler-object surface such as `{ updateName: ... }`, it no longer overrides a checker-reported reducer state of `any`
+  - that specifically restores no-default reducers like `otherNameNoDefault` in `samples/logic.ts` instead of incorrectly retyping them as the handler map itself
+- Added a sample-backed regression assertion in `TestBuildParsedLogicsSynthesizesLoadersAndDefaults` to keep no-default reducers loose.
+
+### Verification
+
+- Focused Go tests command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsSynthesizesLoadersAndDefaults|TestBuildParsedLogicsParityRecoversTemplateRowHelperAndSelectorSurfaces|TestSourceExpressionTypeTextWithBlockScopeRecoversReturnedObjectFromLocalVariables" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - semantic accuracy: `20/20`
+  - exact accuracy: `0/20`
+  - semantic diffs: `0`
+- FrameOS compare command:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+  - semantic matches: `31/38`
+  - semantic accuracy: `81.58%`
+  - semantic diffs: `7`
+  - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-sabLbk`
+  - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-sabLbk/frameos-baseline.json`
+
+### Remaining FrameOS Semantic Diffs
+
+- `src/scenes/frame/panels/Chat/chatLogicType.ts`
+- `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+- `src/scenes/frame/panels/Diagram/diagramLogicType.ts`
+- `src/scenes/frame/panels/Diagram/newNodePickerLogicType.ts`
+- `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+- `src/scenes/frame/panels/Templates/templateRowLogicType.ts`
+- `src/scenes/frame/panels/Templates/templatesLogicType.ts`
+
+### Current Reading
+
+- The sample regression is fixed and the repo-local benchmark is back at the non-negotiable `20/20` semantic baseline.
+- The real-world FrameOS compare did not improve further from the current `31/38`; the remaining work is still concentrated in the `Diagram`, `Scenes`, and `Templates` families.
+- The compare-harness behavior is now the main unresolved gap:
+  - the compare script creates fresh git worktrees
+  - links the target repo's `node_modules`
+  - deletes all existing `*Type.ts` files before running typegen
+  - runs the Go CLI from the `kea-typegen` repo root with `KEA_TYPEGEN_CWD` pointed at the target frontend
+- Several narrower reproductions stayed stronger than the compare-harness result:
+  - single-file parity writes for `templateRowLogic.ts` on copied FrameOS frontend fixtures kept the strong `FrameScene` / `StateField` selector surfaces
+  - a full parity write on a copied `frontend/` tree also kept `templateRowLogicType.ts` strong, even after deleting all local `*Type.ts`
+  - a full parity write on the preserved clean `frameos-js` worktree also kept `templateRowLogicType.ts` strong
+- But the compare-produced `frameos-go` worktree from `.cache/kea-typegen/tmp/frameos-corpus-sabLbk` still ended with `templateRowLogicType.ts` public/helper selector surfaces collapsed back to `any`.
+- So the next pass should stop guessing from the diff itself and instead isolate the exact compare-harness context difference:
+  - either add a test that mirrors the compare harness more faithfully
+  - or instrument the write-round / inspect-round boundary to see which report/input difference only appears in that worktree path
+  - until that is understood, further Template-lane tweaks risk turning back into compare-driven whack-a-mole.
+
+## March 27 UTC Follow-Up
+
+### What Changed
+
+- Fixed builder `forms` merge precedence for loose existing reducer surfaces:
+  - added `TestBuildParsedLogicsBuilderFormsReplaceLooseReducerTypeWithFormType`
+  - builder-forms reducer/selector merges now replace an existing `any` / `unknown` field with the later concrete forms surface instead of blindly preserving the loose earlier field
+  - this fixes handler-only reducer objects like `templateForm` in FrameOS `templatesLogic.tsx`, where reducers are parsed before `forms` and previously blocked the concrete `TemplateForm` reducer type from the forms plugin
+- Aligned literal-`true` `Object.fromEntries(...)` recovery with the JS typegen surface:
+  - `sourceBuiltInCallExpressionTypeTextWithContext(...)` now emits `{ [k: string]: true; }` for literal-`true` maps instead of `Record<string, true>`
+  - tightened `TestSourceExpressionTypeTextWithContextRecoversObjectFromEntriesLiteralTrueMap`
+  - tightened `TestBuildParsedLogicsParityKeepsInstalledTemplatesByNameLiteralTrueMap` to require both:
+    - selector type `{ [k: string]: true; }`
+    - helper type `(frameForm: Partial<FrameType>) => { [k: string]: true; }`
+- Tried to close the last `templateRowLogicType.ts` mismatch by making internal-helper canonicalization respect placeholder dependency names for unnamed dependencies.
+  - that alone was not enough, because the clean write-round path could still keep a strong current helper and only differ from the recovered helper by parameter name
+  - added a narrower parity-mode preference for recovered helpers when an explicitly typed unnamed dependency only differs by placeholder parameter names
+  - added `TestParityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered`
+
+### Verification
+
+- Focused Go tests command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestSourceExpressionTypeTextWithContextRecoversObjectFromEntriesLiteralTrueMap|TestBuildParsedLogicsParityKeepsInstalledTemplatesByNameLiteralTrueMap|TestBuildParsedLogicsBuilderFormsReplaceLooseReducerTypeWithFormType|TestBuildParsedLogicsPreservesExplicitReducerTypesOverBuilderFormsDefaults|TestBuildParsedLogicsParityRecoversImportedTemplateRowScenesSelector" -count=1'`
+  - result: pass
+- Focused selector-helper regression command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsInternalSelectorHelpersMatchTupleShapedSelectorInputs|TestBuildParsedLogicsInternalSelectorHelpersPreferDependencyNamesOverDestructuredProjectorParams|TestBuildParsedLogicsParityRecoversImportedTemplateRowScenesSelector|TestBuildParsedLogicsParityRecoversTemplateRowHelperAndSelectorSurfaces|TestBuildParsedLogicsParityKeepsInstalledTemplatesByNameLiteralTrueMap" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - TypeScript mean: `8552.8 ms`
+  - Go mean: `3703.1 ms`
+  - semantic accuracy: `20/20`
+  - semantic diffs: `0`
+- Clean-slate preserved-worktree compare commands:
+  - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-eFWTm3`
+  - clean generated Go artifacts:
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type f -name '*Type.ts' -delete`
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type d -name '.typegen' -prune -exec rm -rf {} +`
+  - rerun Go parity write into the preserved worktree:
+    - `flox activate -c 'KEA_TYPEGEN_CWD=/home/ubuntu/Projects/kea-typegen/.cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend KEA_TYPEGEN_PARITY_MODE=1 ./rewrite/bin/kea-typegen-go write --config tsconfig.json --root . --write-paths -q'`
+  - recompute semantic summary against the preserved JS worktree:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-js/frontend --go-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend --json`
+  - result:
+    - semantic matches: `33/38`
+    - semantic accuracy: `86.84%`
+    - semantic diffs: `5`
+
+### Remaining Semantic Diffs After The Clean Preserved-Worktree Rerun
+
+- `src/scenes/frame/panels/Chat/chatLogicType.ts`
+- `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+- `src/scenes/frame/panels/Diagram/diagramLogicType.ts`
+- `src/scenes/frame/panels/Diagram/newNodePickerLogicType.ts`
+- `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+
+### Current Reading
+
+- `templatesLogicType.ts` is no longer in the semantic diff set.
+- `templateRowLogicType.ts` is also out of the semantic diff set now.
+- The concrete `templateForm` reducer/selector/value surface is now preserved through the full write round:
+  - `templateForm: TemplateForm`
+  - `templateFormValidationErrors: DeepPartialMap<TemplateForm, ValidationErrorType>`
+- `installedTemplatesByName` is also aligned now:
+  - selector/value surface: `{ [k: string]: true; }`
+  - internal helper surface: `(frameForm: Partial<FrameType>) => { [k: string]: true; }`
+- The new placeholder-name preference closes the last `Templates` lane write-round mismatch without changing the recovered helper types themselves:
+  - JS and Go now both emit `scenes: (arg: FrameScene[] | undefined) => FrameScene[]` for the internal helper surface in `templateRowLogicType.ts`
+- The remaining real-world gaps are back to the non-`Templates` families:
+  - `Chat`
+  - `Diagram`
+  - `Scenes`
+
+### Later March 27 UTC Pass
+
+#### What Changed
+
+- Added a parity-only action-payload merge guard for shorthand members whose reported payload surface is already `any` while the source parameter is a union / nullish type:
+  - new regression: `TestBuildParsedLogicsParityKeepsReportedAnyForUnionShorthandActionPayloadMembers`
+  - this preserves the JS-emitted shorthand looseness for cases like:
+    - `addEdge: (edge: Edge | Connection) => ({ edge })`
+    - `setCursorPosition: (position: XYPosition | null) => ({ position })`
+  - that closes the shared remaining payload mismatch in:
+    - `diagramLogicType.ts`
+    - `newNodePickerLogicType.ts`
+- Added a selector-only `Object.fromEntries(...)` primitive-map override that rewrites recovered `Record<...>` surfaces back to the JS-style index signature when the selector body is a primitive-valued `fromEntries` call:
+  - the override now uses selector dependency hints instead of trying to infer the tuple map element shape blindly
+  - it runs after alias-preservation so the selector-specific index signature wins over a generic recovered `Record<...>` alias
+  - existing FrameOS-style regression now requires `sceneTitles: { [k: string]: string; }`
+  - this closes the `sceneTitles` mismatch in `scenesLogicType.ts`
+
+#### Verification
+
+- Focused regressions command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParityKeepsReportedAnyForUnionShorthandActionPayloadMembers|TestBuildParsedLogicsRecoversBuilderSelectorObjectFromEntriesAndLastSortedLogEntries|TestBuildParsedLogicsFromSourceRecoversFrameOSStyleSelectorTypes" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - TypeScript mean: `8635.1 ms`
+  - Go mean: `4224.3 ms`
+  - semantic accuracy: `20/20`
+  - semantic diffs: `0`
+- Clean-slate preserved-worktree compare commands:
+  - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-eFWTm3`
+  - clean generated Go artifacts:
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type f -name '*Type.ts' -delete`
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type d -name '.typegen' -prune -exec rm -rf {} +`
+  - rerun Go parity write into the preserved worktree:
+    - `flox activate -c 'KEA_TYPEGEN_CWD=/home/ubuntu/Projects/kea-typegen/.cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend KEA_TYPEGEN_PARITY_MODE=1 ./rewrite/bin/kea-typegen-go write --config tsconfig.json --root . --write-paths -q'`
+  - recompute semantic summary against the preserved JS worktree:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-js/frontend --go-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend --json`
+  - result:
+    - semantic matches: `35/38`
+    - semantic accuracy: `92.11%`
+    - semantic diffs: `3`
+
+#### Remaining Semantic Diffs After The Latest Preserved-Worktree Rerun
+
+- `src/scenes/frame/panels/Chat/chatLogicType.ts`
+- `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+- `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+
+#### Current Reading
+
+- `diagramLogicType.ts` is now out of the semantic diff set.
+- `newNodePickerLogicType.ts` is now out of the semantic diff set.
+- `scenesLogicType.ts` improved, but it still has a narrower remaining mismatch set:
+  - `frameId` still stays `any` on the Go side while JS emits `number`
+  - `editingFrame` still keeps an opaque internal helper return on the Go side
+  - the optional-`undefined` spelling inside the AI-scene log object family still differs in some surfaces
+- `chatLogicType.ts` still looks like a selector/helper looseness parity issue:
+  - JS keeps the `chatAppContext.sceneName` property loose (`any`)
+  - Go still tightens that property and several internal helper parameters
+- `appNodeLogicType.ts` is still the biggest remaining selector-looseness bucket:
+  - JS keeps `node`, `nodeId`, `codeArgs`, `nodeOutputFields`, `configJsonError`, and `isCustomApp` looser than the current Go output
+  - the remaining work there still looks like “preserve the JS-reported loose surface” rather than another missing-recovery issue
+
+### Later March 27 UTC Selector-Identity / Fallback Follow-Up
+
+#### What Changed
+
+- Tightened builder-selector parity around identity projectors without reopening the earlier untyped-props guard:
+  - explicitly typed props dependency callbacks can now keep their recovered primitive selector/helper surface in parity mode
+  - explicitly returned primitive projectors like `(nodeId): string => nodeId` no longer get forced back to `any` by the older props-identity looseness rule
+  - kept the existing guard intact for the untyped builder-props case:
+    - `(_, props) => props.frameId` still stays loose
+    - `(_, props: DemoLogicProps) => props.frameId` now recovers to `number`
+- Tightened internal-helper fallback recovery for direct logical identity chains:
+  - helpers like `frameForm || frame || null` can now keep a concrete recovered return when one direct dependency already matches that concrete object type
+  - that is intentionally limited to plain parameter fallbacks only
+  - the first attempt was too broad and briefly pulled `diagramLogicType.ts` back into the diff set by treating property access like `edge?.id ?? null` as a direct identity fallback
+  - the final narrowed rule only accepts plain parameter references, which restores the earlier `diagramLogicType.ts` baseline while keeping the `editingFrame` helper win
+- Added focused regressions in `rewrite/internal/keainspect/model_test.go`:
+  - `TestBuildParsedLogicsParityRecoversExplicitlyTypedBuilderPropsIdentitySelectorType`
+  - `TestBuildParsedLogicsParityUsesExplicitProjectorReturnForUntypedPropsIdentitySelector`
+  - `TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsEditingFrameHelperReturnConcrete`
+  - `TestInternalHelperOpaqueComplexFallbackReturnKeepsDirectConcreteFallbackReturn`
+  - kept and re-ran the earlier guardrails:
+    - `TestBuildParsedLogicsRecoversInterfaceBackedBuilderPropsKeyButKeepsReportedAnySelectorType`
+    - `TestBuildParsedLogicsParityRecoversNullableLookupSelectorWithOpaqueKey`
+
+#### Verification
+
+- Focused regressions command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParityRecoversExplicitlyTypedBuilderPropsIdentitySelectorType|TestBuildParsedLogicsParityUsesExplicitProjectorReturnForUntypedPropsIdentitySelector|TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsEditingFrameHelperReturnConcrete|TestInternalHelperOpaqueComplexFallbackReturnKeepsDirectConcreteFallbackReturn|TestBuildParsedLogicsRecoversInterfaceBackedBuilderPropsKeyButKeepsReportedAnySelectorType|TestBuildParsedLogicsParityRecoversNullableLookupSelectorWithOpaqueKey" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - TypeScript mean: `9320.3 ms`
+  - Go mean: `4168.9 ms`
+  - semantic accuracy: `20/20`
+  - semantic diffs: `0`
+- Clean-slate preserved-worktree compare commands:
+  - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-eFWTm3`
+  - clean generated Go artifacts:
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type f -name '*Type.ts' -delete`
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type d -name '.typegen' -prune -exec rm -rf {} +`
+  - rerun Go parity write into the preserved worktree:
+    - `flox activate -c 'KEA_TYPEGEN_CWD=/home/ubuntu/Projects/kea-typegen/.cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend KEA_TYPEGEN_PARITY_MODE=1 ./rewrite/bin/kea-typegen-go write --config tsconfig.json --root . --write-paths -q'`
+  - recompute semantic summary against the preserved JS worktree:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-js/frontend --go-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend --json`
+  - result:
+    - semantic matches: `35/38`
+    - semantic accuracy: `92.11%`
+    - semantic diffs: `3`
+
+#### Remaining Semantic Diffs After The Selector-Identity / Fallback Follow-Up
+
+- `src/scenes/frame/panels/Chat/chatLogicType.ts`
+- `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+- `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+
+#### Current Reading
+
+- This was a neutral corpus pass, not a new score win:
+  - the preserved FrameOS compare stayed at `35/38`
+  - the temporary `34/38` regression from the first broad fallback attempt was removed before stopping
+- `scenesLogicType.ts` is materially narrower now even though it is still in the diff set:
+  - `frameId` now matches JS as `number`
+  - the `editingFrame` internal helper now matches JS as `(frameForm: Partial<FrameType>, frame: any) => Partial<FrameType>`
+  - the remaining mismatch appears to be concentrated in the AI-scene log object family, especially optional-`undefined` spelling inside nested payload/helper return surfaces
+- `appNodeLogicType.ts` is also narrower now:
+  - `nodeId` now matches JS as a public/value `string`
+  - the remaining mismatch is still the same “keep the JS loose surface” bucket on:
+    - `node`
+    - `codeArgs`
+    - `nodeOutputFields`
+    - `configJsonError`
+    - `isCustomApp`
+- `chatLogicType.ts` remains unchanged by this pass.
 
 ## Guardrails
 
