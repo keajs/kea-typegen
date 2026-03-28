@@ -2,6 +2,8 @@ package keainspect
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -12,12 +14,22 @@ import (
 )
 
 type MemberReport struct {
-	Name                  string `json:"name"`
-	TypeString            string `json:"typeString,omitempty"`
-	PrintedTypeNode       string `json:"printedTypeNode,omitempty"`
-	ReturnTypeString      string `json:"returnTypeString,omitempty"`
-	PrintedReturnTypeNode string `json:"printedReturnTypeNode,omitempty"`
-	SignatureCount        int    `json:"signatureCount,omitempty"`
+	Name                                 string `json:"name"`
+	TypeString                           string `json:"typeString,omitempty"`
+	PrintedTypeNode                      string `json:"printedTypeNode,omitempty"`
+	ReturnTypeString                     string `json:"returnTypeString,omitempty"`
+	PrintedReturnTypeNode                string `json:"printedReturnTypeNode,omitempty"`
+	SelectorInputReturnTypeString        string `json:"selectorInputReturnTypeString,omitempty"`
+	SelectorInputPrintedReturnTypeNode   string `json:"selectorInputPrintedReturnTypeNode,omitempty"`
+	ProjectorDirectTypeString            string `json:"projectorDirectTypeString,omitempty"`
+	ProjectorDirectPrintedTypeNode       string `json:"projectorDirectPrintedTypeNode,omitempty"`
+	ProjectorDirectReturnTypeString      string `json:"projectorDirectReturnTypeString,omitempty"`
+	ProjectorDirectPrintedReturnTypeNode string `json:"projectorDirectPrintedReturnTypeNode,omitempty"`
+	ProjectorTypeString                  string `json:"projectorTypeString,omitempty"`
+	ProjectorPrintedTypeNode             string `json:"projectorPrintedTypeNode,omitempty"`
+	ProjectorReturnTypeString            string `json:"projectorReturnTypeString,omitempty"`
+	ProjectorPrintedReturnTypeNode       string `json:"projectorPrintedReturnTypeNode,omitempty"`
+	SignatureCount                       int    `json:"signatureCount,omitempty"`
 }
 
 type SectionReport struct {
@@ -277,7 +289,7 @@ func inspectSection(
 	}
 
 	if property.Name == "selectors" {
-		report.Members = enrichSelectorReturnTypes(ctx, client, timeout, snapshot, projectID, file, source, offsets, property, report.Members)
+		report.Members = enrichSelectorCallbackTypes(ctx, client, timeout, snapshot, projectID, file, source, offsets, property, report.Members)
 	}
 
 	sort.Slice(report.Members, func(i, j int) bool {
@@ -380,7 +392,7 @@ func shouldEnumerateMembers(effectiveType string, hasBuilderFallback bool) bool 
 	return strings.HasPrefix(strings.TrimSpace(effectiveType), "{")
 }
 
-func enrichSelectorReturnTypes(
+func enrichSelectorCallbackTypes(
 	ctx context.Context,
 	client *tsgoapi.Client,
 	timeout time.Duration,
@@ -402,6 +414,8 @@ func enrichSelectorReturnTypes(
 		return members
 	}
 
+	nodes, hasNodes := inspectSourceFileNodes(ctx, client, timeout, snapshot, projectID, file, offsets)
+
 	indexByName := map[string]int{}
 	for index, member := range members {
 		indexByName[member.Name] = index
@@ -412,8 +426,27 @@ func enrichSelectorReturnTypes(
 		if !ok {
 			continue
 		}
-		if !selectorReturnTypeNeedsRecovery(members[index]) {
-			continue
+
+		if hasNodes {
+			if elementStart, elementEnd, ok, err := findFirstFunctionLikeTopLevelArrayElement(source, nested.ValueStart, nested.ValueEnd); err == nil && ok {
+				location := sourceNodeLocationHandleForRange(
+					nodes,
+					offsets.utf16Offset(elementStart),
+					offsets.utf16Offset(elementEnd),
+					file,
+				)
+				if location != "" {
+					inputType, err := client.GetTypeAtLocation(
+						tsgoapi.WithTimeout(ctx, timeout),
+						snapshot,
+						projectID,
+						location,
+					)
+					if err == nil && inputType != nil {
+						members[index] = populateSelectorInputTypeReport(ctx, client, timeout, snapshot, projectID, members[index], inputType.ID)
+					}
+				}
+			}
 		}
 
 		elementStart, elementEnd, ok, err := FindLastFunctionLikeTopLevelArrayElement(source, nested.ValueStart, nested.ValueEnd)
@@ -421,17 +454,199 @@ func enrichSelectorReturnTypes(
 			continue
 		}
 
+		if hasNodes {
+			location := sourceNodeLocationHandleForRange(
+				nodes,
+				offsets.utf16Offset(elementStart),
+				offsets.utf16Offset(elementEnd),
+				file,
+			)
+			if location != "" {
+				projectorType, err := client.GetTypeAtLocation(
+					tsgoapi.WithTimeout(ctx, timeout),
+					snapshot,
+					projectID,
+					location,
+				)
+				if err == nil && projectorType != nil {
+					members[index] = populateProjectorDirectTypeReport(ctx, client, timeout, snapshot, projectID, members[index], projectorType.ID)
+				}
+
+				contextualType, err := client.GetContextualType(
+					tsgoapi.WithTimeout(ctx, timeout),
+					snapshot,
+					projectID,
+					location,
+				)
+				if err == nil && contextualType != nil {
+					members[index] = populateProjectorContextualTypeReport(ctx, client, timeout, snapshot, projectID, members[index], contextualType.ID)
+				}
+			}
+		}
+
+		if !selectorReturnTypeNeedsRecovery(members[index]) {
+			continue
+		}
+		if directReturn := strings.TrimSpace(members[index].ProjectorDirectReturnTypeString); directReturn != "" {
+			members[index].ReturnTypeString = directReturn
+			if printed := strings.TrimSpace(members[index].ProjectorDirectPrintedReturnTypeNode); printed != "" {
+				members[index].PrintedReturnTypeNode = printed
+			}
+			continue
+		}
 		if typeText := selectorReturnTypeFromSourceProbe(ctx, client, timeout, snapshot, projectID, file, source, offsets, elementStart, elementEnd); typeText != "" {
 			members[index].ReturnTypeString = typeText
 			continue
 		}
-
 		if typeText := selectorReturnTypeFromSignature(ctx, client, timeout, snapshot, projectID, file, offsets, elementStart); typeText != "" {
 			members[index].ReturnTypeString = typeText
 		}
 	}
 
 	return members
+}
+
+func inspectSourceFileNodes(
+	ctx context.Context,
+	client *tsgoapi.Client,
+	timeout time.Duration,
+	snapshot string,
+	projectID string,
+	file string,
+	offsets sourceOffsetMap,
+) ([]sourceFileNode, bool) {
+	raw, err := client.CallRaw(
+		tsgoapi.WithTimeout(ctx, timeout),
+		"getSourceFile",
+		map[string]any{
+			"snapshot": snapshot,
+			"project":  projectID,
+			"file":     file,
+		},
+	)
+	if err != nil || len(raw) == 0 || string(raw) == "null" {
+		return nil, false
+	}
+
+	var payload struct {
+		Data string `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil || payload.Data == "" {
+		return nil, false
+	}
+
+	blob, err := decodeBase64String(payload.Data)
+	if err != nil {
+		return nil, false
+	}
+	nodes, err := parseSourceFileNodes(blob, offsets.utf16Length())
+	if err != nil {
+		return nil, false
+	}
+	return nodes, len(nodes) > 0
+}
+
+func typeSurfaceReport(
+	ctx context.Context,
+	client *tsgoapi.Client,
+	timeout time.Duration,
+	snapshot string,
+	projectID string,
+	typeID string,
+) (string, string, string, string) {
+	typeString := safeTypeString(ctx, client, timeout, snapshot, projectID, typeID)
+	printedType := ""
+	if printed, err := client.PrintTypeNode(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, typeID); err == nil {
+		printedType = printed
+	}
+
+	signatures, err := client.GetSignaturesOfType(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, typeID)
+	if err != nil || len(signatures) == 0 || signatures[0] == nil {
+		return typeString, printedType, "", ""
+	}
+
+	returnType, err := client.GetReturnTypeOfSignature(
+		tsgoapi.WithTimeout(ctx, timeout),
+		snapshot,
+		projectID,
+		signatures[0].ID,
+	)
+	if err != nil || returnType == nil {
+		return typeString, printedType, "", ""
+	}
+
+	returnTypeString := safeTypeString(ctx, client, timeout, snapshot, projectID, returnType.ID)
+	printedReturnType := ""
+	if printed, err := client.PrintTypeNode(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, returnType.ID); err == nil {
+		printedReturnType = printed
+	}
+	return typeString, printedType, returnTypeString, printedReturnType
+}
+
+func populateSelectorInputTypeReport(
+	ctx context.Context,
+	client *tsgoapi.Client,
+	timeout time.Duration,
+	snapshot string,
+	projectID string,
+	member MemberReport,
+	typeID string,
+) MemberReport {
+	_, _, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID)
+	member.SelectorInputReturnTypeString = returnTypeString
+	member.SelectorInputPrintedReturnTypeNode = printedReturnType
+	return member
+}
+
+func populateProjectorDirectTypeReport(
+	ctx context.Context,
+	client *tsgoapi.Client,
+	timeout time.Duration,
+	snapshot string,
+	projectID string,
+	member MemberReport,
+	typeID string,
+) MemberReport {
+	typeString, printedType, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID)
+	member.ProjectorDirectTypeString = typeString
+	member.ProjectorDirectPrintedTypeNode = printedType
+	member.ProjectorDirectReturnTypeString = returnTypeString
+	member.ProjectorDirectPrintedReturnTypeNode = printedReturnType
+	return member
+}
+
+func populateProjectorContextualTypeReport(
+	ctx context.Context,
+	client *tsgoapi.Client,
+	timeout time.Duration,
+	snapshot string,
+	projectID string,
+	member MemberReport,
+	typeID string,
+) MemberReport {
+	typeString, printedType, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID)
+	member.ProjectorTypeString = typeString
+	member.ProjectorPrintedTypeNode = printedType
+	member.ProjectorReturnTypeString = returnTypeString
+	member.ProjectorPrintedReturnTypeNode = printedReturnType
+	return member
+}
+
+func findFirstFunctionLikeTopLevelArrayElement(source string, valueStart, valueEnd int) (int, int, bool, error) {
+	elements, err := FindTopLevelArrayElements(source, valueStart, valueEnd)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	for _, element := range elements {
+		if element.End <= element.Start {
+			continue
+		}
+		if !isFunctionLikeTopLevelArrayElement(strings.TrimSpace(source[element.Start:element.End])) {
+			continue
+		}
+		return element.Start, element.End, true, nil
+	}
+	return 0, 0, false, nil
 }
 
 func selectorReturnTypeFromSourceProbe(
@@ -471,6 +686,10 @@ func selectorReturnTypeFromSourceProbe(
 		}
 	}
 	return fallback
+}
+
+func decodeBase64String(value string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(value)
 }
 
 func selectorReturnTypeFromSignature(

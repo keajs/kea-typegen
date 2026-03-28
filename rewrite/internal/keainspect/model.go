@@ -1333,7 +1333,7 @@ func parseActionPayloadObjectMembers(typeText string) (map[string]actionPayloadO
 		}
 		properties[name] = actionPayloadObjectMember{
 			Optional: optional,
-			Type:     strings.TrimSpace(value),
+			Type:     normalizeSelectorOptionalUndefinedTypeText(strings.TrimSpace(value)),
 		}
 	}
 	return properties, true
@@ -1762,12 +1762,7 @@ func shouldEmitBuilderFormsPluginSurface(formType string) bool {
 }
 
 func preferredMemberTypeText(member MemberReport) string {
-	printed := strings.TrimSpace(member.PrintedTypeNode)
-	raw := strings.TrimSpace(member.TypeString)
-	if printed != "" && (!strings.Contains(printed, "...") || strings.Contains(raw, "...")) {
-		return printed
-	}
-	return raw
+	return preferredPrintedOrRawTypeText(member.PrintedTypeNode, member.TypeString)
 }
 
 func preferredMemberFunctionTypeText(member MemberReport) string {
@@ -1775,23 +1770,50 @@ func preferredMemberFunctionTypeText(member MemberReport) string {
 }
 
 func preferredMemberReturnTypeText(member MemberReport) string {
-	printed := strings.TrimSpace(member.PrintedReturnTypeNode)
-	raw := strings.TrimSpace(member.ReturnTypeString)
+	text := preferredPrintedOrRawTypeText(member.PrintedReturnTypeNode, member.ReturnTypeString)
+	if text == "" {
+		return ""
+	}
+	return normalizeSourceTypeTextWithOptions(text, false)
+}
+
+func preferredSelectorInputTupleTypeText(member MemberReport) string {
+	return preferredPrintedOrRawTypeText(member.SelectorInputPrintedReturnTypeNode, member.SelectorInputReturnTypeString)
+}
+
+func preferredSelectorProjectorTypeText(member MemberReport) string {
+	return preferredPrintedOrRawTypeText(member.ProjectorPrintedTypeNode, member.ProjectorTypeString)
+}
+
+func preferredSelectorProjectorReturnTypeText(member MemberReport) string {
+	text := preferredPrintedOrRawTypeText(member.ProjectorPrintedReturnTypeNode, member.ProjectorReturnTypeString)
+	if text == "" {
+		return ""
+	}
+	return normalizeSourceTypeTextWithOptions(text, false)
+}
+
+func preferredPrintedOrRawTypeText(printed, raw string) string {
+	printed = strings.TrimSpace(printed)
+	raw = strings.TrimSpace(raw)
 	if printed != "" && (!strings.Contains(printed, "...") || strings.Contains(raw, "...")) {
-		return normalizeSourceTypeTextWithOptions(printed, false)
+		return printed
 	}
 	return raw
 }
 
 func selectorReportedMemberReturnTypeText(member MemberReport) string {
+	if projectorReturn := strings.TrimSpace(preferredSelectorProjectorReturnTypeText(member)); projectorReturn != "" {
+		return projectorReturn
+	}
 	for _, text := range []string{
 		strings.TrimSpace(member.TypeString),
 		strings.TrimSpace(member.PrintedTypeNode),
 	} {
 		if selectorMemberTypeTextSupportsInternalHelper(text) {
-			// InspectFile currently records selector member return types from the first
-			// callable signature on the tuple, which is often the dependency collector
-			// rather than the projector callback.
+			// Tuple-shaped selector members can report the dependency collector signature
+			// instead of the computed callback return when the direct projector surface
+			// is not available.
 			return ""
 		}
 	}
@@ -4210,6 +4232,9 @@ func parseSelectorsWithSource(
 		}
 		reportedSelectorType := resolveReportedSelectorType(preferredMemberReturnType, parsedMemberReturnType)
 		keepParityReportedSelectorType := hasMember && parityModeKeepsLooseReportedSelectorType(logic, source, file, seenNames, selectorExpression, reportedSelectorType, member.TypeString, state)
+		if !keepParityReportedSelectorType && hasMember && parityModeKeepsLooseContextualProjectorReportedSelectorType(selectorExpression, reportedSelectorType, member) {
+			keepParityReportedSelectorType = true
+		}
 		keepParityTupleProjectorSurfaceLoose := hasMember && parityModeTupleProjectorSelectorSurfaceShouldStayLoose(contextLogic, source, file, selectorExpression, member, parsedMemberReturnType, state)
 		if keepParityTupleProjectorSurfaceLoose {
 			keepParityReportedSelectorType = true
@@ -4388,6 +4413,10 @@ func parseSelectorsWithSource(
 				selectorType = existing.Type
 			}
 		}
+		if parityModeReportedStructuredTypeShouldStayLoose(reportedSelectorType, selectorType) ||
+			parityModeReportedStructuredTypeShouldBeatOpaqueCandidate(reportedSelectorType, selectorType) {
+			selectorType = reportedSelectorType
+		}
 		selectorType = wrapSelectorFunctionType(normalizeSelectorFunctionTypeOptionalUndefined(selectorType))
 		field := ParsedField{Name: name, Type: selectorType}
 		selectors = append(selectors, field)
@@ -4470,10 +4499,14 @@ func parseInternalSelectorTypesWithSource(
 		if hasMember {
 			functionType = selectorFunctionTypeFromMember(member)
 		}
+		reportedFunctionType := functionType
 		keepParityReportedSelectorType := false
 		if hasMember {
 			if field, ok := findParsedField(logic.Selectors, name); ok {
 				keepParityReportedSelectorType = parityModeKeepsLooseReportedSelectorType(logic, source, file, seenNames, selectorExpression, field.Type, member.TypeString, state)
+				if !keepParityReportedSelectorType && parityModeKeepsLooseContextualProjectorReportedSelectorType(selectorExpression, field.Type, member) {
+					keepParityReportedSelectorType = true
+				}
 				if !keepParityReportedSelectorType &&
 					parityModeEnabled() &&
 					selectorMemberHasLooseReportedReturn(member.TypeString) &&
@@ -4542,6 +4575,9 @@ func parseInternalSelectorTypesWithSource(
 			}
 		}
 		functionType = canonicalizeInternalHelperFunctionTypeWithSelectorDependencies(contextLogic, source, file, selectorExpression, functionType, state)
+		if parityModeReportedStructuredHelperFunctionTypeShouldStayReported(reportedFunctionType, functionType) {
+			functionType = reportedFunctionType
+		}
 		parameters, _, ok := splitFunctionType(functionType)
 		if !ok {
 			continue
@@ -4631,7 +4667,7 @@ func canonicalizeInternalHelperFunctionTypeWithSelectorDependencies(logic Parsed
 		}
 		rebuilt = append(rebuilt, fmt.Sprintf("%s: %s", dependencyNames[index], paramType))
 	}
-	return "(" + strings.Join(rebuilt, ", ") + ") => " + normalizeInferredTypeText(strings.TrimSpace(returnType))
+	return "(" + strings.Join(rebuilt, ", ") + ") => " + normalizeSelectorOptionalUndefinedTypeText(strings.TrimSpace(returnType))
 }
 
 func selectorInternalHelperShouldStayAny(logic ParsedLogic, source, file, expression, selectorType, functionType string, state *buildState) bool {
@@ -5487,7 +5523,298 @@ func normalizePublicRecoveredSelectorType(logic ParsedLogic, source, file, expre
 	if isAnyLikeType(reportedType) && selectorPrimitivePropsReturnShouldStayAny(logic, source, file, expression, normalized, state) {
 		return "any"
 	}
+	if parityModeReportedStructuredTypeShouldStayLoose(reportedType, normalized) ||
+		parityModeReportedStructuredTypeShouldBeatOpaqueCandidate(reportedType, normalized) {
+		return reportedType
+	}
 	return normalized
+}
+
+func parityModeReportedStructuredHelperFunctionTypeShouldStayReported(current, candidate string) bool {
+	if !parityModeEnabled() {
+		return false
+	}
+	currentParameters, currentReturn, ok := splitFunctionType(current)
+	if !ok {
+		return false
+	}
+	candidateParameters, candidateReturn, ok := splitFunctionType(candidate)
+	if !ok {
+		return false
+	}
+	returnShouldStayReported := parityModeReportedStructuredTypeShouldStayLoose(currentReturn, candidateReturn) ||
+		parityModeReportedStructuredTypeShouldBeatOpaqueCandidate(currentReturn, candidateReturn)
+	if !returnShouldStayReported {
+		return false
+	}
+	sawOpaquePreservation := structuredTypeUsesOpaqueLoosePreservation(currentReturn, candidateReturn) ||
+		parityModeReportedStructuredTypeShouldBeatOpaqueCandidate(currentReturn, candidateReturn)
+	currentParams, ok := parseFunctionParameters(currentParameters)
+	if !ok {
+		return false
+	}
+	candidateParams, ok := parseFunctionParameters(candidateParameters)
+	if !ok || len(currentParams) != len(candidateParams) {
+		return false
+	}
+	for index := range currentParams {
+		currentType := normalizeInferredTypeText(strings.TrimSpace(currentParams[index].Type))
+		candidateType := normalizeInferredTypeText(strings.TrimSpace(candidateParams[index].Type))
+		if currentType == candidateType {
+			continue
+		}
+		if isAnyLikeType(currentType) || isLooselyTypedType(currentType) ||
+			isAnyLikeType(candidateType) || isLooselyTypedType(candidateType) {
+			sawOpaquePreservation = true
+			continue
+		}
+		if structuredTypeCandidateAddsOnlyNullish(currentType, candidateType) ||
+			structuredTypeCandidateAddsOnlyNullish(candidateType, currentType) {
+			continue
+		}
+		return false
+	}
+	return sawOpaquePreservation
+}
+
+func parityModeReportedStructuredTypeShouldStayLoose(reported, candidate string) bool {
+	if !parityModeEnabled() {
+		return false
+	}
+	reportedMembers, reportedNullish, ok := structuredTypeMembersAndNullish(reported)
+	if !ok {
+		return false
+	}
+	candidateMembers, candidateNullish, ok := structuredTypeMembersAndNullish(candidate)
+	if !ok {
+		return false
+	}
+	if len(reportedMembers) != len(candidateMembers) {
+		return false
+	}
+	if !sameStringSet(reportedNullish, candidateNullish) {
+		return false
+	}
+	sawLoosePreservation := false
+	sawSpecificSurface := false
+	for name, reportedType := range reportedMembers {
+		candidateType, ok := candidateMembers[name]
+		if !ok {
+			return false
+		}
+		reportedType = normalizeInferredTypeText(strings.TrimSpace(reportedType))
+		candidateType = normalizeInferredTypeText(strings.TrimSpace(candidateType))
+		if !isAnyLikeType(reportedType) && !isLooselyTypedType(reportedType) {
+			sawSpecificSurface = true
+		}
+		if reportedType == candidateType {
+			continue
+		}
+		if isAnyLikeType(reportedType) || isLooselyTypedType(reportedType) {
+			sawLoosePreservation = true
+			continue
+		}
+		if structuredTypeCandidateAddsOnlyNullish(reportedType, candidateType) {
+			sawLoosePreservation = true
+			continue
+		}
+		return false
+	}
+	return sawLoosePreservation && sawSpecificSurface
+}
+
+func parityModeReportedStructuredTypeShouldBeatOpaqueCandidate(reported, candidate string) bool {
+	if !parityModeEnabled() {
+		return false
+	}
+	reportedMembers, reportedNullish, ok := structuredTypeMembersAndNullish(reported)
+	if !ok {
+		return false
+	}
+	candidateMembers, candidateNullish, ok := structuredTypeMembersAndNullish(candidate)
+	if !ok {
+		return false
+	}
+	if len(reportedMembers) != len(candidateMembers) {
+		return false
+	}
+	if !sameStringSet(reportedNullish, candidateNullish) {
+		return false
+	}
+	sawOpaqueLoss := false
+	sawSpecificReported := false
+	for name, reportedType := range reportedMembers {
+		candidateType, ok := candidateMembers[name]
+		if !ok {
+			return false
+		}
+		reportedType = normalizeInferredTypeText(strings.TrimSpace(reportedType))
+		candidateType = normalizeInferredTypeText(strings.TrimSpace(candidateType))
+		if !isAnyLikeType(reportedType) && !isLooselyTypedType(reportedType) {
+			sawSpecificReported = true
+		}
+		if reportedType == candidateType {
+			continue
+		}
+		if !isAnyLikeType(reportedType) && !isLooselyTypedType(reportedType) &&
+			(isAnyLikeType(candidateType) || isLooselyTypedType(candidateType)) {
+			sawOpaqueLoss = true
+			continue
+		}
+		return false
+	}
+	return sawOpaqueLoss && sawSpecificReported
+}
+
+func structuredTypeMembersAndNullish(typeText string) (map[string]string, []string, bool) {
+	text := normalizeSourceTypeTextWithOptions(strings.TrimSpace(typeText), false)
+	if text == "" {
+		return nil, nil, false
+	}
+	parts, err := splitTopLevelUnion(text)
+	if err != nil || len(parts) == 0 {
+		parts = []string{text}
+	}
+
+	nullish := []string{}
+	objectType := ""
+	for _, part := range parts {
+		part = normalizeSourceTypeTextWithOptions(strings.TrimSpace(part), false)
+		switch part {
+		case "", "null", "undefined":
+			if part != "" {
+				nullish = append(nullish, part)
+			}
+		default:
+			if objectType != "" {
+				return nil, nil, false
+			}
+			objectType = part
+		}
+	}
+	if objectType == "" {
+		return nil, nil, false
+	}
+	members, ok := parseObjectTypeMembersWithOptionalUndefined(objectType, true)
+	if !ok || len(members) == 0 {
+		return nil, nil, false
+	}
+	sort.Strings(nullish)
+	return members, nullish, true
+}
+
+func structuredTypeUsesOpaqueLoosePreservation(reported, candidate string) bool {
+	reportedMembers, _, ok := structuredTypeMembersAndNullish(reported)
+	if !ok {
+		return false
+	}
+	candidateMembers, _, ok := structuredTypeMembersAndNullish(candidate)
+	if !ok || len(reportedMembers) != len(candidateMembers) {
+		return false
+	}
+	for name, reportedType := range reportedMembers {
+		candidateType, ok := candidateMembers[name]
+		if !ok {
+			return false
+		}
+		reportedType = normalizeInferredTypeText(strings.TrimSpace(reportedType))
+		candidateType = normalizeInferredTypeText(strings.TrimSpace(candidateType))
+		if reportedType == candidateType {
+			continue
+		}
+		if isAnyLikeType(reportedType) || isLooselyTypedType(reportedType) {
+			return true
+		}
+	}
+	return false
+}
+
+func parityModeKeepsLooseContextualProjectorReportedSelectorType(expression, reportedType string, member MemberReport) bool {
+	if !parityModeEnabled() || strings.TrimSpace(expression) == "" || sourceSelectorReturnType(expression) != "" {
+		return false
+	}
+	reportedType = normalizeInferredTypeText(strings.TrimSpace(reportedType))
+	if !isAnyLikeType(reportedType) && !isLooselyTypedType(reportedType) {
+		return false
+	}
+	if !selectorMemberHasLooseReportedReturn(strings.TrimSpace(member.TypeString)) {
+		return false
+	}
+	return selectorMemberHasLooseReportedReturn(strings.TrimSpace(preferredSelectorProjectorTypeText(member)))
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func structuredTypeCandidateAddsOnlyNullish(current, candidate string) bool {
+	currentMain, currentNullish, ok := structuredTypeMainAndNullish(current)
+	if !ok {
+		return false
+	}
+	candidateMain, candidateNullish, ok := structuredTypeMainAndNullish(candidate)
+	if !ok || currentMain != candidateMain || currentNullish == candidateNullish {
+		return false
+	}
+	currentParts := map[string]bool{}
+	for _, part := range strings.Split(currentNullish, "|") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			currentParts[part] = true
+		}
+	}
+	sawExtra := false
+	for _, part := range strings.Split(candidateNullish, "|") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if currentParts[part] {
+			continue
+		}
+		if part != "null" && part != "undefined" {
+			return false
+		}
+		sawExtra = true
+	}
+	return sawExtra
+}
+
+func structuredTypeMainAndNullish(typeText string) (string, string, bool) {
+	text := normalizeSourceTypeTextWithOptions(strings.TrimSpace(typeText), false)
+	if text == "" {
+		return "", "", false
+	}
+	parts, err := splitTopLevelUnion(text)
+	if err != nil || len(parts) == 0 {
+		parts = []string{text}
+	}
+	mainParts := make([]string, 0, len(parts))
+	nullish := make([]string, 0, 2)
+	for _, part := range parts {
+		part = normalizeSourceTypeTextWithOptions(strings.TrimSpace(part), false)
+		switch part {
+		case "", "null", "undefined":
+			if part != "" {
+				nullish = append(nullish, part)
+			}
+		default:
+			mainParts = append(mainParts, part)
+		}
+	}
+	if len(mainParts) != 1 {
+		return "", "", false
+	}
+	sort.Strings(nullish)
+	return mainParts[0], strings.Join(nullish, "|"), true
 }
 
 func selectorObjectFromEntriesPrimitiveMapType(logic ParsedLogic, source, file, expression string, state *buildState) string {
@@ -6763,22 +7090,109 @@ func selectorMemberTypeTextSupportsInternalHelper(text string) bool {
 	return strings.HasPrefix(text, "[")
 }
 
-func selectorFunctionTypeFromMember(member MemberReport) string {
-	text := strings.TrimSpace(member.TypeString)
-	if element := sourceSelectorProjectorElement(text); element != "" {
-		if parameters, returnType, ok := splitFunctionType(element); ok && strings.TrimSpace(firstParameterText(parameters)) != "" {
-			return parameters + " => " + normalizeInferredTypeText(returnType)
-		}
+func selectorFunctionTypeFromInputTuple(member MemberReport) string {
+	returnType := normalizeInferredTypeText(strings.TrimSpace(selectorReportedMemberReturnTypeText(member)))
+	if returnType == "" {
+		return ""
 	}
-	if element := lastTopLevelArrayElement(text); element != "" {
-		if parameters, returnType, ok := splitFunctionType(element); ok && strings.TrimSpace(firstParameterText(parameters)) != "" {
-			return parameters + " => " + normalizeInferredTypeText(returnType)
-		}
-	}
-	if parameters, returnType, ok := splitFunctionType(text); ok && strings.TrimSpace(firstParameterText(parameters)) != "" {
-		return parameters + " => " + normalizeInferredTypeText(returnType)
+	if functionType := selectorFunctionTypeFromInputTupleText(strings.TrimSpace(preferredSelectorInputTupleTypeText(member)), returnType); functionType != "" {
+		return functionType
 	}
 	return ""
+}
+
+func selectorFunctionTypeFromMember(member MemberReport) string {
+	for _, text := range []string{
+		strings.TrimSpace(preferredSelectorProjectorTypeText(member)),
+		strings.TrimSpace(member.TypeString),
+		strings.TrimSpace(member.PrintedTypeNode),
+	} {
+		if text == "" {
+			continue
+		}
+		if parameters, returnType, ok := splitFunctionType(text); ok && strings.TrimSpace(firstParameterText(parameters)) != "" {
+			return parameters + " => " + normalizeInferredTypeText(returnType)
+		}
+		if element := sourceSelectorProjectorElement(text); element != "" {
+			if parameters, returnType, ok := splitFunctionType(element); ok && strings.TrimSpace(firstParameterText(parameters)) != "" {
+				return parameters + " => " + normalizeInferredTypeText(returnType)
+			}
+		}
+		if element := lastTopLevelArrayElement(text); element != "" {
+			if parameters, returnType, ok := splitFunctionType(element); ok && strings.TrimSpace(firstParameterText(parameters)) != "" {
+				return parameters + " => " + normalizeInferredTypeText(returnType)
+			}
+		}
+	}
+	return ""
+}
+
+func selectorInputTupleTypeTextFromSelectorMember(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	element := firstTopLevelArrayElement(text)
+	if element == "" {
+		return ""
+	}
+	_, returnType, ok := splitFunctionType(element)
+	if !ok {
+		return ""
+	}
+	return normalizeSourceTypeText(strings.TrimSpace(returnType))
+}
+
+func selectorFunctionTypeFromInputTupleText(tupleText, returnType string) string {
+	elementTypes := selectorInputTupleElementTypes(tupleText)
+	if len(elementTypes) == 0 {
+		return ""
+	}
+	parameters := make([]string, 0, len(elementTypes))
+	for index, elementType := range elementTypes {
+		parameterType := normalizeInternalHelperSignatureParameterType(elementType, true)
+		if parameterType == "" {
+			return ""
+		}
+		name := "arg"
+		if index > 0 {
+			name = fmt.Sprintf("arg%d", index+1)
+		}
+		parameters = append(parameters, fmt.Sprintf("%s: %s", name, parameterType))
+	}
+	return "(" + strings.Join(parameters, ", ") + ") => " + returnType
+}
+
+func selectorInputTupleElementTypes(text string) []string {
+	text = normalizeSourceTypeText(strings.TrimSpace(text))
+	if text == "" {
+		return nil
+	}
+	arrayStart, arrayEnd, ok, err := FindInspectableArrayLiteral(text, 0, len(text))
+	if err != nil || !ok || arrayEnd <= arrayStart {
+		return nil
+	}
+	parts, err := splitTopLevelList(text[arrayStart+1 : arrayEnd])
+	if err != nil || len(parts) == 0 {
+		return nil
+	}
+	elementTypes := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil
+		}
+		if _, returnType, ok := splitFunctionType(part); ok {
+			normalized := normalizeInferredTypeText(strings.TrimSpace(returnType))
+			if normalized == "" {
+				return nil
+			}
+			elementTypes = append(elementTypes, normalized)
+			continue
+		}
+		elementTypes = append(elementTypes, "any")
+	}
+	return elementTypes
 }
 
 func sourceInternalSelectorFunctionType(logic ParsedLogic, source, file, expression string, state *buildState) string {
@@ -12302,7 +12716,7 @@ func normalizeSourceTypeTextWithOptions(text string, collapseOptionalUndefined b
 	if text == "" {
 		return ""
 	}
-	text = normalizeTypeLiteralText(text)
+	text = normalizeTypeLiteralTextWithOptions(text, collapseOptionalUndefined)
 	text = strings.Join(strings.Fields(text), " ")
 	text = strings.ReplaceAll(text, "( ", "(")
 	text = strings.ReplaceAll(text, " )", ")")
@@ -12314,6 +12728,10 @@ func normalizeSourceTypeTextWithOptions(text string, collapseOptionalUndefined b
 }
 
 func normalizeTypeLiteralText(text string) string {
+	return normalizeTypeLiteralTextWithOptions(text, true)
+}
+
+func normalizeTypeLiteralTextWithOptions(text string, collapseOptionalUndefined bool) string {
 	var builder strings.Builder
 	for i := 0; i < len(text); i++ {
 		if text[i] != '{' {
@@ -12327,8 +12745,8 @@ func normalizeTypeLiteralText(text string) string {
 			continue
 		}
 
-		inner := normalizeTypeLiteralText(text[i+1 : end])
-		normalized, ok := normalizeTypeLiteralBody(inner)
+		inner := normalizeTypeLiteralTextWithOptions(text[i+1:end], collapseOptionalUndefined)
+		normalized, ok := normalizeTypeLiteralBodyWithOptions(inner, collapseOptionalUndefined)
 		if !ok {
 			builder.WriteByte(text[i])
 			continue
@@ -12347,6 +12765,10 @@ func normalizeTypeLiteralText(text string) string {
 }
 
 func normalizeTypeLiteralBody(text string) (string, bool) {
+	return normalizeTypeLiteralBodyWithOptions(text, true)
+}
+
+func normalizeTypeLiteralBodyWithOptions(text string, collapseOptionalUndefined bool) (string, bool) {
 	body := strings.TrimSpace(text)
 	if body == "" {
 		return "", true
@@ -12367,10 +12789,10 @@ func normalizeTypeLiteralBody(text string) (string, bool) {
 			return "", false
 		}
 		if name, value, ok := splitTopLevelTypeMember(entry); ok {
-			parts = append(parts, strings.TrimSpace(name)+": "+normalizeSourceTypeText(value))
+			parts = append(parts, strings.TrimSpace(name)+": "+normalizeSourceTypeTextWithOptions(value, collapseOptionalUndefined))
 			continue
 		}
-		parts = append(parts, normalizeSourceTypeText(entry))
+		parts = append(parts, normalizeSourceTypeTextWithOptions(entry, collapseOptionalUndefined))
 	}
 	if len(parts) == 0 {
 		return "", true

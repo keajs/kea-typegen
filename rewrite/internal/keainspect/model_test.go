@@ -4542,6 +4542,355 @@ func TestBuildParsedLogicsParityModeKeepsOpaqueTemplateSelectorHelpersLoose(t *t
 	}
 }
 
+func TestParityModeReportedStructuredTypeShouldStayLoose(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	t.Run("preserves_any_and_added_undefined_members", func(t *testing.T) {
+		reported := "null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }"
+		candidate := "null | { nodeData: AppNodeData | null; nodeId: string | undefined; sceneId: string | undefined; sceneName: string | undefined; }"
+
+		if !parityModeReportedStructuredTypeShouldStayLoose(reported, candidate) {
+			t.Fatalf("expected structured parity helper to preserve reported type %q over %q", reported, candidate)
+		}
+	})
+
+	t.Run("does_not_mask_real_member_type_changes", func(t *testing.T) {
+		reported := "{ configJsonError: string | null; isCustomApp: boolean; }"
+		candidate := "{ configJsonError: boolean; isCustomApp: \"sources\"; }"
+
+		if parityModeReportedStructuredTypeShouldStayLoose(reported, candidate) {
+			t.Fatalf("expected structured parity helper to reject reported type %q over %q", reported, candidate)
+		}
+	})
+
+	t.Run("does_not_preserve_fully_opaque_object_surfaces", func(t *testing.T) {
+		reported := "null | { mainScene: any; payloadScenes: any; }"
+		candidate := "null | { mainScene: FrameScene; payloadScenes: FrameScene[]; }"
+
+		if parityModeReportedStructuredTypeShouldStayLoose(reported, candidate) {
+			t.Fatalf("expected structured parity helper to reject fully opaque reported type %q over %q", reported, candidate)
+		}
+	})
+}
+
+func TestParityModeReportedStructuredTypeShouldBeatOpaqueCandidate(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	reported := "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }"
+	candidate := "null | { nodeData: AppNodeData | undefined; nodeId: any; sceneId: any; sceneName: any; }"
+
+	if !parityModeReportedStructuredTypeShouldBeatOpaqueCandidate(reported, candidate) {
+		t.Fatalf("expected reported structured type %q to beat more opaque candidate %q", reported, candidate)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsLooseReportedStructuredSelectorAndHelperTypes(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type ChatContextType = 'scene' | null",
+		"type AppNodeData = { id: string }",
+		"type FrameScene = { id: string; name: string }",
+		"type FrameType = { scenes?: FrameScene[] }",
+		"",
+		"export const chatLogic = kea({",
+		"  reducers: {",
+		"    chatContextType: [null as ChatContextType, {}],",
+		"    chatContextId: [null as string | null, {}],",
+		"    frameForm: [{} as Partial<FrameType>, {}],",
+		"  },",
+		"  selectors: {",
+		"    chatAppContext: [",
+		"      (s) => [s.chatContextType, s.chatContextId, s.frameForm],",
+		"      (chatContextType, chatContextId, frameForm) => {",
+		"        if (chatContextType !== 'scene' || !chatContextId) {",
+		"          return null",
+		"        }",
+		"        const scene = frameForm.scenes?.find((candidate) => candidate.id === chatContextId)",
+		"        return {",
+		"          nodeData: null as AppNodeData | null,",
+		"          nodeId: chatContextId,",
+		"          sceneId: scene?.id,",
+		"          sceneName: scene?.name,",
+		"        }",
+		"      },",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/chatLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "chatLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "chatContextType", TypeString: "[ChatContextType, {}]"},
+							{Name: "chatContextId", TypeString: "[string | null, {}]"},
+							{Name: "frameForm", TypeString: "[Partial<FrameType>, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:             "chatAppContext",
+								TypeString:       "[(s: any) => any[], (chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }]",
+								ReturnTypeString: "null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	expectedSelectorType := "null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }"
+	if selector, ok := findParsedField(logic.Selectors, "chatAppContext"); !ok || selector.Type != expectedSelectorType {
+		t.Fatalf("expected parity-mode chatAppContext selector type %q, got %+v", expectedSelectorType, logic.Selectors)
+	}
+	expectedHelperType := "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }"
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "chatAppContext"); !ok || helper.FunctionType != expectedHelperType {
+		t.Fatalf("expected parity-mode chatAppContext helper %q, got %+v", expectedHelperType, logic.InternalSelectorTypes)
+	}
+}
+
+func TestParityModeReportedStructuredHelperFunctionTypeShouldStayReported(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	t.Run("preserves_opaque_helper_surface", func(t *testing.T) {
+		current := "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }"
+		candidate := "(chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: string; }"
+
+		if !parityModeReportedStructuredHelperFunctionTypeShouldStayReported(current, candidate) {
+			t.Fatalf("expected helper parity preservation for %q over %q", current, candidate)
+		}
+	})
+
+	t.Run("does_not_preserve_nullish_only_helper_diffs", func(t *testing.T) {
+		current := "(requestId: string | null, logsByRequestId: Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>) => { message: string; status?: string; stage?: string; timestamp: string; } | null"
+		candidate := "(requestId: string | null, logsByRequestId: Record<string, { message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; }[]>) => { message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; } | null"
+
+		if parityModeReportedStructuredHelperFunctionTypeShouldStayReported(current, candidate) {
+			t.Fatalf("expected helper parity preservation to reject nullish-only refinement %q over %q", current, candidate)
+		}
+	})
+}
+
+func TestSelectorReportedMemberReturnTypeTextPrefersProjectorContextualReturn(t *testing.T) {
+	member := MemberReport{
+		TypeString:                "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
+		ReturnTypeString:          "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }",
+		ProjectorReturnTypeString: "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
+	}
+
+	if got := selectorReportedMemberReturnTypeText(member); got != "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }" {
+		t.Fatalf("expected projector contextual return type to win, got %q", got)
+	}
+}
+
+func TestSelectorFunctionTypeFromMemberPrefersProjectorContextualType(t *testing.T) {
+	member := MemberReport{
+		TypeString:          "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
+		ProjectorTypeString: "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
+	}
+
+	expected := "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }"
+	if got := selectorFunctionTypeFromMember(member); got != expected {
+		t.Fatalf("expected projector contextual function type %q, got %q", expected, got)
+	}
+}
+
+func TestBuildParsedLogicsParityModeUsesProjectorContextualSelectorSurface(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type ChatContextType = 'app' | null",
+		"type AppNodeData = { id: string }",
+		"type FrameNode = { id: string; data?: AppNodeData }",
+		"type FrameScene = { id: string; name: string; nodes?: FrameNode[] }",
+		"type FrameType = { scenes?: FrameScene[] }",
+		"",
+		"const parseAppContextId = (contextId?: string | null) => {",
+		"  if (!contextId) {",
+		"    return null",
+		"  }",
+		"  return { sceneId: contextId, nodeId: contextId }",
+		"}",
+		"",
+		"export const chatLogic = kea({",
+		"  reducers: {",
+		"    chatContextType: [null as ChatContextType, {}],",
+		"    chatContextId: [null as string | null, {}],",
+		"    frameForm: [{} as Partial<FrameType>, {}],",
+		"  },",
+		"  selectors: {",
+		"    chatAppContext: [",
+		"      (s) => [s.chatContextType, s.chatContextId, s.frameForm],",
+		"      (chatContextType: ChatContextType, chatContextId: string | null, frameForm) => {",
+		"        if (chatContextType !== 'app' || !chatContextId) {",
+		"          return null",
+		"        }",
+		"        const parsed = parseAppContextId(chatContextId)",
+		"        if (!parsed) {",
+		"          return null",
+		"        }",
+		"        const scene = frameForm?.scenes?.find((item: FrameScene) => item.id === parsed.sceneId)",
+		"        const node = scene?.nodes?.find((item: FrameNode) => item.id === parsed.nodeId)",
+		"        return {",
+		"          sceneId: parsed.sceneId,",
+		"          nodeId: parsed.nodeId,",
+		"          sceneName: scene?.name ?? parsed.sceneId,",
+		"          nodeData: node?.data as AppNodeData | undefined,",
+		"        }",
+		"      },",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/chatLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "chatLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "chatContextType", TypeString: "[ChatContextType, {}]"},
+							{Name: "chatContextId", TypeString: "[string | null, {}]"},
+							{Name: "frameForm", TypeString: "[Partial<FrameType>, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:                      "chatAppContext",
+								TypeString:                "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
+								ReturnTypeString:          "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }",
+								ProjectorTypeString:       "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
+								ProjectorReturnTypeString: "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	expectedSelectorType := "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }"
+	if selector, ok := findParsedField(logic.Selectors, "chatAppContext"); !ok || selector.Type != expectedSelectorType {
+		t.Fatalf("expected parity-mode chatAppContext selector type %q, got %+v", expectedSelectorType, logic.Selectors)
+	}
+	expectedHelperType := "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }"
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "chatAppContext"); !ok || helper.FunctionType != expectedHelperType {
+		t.Fatalf("expected parity-mode chatAppContext helper %q, got %+v", expectedHelperType, logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsDualReportedAnyProjectorSelectorSurface(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type DiagramNode = { id: string }",
+		"",
+		"export const appNodeLogic = kea({",
+		"  reducers: {",
+		"    nodes: [[] as DiagramNode[], {}],",
+		"    nodeId: ['' as string, {}],",
+		"  },",
+		"  selectors: {",
+		"    node: [",
+		"      (s) => [s.nodes, s.nodeId],",
+		"      (nodes: DiagramNode[], nodeId: string) => nodes.find((item) => item.id === nodeId) ?? null,",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/appNodeLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "appNodeLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "nodes", TypeString: "[DiagramNode[], {}]"},
+							{Name: "nodeId", TypeString: "[string, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:                      "node",
+								TypeString:                "[(s: any) => any[], (nodes: DiagramNode[], nodeId: string) => any]",
+								ReturnTypeString:          "any",
+								ProjectorTypeString:       "(nodes: DiagramNode[], nodeId: string) => any",
+								ProjectorReturnTypeString: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "node"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode node selector type %q, got %+v", "any", logic.Selectors)
+	}
+	expectedHelperType := "(nodes: DiagramNode[], nodeId: string) => any"
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "node"); !ok || helper.FunctionType != expectedHelperType {
+		t.Fatalf("expected parity-mode node helper %q, got %+v", expectedHelperType, logic.InternalSelectorTypes)
+	}
+}
+
 func TestBuildParsedLogicsParityModeKeepsLooseReportedBuilderSelectorTypes(t *testing.T) {
 	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
 
@@ -7542,6 +7891,15 @@ func TestNormalizeActionPayloadTypeSortsObjectMembers(t *testing.T) {
 
 	if got := normalizeActionPayloadType(input); got != expected {
 		t.Fatalf("expected normalized action payload %q, got %q", expected, got)
+	}
+}
+
+func TestNormalizeActionPayloadTypePreservesOptionalUndefinedInNestedObjects(t *testing.T) {
+	input := "{ log: { message: string; stage?: string; status?: string; timestamp: string; }; }"
+	expected := "{ log: { message: string; stage?: string | undefined; status?: string | undefined; timestamp: string; }; }"
+
+	if got := normalizeActionPayloadType(input); got != expected {
+		t.Fatalf("expected normalized nested action payload %q, got %q", expected, got)
 	}
 }
 
@@ -12706,6 +13064,33 @@ func TestNormalizeSelectorFunctionTypeOptionalUndefinedPreservesReturnObjectMemb
 	expected := "((resource: APIScopeObject, resourceLabel: string) => ({ disabledReason: undefined; label: string; value: AccessControlLevel | null; } | { value: AccessControlLevel; label: string; disabledReason?: string | undefined; })[])"
 	if normalized != expected {
 		t.Fatalf("expected selector function type %q, got %q", expected, normalized)
+	}
+}
+
+func TestNormalizeSelectorFunctionTypeOptionalUndefinedPreservesNestedGenericObjectMembers(t *testing.T) {
+	typeText := "(aiSceneRequestId: string | null, aiSceneLogsByRequestId: Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>) => { message: string; status?: string; stage?: string; timestamp: string; } | null"
+
+	normalized := normalizeSelectorFunctionTypeOptionalUndefined(typeText)
+	expected := "(aiSceneRequestId: string | null, aiSceneLogsByRequestId: Record<string, { message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; }[]>) => { message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; } | null"
+	if normalized != expected {
+		t.Fatalf("expected selector function type %q, got %q", expected, normalized)
+	}
+}
+
+func TestCanonicalizeInternalHelperFunctionTypeWithSelectorDependenciesPreservesOptionalUndefined(t *testing.T) {
+	logic := ParsedLogic{
+		Reducers: []ParsedField{
+			{Name: "aiSceneRequestId", Type: "string | null"},
+			{Name: "aiSceneLogsByRequestId", Type: "Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>"},
+		},
+	}
+	expression := "[(s) => [s.aiSceneRequestId, s.aiSceneLogsByRequestId], (requestId, logsByRequestId) => logsByRequestId[requestId ?? '']?.[0] ?? null]"
+	functionType := "(requestId: string | null, logsByRequestId: Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>) => { message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; } | null"
+
+	got := canonicalizeInternalHelperFunctionTypeWithSelectorDependencies(logic, "", "", expression, functionType, nil)
+	expected := "(aiSceneRequestId: string | null, aiSceneLogsByRequestId: Record<string, { message: string; status?: string; stage?: string; timestamp: string; }[]>) => { message: string; status?: string | undefined; stage?: string | undefined; timestamp: string; } | null"
+	if got != expected {
+		t.Fatalf("expected canonicalized helper type %q, got %q", expected, got)
 	}
 }
 

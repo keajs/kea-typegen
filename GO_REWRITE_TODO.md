@@ -1989,6 +1989,251 @@
     - `isCustomApp`
 - `chatLogicType.ts` remains unchanged by this pass.
 
+## Latest Follow-Up: Structured-Surface Parity and AI-Scene Optional-Undefined
+
+### What Changed
+
+- Added a narrow structured-surface parity pass in `rewrite/internal/keainspect/model.go`:
+  - nested action-payload object members now normalize optional properties to explicit `| undefined`
+  - parity mode can keep reported structured selector/helper surfaces when the JS report is protecting an otherwise-specific object shape with loose `any` members
+  - helper preservation was narrowed again so it does not keep fully-opaque object surfaces or pure nullish-only refinements
+- Added focused regressions in `rewrite/internal/keainspect/model_test.go` for:
+  - nested action-payload optional-`undefined` normalization
+  - structured object parity preservation vs real member-type changes
+  - a chat-like selector/helper parity case
+  - a helper guard that rejects nullish-only preservation
+
+### Verification
+
+- Focused regressions command:
+  - `cd rewrite && go test ./internal/keainspect -run 'TestParityModeReportedStructured(TypeShouldStayLoose|HelperFunctionTypeShouldStayReported)|TestBuildParsedLogicsParityModeKeepsLooseReportedStructuredSelectorAndHelperTypes|TestBuildParsedLogicsFromSourceRecoversFrameOSStyleSelectorTypes|TestBuildParsedLogicsParityRecoversTemplateRowHelperAndSelectorSurfaces|TestNormalizeActionPayloadType(PreservesOptionalUndefinedInNestedObjects|SortsObjectMembers)' -count=1`
+  - result: pass
+- Full Go package command:
+  - `cd rewrite && go test ./internal/keainspect -count=1`
+  - result: pass
+- Rebuilt Go binary command:
+  - `./bin/prepare-go`
+  - result: pass
+- Sample benchmark command:
+  - `./bin/benchmark -c write -n 1 -w 0 --skip-prepare`
+  - TypeScript mean: `9558.1 ms`
+  - Go mean: `4215.7 ms`
+  - semantic accuracy: `20/20`
+  - semantic diffs: `0`
+- Clean-slate preserved-worktree compare commands:
+  - clean generated Go artifacts:
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type f -name '*Type.ts' -delete`
+    - `find .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go -type d -name '.typegen' -prune -exec rm -rf {} +`
+  - rerun Go parity write:
+    - `KEA_TYPEGEN_CWD=/home/ubuntu/Projects/kea-typegen/.cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend KEA_TYPEGEN_PARITY_MODE=1 ./rewrite/bin/kea-typegen-go write --config tsconfig.json --root . --write-paths -q`
+  - recompute semantic summary:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-js/frontend --go-dir .cache/kea-typegen/tmp/frameos-corpus-eFWTm3/frameos-go/frontend --json`
+  - result:
+    - semantic matches: `35/38`
+    - semantic accuracy: `92.11%`
+    - semantic diffs: `3`
+
+### Probe Findings
+
+- `chatLogic.ts` `selectors.chatAppContext`:
+  - `probe-api --sample selectors --member chatAppContext --method memberDetails --json` shows the projector callback `type` as concrete:
+    - `(chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => { sceneId: string; nodeId: string; sceneName: string; nodeData: AppNodeData | undefined; } | null`
+  - but the same callback parameters still expose `declaredType: any`
+  - inference: the remaining chat mismatch likely needs access to the declared callback surface or the exact JS inspector report shape, not another source-recovery heuristic
+- `appNodeLogic.ts` `selectors.node`:
+  - `probe-api --sample selectors --member node --method memberDetails --json` shows the projector callback `type` as:
+    - `(nodes: DiagramNode[], nodeId: string) => any`
+  - and the callback `returnType` is also `any`
+  - inference: the loose JS surface on `node` / `codeArgs` / `nodeOutputFields` / `configJsonError` / `isCustomApp` is inspector-backed; preserving it should come from report/TS API handling, not more Go-side reconstruction from source
+- `scenesLogic.tsx` `actions.setAiSceneLogMessage`:
+  - `probe-api --sample actions --member setAiSceneLogMessage --method memberDetails --json` reports:
+    - `log: { requestId: string; message: string; status?: string; stage?: string; timestamp: string; }`
+  - the hidden API surface still omits explicit optional `| undefined`
+  - inference: the remaining `scenes` diff is concentrated in optional-`undefined` spelling across AI-scene action/reducer/helper surfaces, and may require either:
+    - a broader emitter-side optional-undefined normalization policy for object literals, or
+    - a better TS/tsgo surface that exposes the JS-style printed form directly
+
+### Remaining Semantic Diffs
+
+- `src/scenes/frame/panels/Chat/chatLogicType.ts`
+- `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+- `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+
+### Next Best Step
+
+- Before adding another heuristic in `model.go`, inspect or extend the report/`tsgoapi` layer so we can answer two questions directly:
+  - for chat tuple projectors, can we fetch the declared callback surface that still carries `any` parameters/member looseness?
+  - for scenes AI-scene log objects, can we fetch a printed type surface that preserves optional `| undefined` the same way JS kea-typegen emits it?
+
+## Latest Follow-Up: Nested Helper Optional-Undefined Preservation
+
+### What Changed
+
+- Kept the earlier structured-surface parity work intact and added one narrower follow-up in `rewrite/internal/keainspect/model.go`:
+  - `normalizeSourceTypeTextWithOptions(...)` now threads the caller’s `collapseOptionalUndefined` choice all the way through nested type-literal normalization instead of silently re-collapsing inner `?` members back to bare optional properties
+  - `canonicalizeInternalHelperFunctionTypeWithSelectorDependencies(...)` now preserves selector-style optional-`undefined` spelling on helper return objects instead of collapsing it during the final dependency-name rewrite step
+- Added focused regressions in `rewrite/internal/keainspect/model_test.go` for:
+  - nested generic selector/helper object normalization
+  - helper canonicalization preserving return-side optional `| undefined`
+
+### Verification
+
+- Focused regressions command:
+  - `cd rewrite && go test ./internal/keainspect -run 'TestParityModeReportedStructured(TypeShouldStayLoose|HelperFunctionTypeShouldStayReported)|TestBuildParsedLogicsParityModeKeepsLooseReportedStructuredSelectorAndHelperTypes|TestBuildParsedLogicsFromSourceRecoversFrameOSStyleSelectorTypes|TestNormalizeActionPayloadType(PreservesOptionalUndefinedInNestedObjects|SortsObjectMembers)|TestNormalizeSelectorFunctionTypeOptionalUndefined(PreservesReturnObjectMembers|PreservesNestedGenericObjectMembers)|TestCanonicalizeInternalHelperFunctionTypeWithSelectorDependenciesPreservesOptionalUndefined' -count=1`
+  - result: pass
+- Full Go package command:
+  - `cd rewrite && go test ./internal/keainspect -count=1`
+  - result: pass
+- Rebuilt Go binary command:
+  - `./bin/prepare-go`
+  - result: pass
+- Sample benchmark command:
+  - `./bin/benchmark -c write -n 1 -w 0 --skip-prepare`
+  - TypeScript mean: `9305.2 ms`
+  - Go mean: `4360.3 ms`
+  - semantic accuracy: `20/20`
+  - semantic diffs: `0`
+- Fresh FrameOS compare command:
+  - `node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees`
+  - result:
+    - semantic matches: `36/38`
+    - semantic accuracy: `94.74%`
+    - semantic diffs: `2`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-1DW4Jf`
+    - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-1DW4Jf/frameos-baseline.json`
+
+### Files Removed From The Diff Set
+
+- `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+
+### Current Reading
+
+- This was a real parity gain, not just a normalization cleanup:
+  - the remaining `scenesLogicType.ts` mismatch really was still the helper-return optional-`undefined` spelling
+  - once the final helper canonicalization stopped re-collapsing those nested optional members, the file dropped out of both the preserved pinned compare and the fresh full FrameOS corpus
+- The remaining FrameOS semantic diffs are now down to two files:
+  - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+  - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+- An intermediate parity-only experiment that tried preferring loose projector probe returns for truncated selector reports was tested during this pass and then backed out:
+  - it did help parts of `appNodeLogicType.ts`
+  - but it also loosened unrelated `Diagram` helpers that the JS generator still keeps concrete
+  - that path was therefore not kept
+
+### Next Best Step
+
+- The remaining two files are now both in the same broader bucket:
+  - the projector callback probe already exposes information that differs from the final JS-emitted surface
+  - but blindly preferring that probe output regresses neighboring diagram files
+- So the next pass should stay in the report / `tsgoapi` lane rather than add more source-shape recovery:
+  - for `chatLogicType.ts`, figure out whether we can recover the declared callback surface that still keeps `sceneName` loose without synthesizing it in Go
+  - for `appNodeLogicType.ts`, figure out which exact inspector-backed signal makes JS keep `node`, `codeArgs`, and `nodeOutputFields` loose while leaving nearby `Diagram` helpers concrete
+
+## Latest Follow-Up: Contextual Projector Report Plumbing
+
+### What Changed
+
+- Added a narrow report-layer follow-up around selector tuple projectors:
+  - `InspectFile(...)` now records projector-contextual selector callback surfaces in `MemberReport` as:
+    - `projectorTypeString`
+    - `projectorPrintedTypeNode`
+    - `projectorReturnTypeString`
+    - `projectorPrintedReturnTypeNode`
+  - the contextual type is fetched from the exact projector callback node range, inside the same live `tsgo` session, instead of trying to reuse ephemeral type handles across separate probe runs
+- Added a small `tsgoapi` wrapper for `getContextualType(...)`.
+- Threaded those projector report fields through the parser:
+  - selector public/report parsing can prefer the projector-specific reported return when it is available
+  - selector internal-helper parsing can prefer the projector-specific reported function surface
+  - parity mode now also preserves reported structured selector/helper returns when later recovery makes previously-specific members more opaque again
+- Added focused regression coverage in `rewrite/internal/keainspect/model_test.go` for:
+  - projector-contextual reported return selection
+  - projector-contextual reported helper selection
+  - structured reported selector/helper surfaces beating more-opaque recovered candidates
+  - a parity-mode `any` selector case guarded by dual reported signals
+
+### Verification
+
+- Focused regressions command:
+  - `cd rewrite && go test ./internal/keainspect -run 'Test(SelectorReportedMemberReturnTypeTextPrefersProjectorContextualReturn|SelectorFunctionTypeFromMemberPrefersProjectorContextualType|BuildParsedLogicsParityModeUsesProjectorContextualSelectorSurface|BuildParsedLogicsParityModeKeepsDualReportedAnyProjectorSelectorSurface|ParityModeReportedStructured(TypeShouldStayLoose|TypeShouldBeatOpaqueCandidate|HelperFunctionTypeShouldStayReported)|BuildParsedLogicsParityModeKeepsLooseReportedStructuredSelectorAndHelperTypes|NormalizeActionPayloadType(PreservesOptionalUndefinedInNestedObjects|SortsObjectMembers)|NormalizeSelectorFunctionTypeOptionalUndefined(PreservesReturnObjectMembers|PreservesNestedGenericObjectMembers)|CanonicalizeInternalHelperFunctionTypeWithSelectorDependenciesPreservesOptionalUndefined)' -count=1`
+  - result: pass
+- Full Go package command:
+  - `cd rewrite && go test ./internal/keainspect -count=1`
+  - result: pass
+- Targeted wrapper/CLI package command:
+  - `cd rewrite && go test ./internal/tsgoapi ./cmd/kea-typegen-go -count=1`
+  - result: pass
+- Rebuilt Go binary command:
+  - `./bin/prepare-go`
+  - result: pass
+- Sample benchmark command:
+  - `./bin/benchmark -c write -n 1 -w 0 --skip-prepare`
+  - result:
+    - TypeScript mean: `9037.6 ms`
+    - Go mean: `4109.1 ms`
+    - semantic accuracy: `20/20`
+    - semantic diffs: `0`
+- Fresh FrameOS compare command:
+  - `node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees`
+  - result:
+    - semantic matches: `36/38`
+    - semantic accuracy: `94.74%`
+    - semantic diffs: `2`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-LOAicv`
+    - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-LOAicv/frameos-baseline.json`
+
+### Current Reading
+
+- This was a safe-but-neutral pass:
+  - the sample benchmark stayed at the non-negotiable `20/20`
+  - the full FrameOS corpus stayed flat at `36/38`
+- A follow-up experiment did add more selector callback data to `InspectFile`:
+  - direct computed-callback type / return surfaces
+  - first input-callback returned-tuple surfaces
+- But wiring those new report fields straight into `model.go` was a dead end:
+  - after rebuilding and rerunning FrameOS on `2026-03-27`, semantic matches fell from `36/38` to `24/38`
+  - the regression reopened `12` extra files on top of the original `chatLogicType.ts` and `appNodeLogicType.ts`
+  - package coverage still showed the same shape: trusting the new inspect surfaces broadly broke `expandedScene`, `schedule`, `template row`, and other selector/helper cases that were previously correct
+- That experiment was fully backed out:
+  - `cd rewrite && go test ./internal/keainspect -count=1`
+    - result: pass
+  - `./bin/prepare-go`
+    - result: pass
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json'`
+    - result: back to `36/38`
+- The new projector report fields do populate on the preserved FrameOS worktree, but the current hidden API surface is still not the one JS kea-typegen is effectively using:
+  - `chatLogic.ts` `chatAppContext` now reports a projector-contextual surface, but it comes back as:
+    - `any | ((chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string | undefined; sceneName: string | undefined; })`
+  - that does not expose the JS-loose `sceneName: any` surface we still need
+- The same problem shows up on the remaining `appNode` bucket:
+  - `node`, `codeArgs`, `nodeOutputFields`, `configJsonError`, and `isCustomApp` also report projector-contextual types in the shape:
+    - `any | ((...) => concreteType)`
+  - but that exact `any | ((...) => concreteType)` pattern also appears on already-correct non-diff selectors like:
+    - `nodeEdges`
+    - `fieldInputFields`
+    - `showOutput`
+    - `isStateNode`
+  - so the presence of the leading `any` union branch is too broad to use as a parity rule by itself
+- One more direct probe confirms the same limit:
+  - `getTypeOfSymbolAtLocation(...)` on the projector callback location resolves right back to the concrete callback type
+  - it does not reveal a looser declared/projected signature surface for either `chatAppContext` or the remaining `appNode` selectors
+- The remaining FrameOS semantic diffs are still:
+  - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+  - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+
+### Next Best Step
+
+- The next pass still needs a deeper report / `tsgo` change rather than another `model.go` heuristic:
+  - either expose the exact declared/projected selector-projector signature branch that JS kea-typegen is effectively printing
+  - or expose the exact printer surface JS uses for tuple projector callbacks when the current contextual type is only `any | ((...) => concreteType)`
+  - specifically, the missing piece now looks like a `typeToTypeNode`-equivalent API that accepts the relevant enclosing callback node/location:
+    - first callback return tuple printed with the input callback as context, matching `visitSelectors.ts`
+    - computed callback return printed from the exact callback signature path JS uses
+- Do not add a new parity rule that treats `any | ((...) => concreteType)` as authoritative:
+  - the preserved FrameOS worktree shows that pattern on both remaining diffing selectors and already-correct non-diff selectors
+  - that would reopen the same broader `Diagram` regressions the earlier projector-probe experiment already demonstrated
+- Do not trust the new direct/input callback report fields in `model.go` until the printer context problem is solved:
+  - the naive pass proved that the raw checker surfaces alone are too loose in many already-correct files
+  - keep those fields as inspection scaffolding only for now
+
 ## Guardrails
 
 - Do not optimize for the current normalized compare score alone.

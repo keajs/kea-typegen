@@ -356,6 +356,18 @@ func (c *Client) GetTypeAtLocation(ctx context.Context, snapshot, projectID, loc
 	return response, nil
 }
 
+func (c *Client) GetContextualType(ctx context.Context, snapshot, projectID, location string) (*TypeResponse, error) {
+	var response *TypeResponse
+	if err := c.call(ctx, "getContextualType", map[string]any{
+		"snapshot": snapshot,
+		"project":  projectID,
+		"location": location,
+	}, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (c *Client) TypeToString(ctx context.Context, snapshot, projectID, typeID string) (string, error) {
 	var response string
 	if err := c.call(ctx, "typeToString", map[string]any{
