@@ -686,6 +686,163 @@ func TestBuildParsedLogicsInternalSelectorHelpersPreferReportedNullableMemberTyp
 	}
 }
 
+func TestBuildParsedLogicsParityKeepsOpaqueReportedNullableLookupWithConcreteProjectorParams(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type DiagramNode = { id: string }",
+		"",
+		"export const appNodeLogic = kea([",
+		"    reducers({",
+		"        nodes: [[] as DiagramNode[], {}],",
+		"        nodeId: ['' as string, {}],",
+		"    }),",
+		"    selectors({",
+		"        node: [",
+		"            (s) => [s.nodes, s.nodeId],",
+		"            (nodes: DiagramNode[], nodeId: string) => nodes?.find((node) => node.id === nodeId) ?? null,",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/appNodeLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "appNodeLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "nodes", TypeString: "[DiagramNode[], {}]"},
+							{Name: "nodeId", TypeString: "[string, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:                                 "node",
+								TypeString:                           "((nodes: DiagramNode[], nodeId: string) => any)[]",
+								ReturnTypeString:                     "any",
+								PrintedReturnTypeNode:                "any",
+								SelectorInputReturnTypeString:        "any[]",
+								SelectorInputPrintedReturnTypeNode:   "any[]",
+								ProjectorDirectTypeString:            "(nodes: DiagramNode[], nodeId: string) => any",
+								ProjectorDirectPrintedTypeNode:       "(nodes: DiagramNode[], nodeId: string) => any",
+								ProjectorDirectReturnTypeString:      "any",
+								ProjectorDirectPrintedReturnTypeNode: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "node"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity node selector type %q, got %+v", "any", logic.Selectors)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "node"); !ok || helper.FunctionType != "(nodes: DiagramNode[], nodeId: string) => any" {
+		t.Fatalf("expected parity node helper type %q, got %+v", "(nodes: DiagramNode[], nodeId: string) => any", logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsParityKeepsOpaqueReportedPrimitiveArraySelectorsWithoutExplicitReturn(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea, reducers, selectors } from 'kea'",
+		"",
+		"type Edge = { source: string; target: string; sourceHandle?: string; targetHandle?: string }",
+		"",
+		"export const appNodeLogic = kea([",
+		"    reducers({",
+		"        nodeEdges: [[] as Edge[], {}],",
+		"        nodeId: ['' as string, {}],",
+		"    }),",
+		"    selectors({",
+		"        codeArgs: [",
+		"            (s) => [s.nodeEdges, s.nodeId],",
+		"            (nodeEdges, nodeId) =>",
+		"                nodeEdges",
+		"                    .filter(",
+		"                        (edge) =>",
+		"                            (edge.sourceHandle === 'fieldOutput' || edge.sourceHandle?.startsWith('code/')) &&",
+		"                            nodeId == edge.target &&",
+		"                            edge.targetHandle?.startsWith('fieldInput/')",
+		"                    )",
+		"                    .map((edge) => edge.targetHandle?.replace('fieldInput/', '') ?? ''),",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/appNodeLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "appNodeLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "nodeEdges", TypeString: "[Edge[], {}]"},
+							{Name: "nodeId", TypeString: "[string, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:                                 "codeArgs",
+								TypeString:                           "(((nodeEdges: any, nodeId: any) => any) | { resultEqualityCheck: any; })[]",
+								ReturnTypeString:                     "any",
+								PrintedReturnTypeNode:                "any",
+								SelectorInputReturnTypeString:        "any[]",
+								SelectorInputPrintedReturnTypeNode:   "any[]",
+								ProjectorDirectTypeString:            "(nodeEdges: any, nodeId: any) => any",
+								ProjectorDirectPrintedTypeNode:       "(nodeEdges: any, nodeId: any) => any",
+								ProjectorDirectReturnTypeString:      "any",
+								ProjectorDirectPrintedReturnTypeNode: "any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "codeArgs"); !ok || selector.Type != "any[]" {
+		t.Fatalf("expected parity codeArgs selector type %q, got %+v", "any[]", logic.Selectors)
+	}
+}
+
 func TestBuildParsedLogicsInternalSelectorHelpersPreferDependencyNamesOverDestructuredProjectorParams(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea, reducers, selectors } from 'kea'",
@@ -4603,7 +4760,7 @@ func TestBuildParsedLogicsParityModeKeepsLooseReportedStructuredSelectorAndHelpe
 		"  },",
 		"  selectors: {",
 		"    chatAppContext: [",
-		"      (s) => [s.chatContextType, s.chatContextId, s.frameForm],",
+		"      (s: any) => [s.chatContextType, s.chatContextId, s.frameForm],",
 		"      (chatContextType, chatContextId, frameForm) => {",
 		"        if (chatContextType !== 'scene' || !chatContextId) {",
 		"          return null",
@@ -4641,9 +4798,10 @@ func TestBuildParsedLogicsParityModeKeepsLooseReportedStructuredSelectorAndHelpe
 						Name: "selectors",
 						Members: []MemberReport{
 							{
-								Name:             "chatAppContext",
-								TypeString:       "[(s: any) => any[], (chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }]",
-								ReturnTypeString: "null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }",
+								Name:                          "chatAppContext",
+								TypeString:                    "[(s: any) => any[], (chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }]",
+								ReturnTypeString:              "null | { nodeData: AppNodeData | null; nodeId: string; sceneId: string; sceneName: any; }",
+								SelectorInputReturnTypeString: "[any, any, any]",
 							},
 						},
 					},
@@ -4705,6 +4863,55 @@ func TestSelectorReportedMemberReturnTypeTextPrefersProjectorContextualReturn(t 
 	}
 }
 
+func TestPreferredPrintedOrRawTypeTextPrefersRawOverImportQualifiedPrinted(t *testing.T) {
+	printed := `Partial<Record<string, import("./autoImportTypes").S7>>`
+	raw := "Partial<Record<string, S7>>"
+
+	if got := preferredPrintedOrRawTypeText(printed, raw); got != raw {
+		t.Fatalf("expected raw type %q to beat import-qualified printed type, got %q", raw, got)
+	}
+}
+
+func TestSelectorReportedMemberReturnTypeTextFallsBackToUnionWrappedProjectorType(t *testing.T) {
+	member := MemberReport{
+		TypeString:               "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
+		ReturnTypeString:         "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }",
+		ProjectorPrintedTypeNode: "any | ((chatContextType: any, chatContextId: any, frameForm: any) => { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; } | null)",
+	}
+
+	expected := "{ nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; } | null"
+	if got := selectorReportedMemberReturnTypeText(member); got != expected {
+		t.Fatalf("expected union-wrapped projector return type %q, got %q", expected, got)
+	}
+}
+
+func TestSelectorReportedMemberReturnTypeTextUsesContextualSurfaceBeforeDirectReturn(t *testing.T) {
+	member := MemberReport{
+		TypeString:                      "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
+		ReturnTypeString:                "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }",
+		ProjectorTypeString:             "any | ((chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; } | null)",
+		ProjectorDirectReturnTypeString: "{ nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; } | null",
+	}
+
+	expected := "{ nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; } | null"
+	if got := selectorReportedMemberReturnTypeText(member); got != expected {
+		t.Fatalf("expected contextual projector surface %q to beat direct return %q", expected, got)
+	}
+}
+
+func TestSelectorReportedMemberReturnTypeTextPrefersLooseDirectReturnOverContextualSurface(t *testing.T) {
+	member := MemberReport{
+		TypeString:                      "[(s: any) => any[], (nodeEdges: Edge[], nodeId: string) => any[]]",
+		ReturnTypeString:                "any[]",
+		ProjectorTypeString:             "any | ((nodeEdges: Edge[], nodeId: string) => string[])",
+		ProjectorDirectReturnTypeString: "any[]",
+	}
+
+	if got := selectorReportedMemberReturnTypeText(member); got != "any[]" {
+		t.Fatalf("expected loose direct return %q, got %q", "any[]", got)
+	}
+}
+
 func TestSelectorFunctionTypeFromMemberPrefersProjectorContextualType(t *testing.T) {
 	member := MemberReport{
 		TypeString:          "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
@@ -4714,6 +4921,34 @@ func TestSelectorFunctionTypeFromMemberPrefersProjectorContextualType(t *testing
 	expected := "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }"
 	if got := selectorFunctionTypeFromMember(member); got != expected {
 		t.Fatalf("expected projector contextual function type %q, got %q", expected, got)
+	}
+}
+
+func TestSelectorFunctionTypeFromMemberPrefersDirectProjectorWhenContextualAddsOptionalUndefined(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	member := MemberReport{
+		TypeString:                "[(s: any) => [any], (activeEditAppPanel: PanelWithMetadata | null) => { sceneId: string; nodeId: string; nodeData: AppNodeData | null; } | null]",
+		ReturnTypeString:          "{ sceneId: string; nodeId: string; nodeData: AppNodeData | null; } | null",
+		ProjectorTypeString:       "any | ((activeEditAppPanel: PanelWithMetadata | null) => null | { nodeData: AppNodeData | null; nodeId: string | undefined; sceneId: string | undefined; })",
+		ProjectorDirectTypeString: "(activeEditAppPanel: PanelWithMetadata | null) => { sceneId: string; nodeId: string; nodeData: AppNodeData | null; } | null",
+	}
+
+	expected := "(activeEditAppPanel: PanelWithMetadata | null) => { sceneId: string; nodeId: string; nodeData: AppNodeData | null; } | null"
+	if got := selectorFunctionTypeFromMember(member); got != expected {
+		t.Fatalf("expected direct projector function type %q, got %q", expected, got)
+	}
+}
+
+func TestSelectorFunctionTypeFromMemberExtractsUnionWrappedProjectorType(t *testing.T) {
+	member := MemberReport{
+		TypeString:               "[(s: any) => any[], (nodes: DiagramNode[], nodeId: string) => any]",
+		ProjectorPrintedTypeNode: "any | ((nodes: DiagramNode[], nodeId: string) => any)",
+	}
+
+	expected := "(nodes: DiagramNode[], nodeId: string) => any"
+	if got := selectorFunctionTypeFromMember(member); got != expected {
+		t.Fatalf("expected union-wrapped projector function type %q, got %q", expected, got)
 	}
 }
 
@@ -4744,7 +4979,7 @@ func TestBuildParsedLogicsParityModeUsesProjectorContextualSelectorSurface(t *te
 		"  },",
 		"  selectors: {",
 		"    chatAppContext: [",
-		"      (s) => [s.chatContextType, s.chatContextId, s.frameForm],",
+		"      (s: any) => [s.chatContextType, s.chatContextId, s.frameForm],",
 		"      (chatContextType: ChatContextType, chatContextId: string | null, frameForm) => {",
 		"        if (chatContextType !== 'app' || !chatContextId) {",
 		"          return null",
@@ -4787,11 +5022,12 @@ func TestBuildParsedLogicsParityModeUsesProjectorContextualSelectorSurface(t *te
 						Name: "selectors",
 						Members: []MemberReport{
 							{
-								Name:                      "chatAppContext",
-								TypeString:                "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
-								ReturnTypeString:          "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }",
-								ProjectorTypeString:       "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
-								ProjectorReturnTypeString: "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
+								Name:                          "chatAppContext",
+								TypeString:                    "[(s: any) => any[], (chatContextType: ChatContextType, chatContextId: string | null, frameForm: Partial<FrameType>) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }]",
+								ReturnTypeString:              "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: string; }",
+								SelectorInputReturnTypeString: "[any, any, any]",
+								ProjectorTypeString:           "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
+								ProjectorReturnTypeString:     "null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }",
 							},
 						},
 					},
@@ -4816,6 +5052,258 @@ func TestBuildParsedLogicsParityModeUsesProjectorContextualSelectorSurface(t *te
 	expectedHelperType := "(chatContextType: any, chatContextId: any, frameForm: any) => null | { nodeData: AppNodeData | undefined; nodeId: string; sceneId: string; sceneName: any; }"
 	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "chatAppContext"); !ok || helper.FunctionType != expectedHelperType {
 		t.Fatalf("expected parity-mode chatAppContext helper %q, got %+v", expectedHelperType, logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsParityModeUsesUnionWrappedProjectorSelectorSurface(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type DiagramNode = { id: string }",
+		"",
+		"export const appNodeLogic = kea({",
+		"  reducers: {",
+		"    nodes: [[] as DiagramNode[], {}],",
+		"    nodeId: ['' as string, {}],",
+		"  },",
+		"  selectors: {",
+		"    node: [",
+		"      (s) => [s.nodes, s.nodeId],",
+		"      (nodes: DiagramNode[], nodeId: string) => nodes.find((item) => item.id === nodeId) ?? null,",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/appNodeLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "appNodeLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "nodes", TypeString: "[DiagramNode[], {}]"},
+							{Name: "nodeId", TypeString: "[string, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:                     "node",
+								TypeString:               "[(s: any) => any[], (nodes: DiagramNode[], nodeId: string) => any]",
+								ReturnTypeString:         "any",
+								ProjectorPrintedTypeNode: "any | ((nodes: DiagramNode[], nodeId: string) => any)",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "node"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode node selector type %q, got %+v", "any", logic.Selectors)
+	}
+	expectedHelperType := "(nodes: DiagramNode[], nodeId: string) => any"
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "node"); !ok || helper.FunctionType != expectedHelperType {
+		t.Fatalf("expected parity-mode node helper %q, got %+v", expectedHelperType, logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsParityModePrefersLooseDirectProjectorReturnOverContextualSurface(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type DiagramNode = { id: string }",
+		"",
+		"export const appNodeLogic = kea({",
+		"  reducers: {",
+		"    nodes: [[] as DiagramNode[], {}],",
+		"    nodeId: ['' as string, {}],",
+		"  },",
+		"  selectors: {",
+		"    node: [",
+		"      (s) => [s.nodes, s.nodeId],",
+		"      (nodes: DiagramNode[], nodeId: string) => nodes.find((item) => item.id === nodeId) ?? null,",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/appNodeLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "appNodeLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "nodes", TypeString: "[DiagramNode[], {}]"},
+							{Name: "nodeId", TypeString: "[string, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:                      "node",
+								TypeString:                "[(s: any) => any[], (nodes: DiagramNode[], nodeId: string) => any]",
+								ReturnTypeString:          "any",
+								ProjectorTypeString:       "any | ((nodes: DiagramNode[], nodeId: string) => DiagramNode | null)",
+								ProjectorDirectTypeString: "(nodes: DiagramNode[], nodeId: string) => any",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "node"); !ok || selector.Type != "any" {
+		t.Fatalf("expected parity-mode node selector type %q, got %+v", "any", logic.Selectors)
+	}
+	expectedHelperType := "(nodes: DiagramNode[], nodeId: string) => any"
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "node"); !ok || helper.FunctionType != expectedHelperType {
+		t.Fatalf("expected parity-mode node helper %q, got %+v", expectedHelperType, logic.InternalSelectorTypes)
+	}
+}
+
+func TestBuildParsedLogicsParityModeKeepsOpaqueSelectorInputTupleHelperParameters(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"",
+		"type FrameScene = { id: string }",
+		"",
+		"export const chatLogic = kea({",
+		"  reducers: {",
+		"    scenes: [[] as FrameScene[], {}],",
+		"    selectedScenePanelId: [null as string | null, {}],",
+		"  },",
+		"  selectors: {",
+		"    selectedScene: [",
+		"      (s: any) => [s.scenes, s.selectedScenePanelId],",
+		"      (scenes: FrameScene[], selectedScenePanelId: string | null) => scenes.find((scene) => scene.id === selectedScenePanelId) ?? null,",
+		"    ],",
+		"  },",
+		"})",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/chatLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "chatLogic",
+				InputKind: "object",
+				Sections: []SectionReport{
+					{
+						Name: "reducers",
+						Members: []MemberReport{
+							{Name: "scenes", TypeString: "[FrameScene[], {}]"},
+							{Name: "selectedScenePanelId", TypeString: "[string | null, {}]"},
+						},
+					},
+					{
+						Name: "selectors",
+						Members: []MemberReport{
+							{
+								Name:                      "selectedScene",
+								TypeString:                "[(s: any) => [any, any], (scenes: FrameScene[], selectedScenePanelId: string | null) => FrameScene | null]",
+								ReturnTypeString:          "FrameScene | null",
+								ProjectorDirectTypeString: "(scenes: FrameScene[], selectedScenePanelId: string | null) => FrameScene | null",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	expectedHelperType := "(scenes: any, selectedScenePanelId: any) => FrameScene | null"
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "selectedScene"); !ok || helper.FunctionType != expectedHelperType {
+		t.Fatalf("expected parity-mode opaque tuple helper %q, got %+v", expectedHelperType, logic.InternalSelectorTypes)
+	}
+}
+
+func TestParityModeOpaqueSelectorInputTupleHelperFunctionTypeKeepsUnknownDependencyOpaque(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "node", Type: "any"},
+		},
+	}
+	member := MemberReport{
+		SelectorInputReturnTypeString: "any[]",
+	}
+	current := "(node: any, scenes: FrameScene[]) => FrameScene | null"
+	expression := "[(s) => [s.node, s.scenes], (node, scenes: FrameScene[]) => node ? scenes[0] ?? null : null]"
+
+	expected := "(node: any, scenes: any) => FrameScene | null"
+	if got := parityModeOpaqueSelectorInputTupleHelperFunctionType(logic, member, "", "", expression, current, nil); got != expected {
+		t.Fatalf("expected opaque unknown-dependency helper %q, got %q", expected, got)
+	}
+}
+
+func TestParityModeOpaqueSelectorInputTupleHelperFunctionTypePreservesKnownLooseArrayDependency(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "fieldInputFields", Type: "string[]"},
+			{Name: "nodeOutputFields", Type: "any[]"},
+		},
+	}
+	member := MemberReport{
+		SelectorInputReturnTypeString: "any[]",
+	}
+	current := "(fieldInputFields: string[], nodeOutputFields: any) => string"
+	expression := "[(s) => [s.fieldInputFields, s.nodeOutputFields], (fieldInputFields, nodeOutputFields) => fieldInputFields.join(',') + String(nodeOutputFields.length)]"
+
+	expected := "(fieldInputFields: string[], nodeOutputFields: any[]) => string"
+	if got := parityModeOpaqueSelectorInputTupleHelperFunctionType(logic, member, "", "", expression, current, nil); got != expected {
+		t.Fatalf("expected opaque known-array helper %q, got %q", expected, got)
 	}
 }
 
@@ -5697,6 +6185,13 @@ func TestParityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(t *te
 	if parityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(expression, recovered, current) {
 		t.Fatalf("did not expect concrete dependency name helper to replace recovered placeholder name")
 	}
+
+	untypedExpression := "[(s) => [s.scenes, (_, props) => props.sceneId, (_, props) => props.sceneOverride], (scenes, sceneId, sceneOverride): FrameScene | null => sceneOverride ?? scenes?.find((scene) => scene.id === sceneId) ?? null]"
+	untypedCurrent := "(scenes: any, sceneId: any, sceneOverride: any) => FrameScene | null"
+	untypedRecovered := "(scenes: any, arg: any, arg2: any) => FrameScene | null"
+	if !parityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(untypedExpression, untypedCurrent, untypedRecovered) {
+		t.Fatalf("expected untyped unnamed dependency helper to prefer recovered placeholder names")
+	}
 }
 
 func TestParseInternalSelectorTypesWithStateKeepsRecoveredConnectedHelperParameterTypes(t *testing.T) {
@@ -5959,6 +6454,103 @@ func TestBuildParsedLogicsParityRecoversTemplateRowHelperAndSelectorSurfaces(t *
 	}
 }
 
+func TestTemplateRowTrySceneConfigSourcePropertyRecoversConcreteHelper(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	root := repoRoot(t)
+	frameOSRoot := filepath.Clean(filepath.Join(root, "..", "frameos"))
+	projectDir := filepath.Join(frameOSRoot, "frontend")
+	targetFile := filepath.Join(projectDir, "src", "scenes", "frame", "panels", "Templates", "templateRowLogic.ts")
+	configFile := filepath.Join(projectDir, "tsconfig.json")
+	if _, err := os.Stat(targetFile); err != nil {
+		t.Skipf("frameos templateRowLogic fixture unavailable: %v", err)
+	}
+
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: projectDir,
+		ConfigFile: configFile,
+		File:       targetFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+	source := mustReadFile(t, targetFile)
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(report.Logics) != 1 || len(sourceLogics) != 1 {
+		t.Fatalf("expected 1 reported logic and 1 source logic, got %d / %d", len(report.Logics), len(sourceLogics))
+	}
+
+	state := &buildState{
+		binaryPath:    report.BinaryPath,
+		projectDir:    report.ProjectDir,
+		configFile:    report.ConfigFile,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	sections := map[string][]SectionReport{}
+	for _, section := range report.Logics[0].Sections {
+		sections[section.Name] = append(sections[section.Name], section)
+	}
+	properties := map[string][]SourceProperty{}
+	for _, property := range sourceLogics[0].Properties {
+		properties[property.Name] = append(properties[property.Name], property)
+	}
+
+	selectorSection := sections["selectors"][0]
+	selectorProperty := sourcePropertyAt(properties["selectors"], 0)
+	parsed := ParsedLogic{InputKind: report.Logics[0].InputKind}
+	if propsSections := sections["props"]; len(propsSections) > 0 {
+		parsed.PropsType = preferredTypeText(propsSections[len(propsSections)-1])
+	}
+	for index, section := range sections["reducers"] {
+		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseReducersWithSource(section, source, sourcePropertyAt(properties["reducers"], index), report.File, state)...)
+	}
+	for index, section := range sections["forms"] {
+		formActions, formReducers, formSelectors, _ := parseFormsPluginSectionWithSource(
+			section,
+			source,
+			sourcePropertyAt(properties["forms"], index),
+			report.File,
+			state,
+		)
+		_ = formActions
+		parsed.Reducers = mergeParsedFieldsPreferExisting(parsed.Reducers, formReducers...)
+		parsed.Selectors = mergeParsedFieldsPreferExisting(parsed.Selectors, formSelectors...)
+	}
+	parsed.Selectors = mergeParsedFields(parsed.Selectors, parseSelectorsWithSource(selectorSection, parsed, source, selectorProperty, report.File, state)...)
+	firstHelpers := parseInternalSelectorTypesWithSource(selectorSection, parsed, source, selectorProperty, report.File, state)
+	parsed.InternalSelectorTypes = mergeParsedFunctions(parsed.InternalSelectorTypes, firstHelpers...)
+	parsed.Selectors = refineSelectorTypesFromInternalHelpers(parsed.Selectors, firstHelpers, false)
+
+	sourceMembers := sectionSourceProperties(source, selectorProperty)
+	trySceneConfigProperty, ok := sourceMembers["trySceneConfig"]
+	if !ok {
+		t.Fatalf("expected trySceneConfig source selector property, got %+v", sourceMembers)
+	}
+
+	got := sourceInternalSelectorFunctionTypeWithFallbackReturn(
+		parsed,
+		source,
+		report.File,
+		sourcePropertyText(source, trySceneConfigProperty),
+		"null | { mainScene: any; payloadScenes: any[]; }",
+		state,
+	)
+	want := "(scenes: FrameScene[]) => null | { mainScene: FrameScene; payloadScenes: FrameScene[]; }"
+	if got != want {
+		t.Fatalf("expected trySceneConfig source helper %q, got %q", want, got)
+	}
+}
+
 func TestBuildParsedLogicsParityKeepsInstalledTemplatesByNameLiteralTrueMap(t *testing.T) {
 	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
 
@@ -6035,6 +6627,200 @@ func TestSourceExpressionTypeTextWithBlockScopeRecoversReturnedObjectFromLocalVa
 	)
 	if got != "{ mainScene: FrameScene; payloadScenes: FrameScene[]; }" {
 		t.Fatalf("expected block-scoped object type %q, got %q", "{ mainScene: FrameScene; payloadScenes: FrameScene[]; }", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithBlockScopeRecoversTemplateRowStyleReturnedObject(t *testing.T) {
+	source := strings.Join([]string{
+		"type SceneNodeData = { keyword?: string }",
+		"type FrameScene = {",
+		"  id: string",
+		"  nodes: { type: string; data?: SceneNodeData }[]",
+		"  settings?: { execution?: 'compiled' | 'interpreted' }",
+		"}",
+		"declare function findConnectedScenes(scenes: FrameScene[], sceneId: string): string[]",
+	}, "\n")
+
+	scopePrefix := strings.Join([]string{
+		"{",
+		"  const interpretedScenes = scenes.filter((scene) => scene.settings?.execution === 'interpreted')",
+		"  if (!interpretedScenes.length) {",
+		"    return null",
+		"  }",
+		"  const parentCounts = new Map<string, number>()",
+		"  for (const scene of scenes) {",
+		"    for (const node of scene.nodes) {",
+		"      if (node.type !== 'scene') {",
+		"        continue",
+		"      }",
+		"      const linkedSceneId = (node.data as SceneNodeData)?.keyword",
+		"      if (linkedSceneId) {",
+		"        parentCounts.set(linkedSceneId, (parentCounts.get(linkedSceneId) ?? 0) + 1)",
+		"      }",
+		"    }",
+		"  }",
+		"  let mainScene = interpretedScenes[0]",
+		"  let lowestParents = parentCounts.get(mainScene.id) ?? 0",
+		"  for (const scene of interpretedScenes.slice(1)) {",
+		"    const parents = parentCounts.get(scene.id) ?? 0",
+		"    if (parents < lowestParents) {",
+		"      lowestParents = parents",
+		"      mainScene = scene",
+		"    }",
+		"  }",
+		"  const connectedIds = new Set(findConnectedScenes(scenes, mainScene.id))",
+		"  const payloadScenes = scenes.filter((scene) => connectedIds.has(scene.id))",
+		"  return { mainScene, payloadScenes }",
+		"}",
+	}, "\n")
+
+	got := sourceExpressionTypeTextWithBlockScope(
+		source,
+		"",
+		"{ mainScene, payloadScenes }",
+		scopePrefix,
+		map[string]string{"scenes": "FrameScene[]"},
+		nil,
+	)
+	if got != "{ mainScene: FrameScene; payloadScenes: FrameScene[]; }" {
+		t.Fatalf("expected template-row block-scoped object type %q, got %q", "{ mainScene: FrameScene; payloadScenes: FrameScene[]; }", got)
+	}
+}
+
+func TestSourceInternalSelectorFunctionTypeWithFallbackReturnRecoversTemplateRowStyleBlockObject(t *testing.T) {
+	source := strings.Join([]string{
+		"type SceneNodeData = { keyword?: string }",
+		"type FrameScene = {",
+		"  id: string",
+		"  nodes: { type: string; data?: SceneNodeData }[]",
+		"  settings?: { execution?: 'compiled' | 'interpreted' }",
+		"}",
+		"declare function findConnectedScenes(scenes: FrameScene[], sceneId: string): string[]",
+	}, "\n")
+
+	expression := strings.Join([]string{
+		"[",
+		"  (s) => [s.scenes],",
+		"  (scenes) => {",
+		"    const interpretedScenes = scenes.filter((scene) => scene.settings?.execution === 'interpreted')",
+		"    if (!interpretedScenes.length) {",
+		"      return null",
+		"    }",
+		"    const parentCounts = new Map<string, number>()",
+		"    for (const scene of scenes) {",
+		"      for (const node of scene.nodes) {",
+		"        if (node.type !== 'scene') {",
+		"          continue",
+		"        }",
+		"        const linkedSceneId = (node.data as SceneNodeData)?.keyword",
+		"        if (linkedSceneId) {",
+		"          parentCounts.set(linkedSceneId, (parentCounts.get(linkedSceneId) ?? 0) + 1)",
+		"        }",
+		"      }",
+		"    }",
+		"    let mainScene = interpretedScenes[0]",
+		"    let lowestParents = parentCounts.get(mainScene.id) ?? 0",
+		"    for (const scene of interpretedScenes.slice(1)) {",
+		"      const parents = parentCounts.get(scene.id) ?? 0",
+		"      if (parents < lowestParents) {",
+		"        lowestParents = parents",
+		"        mainScene = scene",
+		"      }",
+		"    }",
+		"    const connectedIds = new Set(findConnectedScenes(scenes, mainScene.id))",
+		"    const payloadScenes = scenes.filter((scene) => connectedIds.has(scene.id))",
+		"    return { mainScene, payloadScenes }",
+		"  },",
+		"]",
+	}, "\n")
+
+	logic := ParsedLogic{
+		InputKind: "builders",
+		Selectors: []ParsedField{{Name: "scenes", Type: "FrameScene[]"}},
+	}
+
+	got := sourceInternalSelectorFunctionTypeWithFallbackReturn(logic, source, "/tmp/templateRowLogic.ts", expression, "any", nil)
+	want := "(scenes: FrameScene[]) => null | { mainScene: FrameScene; payloadScenes: FrameScene[]; }"
+	if got != want {
+		t.Fatalf("expected template-row helper type %q, got %q", want, got)
+	}
+}
+
+func TestSourceInternalSelectorFunctionTypeWithFallbackReturnRecoversImportedTemplateRowTrySceneConfigHelper(t *testing.T) {
+	files := map[string]string{
+		"src/types.tsx": strings.Join([]string{
+			"export interface SceneNodeData {",
+			"    keyword?: string",
+			"}",
+			"",
+			"export interface FrameScene {",
+			"    id: string",
+			"    nodes: { type: string; data?: SceneNodeData }[]",
+			"    settings?: { execution?: 'compiled' | 'interpreted' }",
+			"}",
+		}, "\n"),
+		"src/utils.ts": strings.Join([]string{
+			"import type { FrameScene } from './types'",
+			"",
+			"export function findConnectedScenes(scenes: FrameScene[], sceneId: string): string[] {",
+			"    return [sceneId]",
+			"}",
+		}, "\n"),
+		"src/templateRowLogic.ts": strings.Join([]string{
+			"import { SceneNodeData } from './types'",
+			"import { findConnectedScenes } from './utils'",
+			"",
+			"export const expression = [",
+			"  (s) => [s.scenes],",
+			"  (scenes) => {",
+			"    const interpretedScenes = scenes.filter((scene) => scene.settings?.execution === 'interpreted')",
+			"    if (!interpretedScenes.length) {",
+			"      return null",
+			"    }",
+			"    const parentCounts = new Map<string, number>()",
+			"    for (const scene of scenes) {",
+			"      for (const node of scene.nodes) {",
+			"        if (node.type !== 'scene') {",
+			"          continue",
+			"        }",
+			"        const linkedSceneId = (node.data as SceneNodeData)?.keyword",
+			"        if (linkedSceneId) {",
+			"          parentCounts.set(linkedSceneId, (parentCounts.get(linkedSceneId) ?? 0) + 1)",
+			"        }",
+			"      }",
+			"    }",
+			"    let mainScene = interpretedScenes[0]",
+			"    let lowestParents = parentCounts.get(mainScene.id) ?? 0",
+			"    for (const scene of interpretedScenes.slice(1)) {",
+			"      const parents = parentCounts.get(scene.id) ?? 0",
+			"      if (parents < lowestParents) {",
+			"        lowestParents = parents",
+			"        mainScene = scene",
+			"      }",
+			"    }",
+			"    const connectedIds = new Set(findConnectedScenes(scenes, mainScene.id))",
+			"    const payloadScenes = scenes.filter((scene) => connectedIds.has(scene.id))",
+			"    return { mainScene, payloadScenes }",
+			"  },",
+			"]",
+		}, "\n"),
+	}
+
+	tempDir, tsconfigPath := writeTempProject(t, files)
+	logicFile := filepath.Join(tempDir, "src", "templateRowLogic.ts")
+	source := mustReadFile(t, logicFile)
+	expressionSource := source[strings.Index(source, "[") : strings.LastIndex(source, "]")+1]
+	state := &buildState{projectDir: tempDir, configFile: tsconfigPath}
+
+	logic := ParsedLogic{
+		InputKind: "builders",
+		Selectors: []ParsedField{{Name: "scenes", Type: "FrameScene[]"}},
+	}
+
+	got := sourceInternalSelectorFunctionTypeWithFallbackReturn(logic, source, logicFile, expressionSource, "any", state)
+	want := "(scenes: FrameScene[]) => null | { mainScene: FrameScene; payloadScenes: FrameScene[]; }"
+	if got != want {
+		t.Fatalf("expected imported template-row helper type %q, got %q", want, got)
 	}
 }
 
@@ -6380,6 +7166,802 @@ func TestInternalHelperOpaqueComplexFallbackReturnKeepsDirectConcreteFallbackRet
 	}
 }
 
+func TestInternalHelperOpaqueComplexFallbackReturnKeepsIndexedRecordLookupConcrete(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	if internalHelperOpaqueComplexFallbackReturnShouldStayAny(
+		ParsedLogic{},
+		"",
+		"",
+		"[(s) => [s.frames, s.frameId], (frames, frameId) => frames[frameId] || null]",
+		"frames[frameId] || null",
+		false,
+		"any",
+		"FrameType",
+		[]string{"Record<number, FrameType>", "any"},
+		nil,
+	) {
+		t.Fatalf("expected indexed record fallback to keep concrete helper return")
+	}
+}
+
+func TestSourceSelectorInferredTypeRecoversIndexedRecordLookupWithOpaqueKey(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "frames", Type: "Record<number, FrameType>"},
+			{Name: "frameId", Type: "any"},
+		},
+	}
+
+	if got := sourceSelectorInferredType(
+		logic,
+		"",
+		"",
+		"[(s) => [s.frames, s.frameId], (frames, frameId) => frames[frameId] || null]",
+		nil,
+	); got != "FrameType" {
+		t.Fatalf("expected indexed record lookup selector type %q, got %q", "FrameType", got)
+	}
+}
+
+func TestSourceInternalSelectorFunctionTypeWithFallbackReturnRecoversIndexedRecordLookup(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "frames", Type: "Record<number, FrameType>"},
+			{Name: "frameId", Type: "any"},
+		},
+	}
+
+	got := sourceInternalSelectorFunctionTypeWithFallbackReturn(
+		logic,
+		"",
+		"",
+		"[(s) => [s.frames, s.frameId], (frames, frameId) => frames[frameId] || null]",
+		"any",
+		nil,
+	)
+	if got != "(frames: Record<number, FrameType>, frameId: any) => FrameType" {
+		t.Fatalf(
+			"expected indexed record lookup helper type %q, got %q",
+			"(frames: Record<number, FrameType>, frameId: any) => FrameType",
+			got,
+		)
+	}
+}
+
+func TestSourceSelectorInferredTypeRecoversImportedIndexedRecordLookupWithOpaqueKey(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir := t.TempDir()
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2019",`,
+		`    "module": "CommonJS",`,
+		`    "strict": true,`,
+		`    "esModuleInterop": true,`,
+		`    "skipLibCheck": true`,
+		"  },",
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte(strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    scenes?: FrameScene[]",
+			"}",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "framesModel.ts"),
+		[]byte(strings.Join([]string{
+			"import { kea } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export const framesModel = kea({",
+			"    defaults: {",
+			"        frames: {} as Record<number, FrameType>,",
+			"    },",
+			"})",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "diagramLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import { framesModel } from './framesModel'",
+		"",
+		"type DiagramLogicProps = { frameId: number }",
+		"",
+		"export const diagramLogic = kea({",
+		"    props: {} as DiagramLogicProps,",
+		"    selectors: {",
+		"        frameId: [",
+		"            () => [(_, props) => props.frameId],",
+		"            (frameId) => frameId,",
+		"        ],",
+		"        originalFrame: [",
+		"            (s) => [framesModel.selectors.frames, s.frameId],",
+		"            (frames, frameId) => frames[frameId] || null,",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	state := &buildState{
+		binaryPath:    tsgoapi.PreferredBinary(repoRoot(t)),
+		projectDir:    tempDir,
+		configFile:    tsconfigPath,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	if len(sourceLogics) != 1 {
+		t.Fatalf("expected 1 source logic, got %d", len(sourceLogics))
+	}
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+	sourceMembers := sectionSourceProperties(source, selectorsProperty)
+	originalFrameProperty, ok := sourceMembers["originalFrame"]
+	if !ok {
+		t.Fatalf("expected originalFrame selector source property, got %+v", sourceMembers)
+	}
+	expression := sourcePropertyText(source, originalFrameProperty)
+
+	logic := ParsedLogic{
+		PropsType: "DiagramLogicProps",
+		Selectors: []ParsedField{
+			{Name: "frameId", Type: "any"},
+		},
+	}
+	dependencyTypes := sourceSelectorDependencyTypes(logic, source, logicFile, expression, state)
+	inferred := sourceSelectorInferredType(logic, source, logicFile, expression, state)
+	functionType := sourceInternalSelectorFunctionTypeWithFallbackReturn(logic, source, logicFile, expression, "any", state)
+
+	if len(dependencyTypes) != 2 || dependencyTypes[0] != "Record<number, FrameType>" || dependencyTypes[1] != "any" {
+		t.Fatalf("expected dependency types %q, got %+v", []string{"Record<number, FrameType>", "any"}, dependencyTypes)
+	}
+	if inferred != "FrameType" {
+		t.Fatalf("expected inferred imported indexed selector type %q, got %q", "FrameType", inferred)
+	}
+	if functionType != "(frames: Record<number, FrameType>, frameId: any) => FrameType" {
+		t.Fatalf(
+			"expected imported indexed helper type %q, got %q",
+			"(frames: Record<number, FrameType>, frameId: any) => FrameType",
+			functionType,
+		)
+	}
+}
+
+func TestParseInternalSelectorTypesWithSourceRecoversImportedIndexedRecordLookupHelper(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir := t.TempDir()
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2019",`,
+		`    "module": "CommonJS",`,
+		`    "strict": true,`,
+		`    "esModuleInterop": true,`,
+		`    "skipLibCheck": true`,
+		"  },",
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte(strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    scenes?: FrameScene[]",
+			"}",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "framesModel.ts"),
+		[]byte(strings.Join([]string{
+			"import { kea } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export const framesModel = kea({",
+			"    defaults: {",
+			"        frames: {} as Record<number, FrameType>,",
+			"    },",
+			"})",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "diagramLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import { framesModel } from './framesModel'",
+		"",
+		"type DiagramLogicProps = { frameId: number }",
+		"",
+		"export const diagramLogic = kea({",
+		"    props: {} as DiagramLogicProps,",
+		"    selectors: {",
+		"        frameId: [",
+		"            () => [(_, props) => props.frameId],",
+		"            (frameId) => frameId,",
+		"        ],",
+		"        originalFrame: [",
+		"            (s) => [framesModel.selectors.frames, s.frameId],",
+		"            (frames, frameId) => frames[frameId] || null,",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	state := &buildState{
+		binaryPath:    tsgoapi.PreferredBinary(repoRoot(t)),
+		projectDir:    tempDir,
+		configFile:    tsconfigPath,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+	helpers := parseInternalSelectorTypesWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{
+					Name:             "frameId",
+					TypeString:       "[() => [(_: any, props: any) => any], (frameId: any) => any]",
+					ReturnTypeString: "any",
+				},
+				{
+					Name:             "originalFrame",
+					TypeString:       "[(s: any) => [any, any], (frames: any, frameId: any) => any]",
+					ReturnTypeString: "any",
+				},
+			},
+		},
+		ParsedLogic{
+			InputKind: "object",
+			PropsType: "DiagramLogicProps",
+			Reducers: []ParsedField{
+				{Name: "frames", Type: "Record<number, FrameType>"},
+			},
+			Selectors: []ParsedField{
+				{Name: "frameId", Type: "any"},
+			},
+		},
+		source,
+		selectorsProperty,
+		logicFile,
+		state,
+	)
+
+	helper, ok := findParsedFunction(helpers, "originalFrame")
+	if !ok || helper.FunctionType != "(frames: Record<number, FrameType>, frameId: any) => FrameType" {
+		t.Fatalf(
+			"expected imported indexed helper %q, got %+v",
+			"(frames: Record<number, FrameType>, frameId: any) => FrameType",
+			helpers,
+		)
+	}
+}
+
+func TestParseInternalSelectorTypesWithSourceRecoversImportedIndexedRecordLookupHelperInBuilders(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir := t.TempDir()
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2019",`,
+		`    "module": "CommonJS",`,
+		`    "strict": true,`,
+		`    "esModuleInterop": true,`,
+		`    "skipLibCheck": true`,
+		"  },",
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte(strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    scenes?: FrameScene[]",
+			"}",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "framesModel.ts"),
+		[]byte(strings.Join([]string{
+			"import { kea } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export const framesModel = kea({",
+			"    defaults: {",
+			"        frames: {} as Record<number, FrameType>,",
+			"    },",
+			"})",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "diagramLogic.ts")
+	source := strings.Join([]string{
+		"import { kea, props, selectors } from 'kea'",
+		"import { framesModel } from './framesModel'",
+		"",
+		"type DiagramLogicProps = { frameId: number }",
+		"",
+		"export const diagramLogic = kea([",
+		"    props({} as DiagramLogicProps),",
+		"    selectors(() => ({",
+		"        frameId: [",
+		"            () => [(_, props) => props.frameId],",
+		"            (frameId) => frameId,",
+		"        ],",
+		"        originalFrame: [",
+		"            (s) => [framesModel.selectors.frames, s.frameId],",
+		"            (frames, frameId) => frames[frameId] || null,",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	state := &buildState{
+		binaryPath:    tsgoapi.PreferredBinary(repoRoot(t)),
+		projectDir:    tempDir,
+		configFile:    tsconfigPath,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+	helpers := parseInternalSelectorTypesWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{
+					Name:       "frameId",
+					TypeString: "((frameId: any) => any)[]",
+				},
+				{
+					Name:                          "originalFrame",
+					TypeString:                    "((frames: any, frameId: any) => any)[]",
+					SelectorInputReturnTypeString: "any[]",
+					ReturnTypeString:              "any",
+				},
+			},
+		},
+		ParsedLogic{
+			InputKind: "builders",
+			PropsType: "DiagramLogicProps",
+			Selectors: []ParsedField{
+				{Name: "frameId", Type: "any"},
+			},
+		},
+		source,
+		selectorsProperty,
+		logicFile,
+		state,
+	)
+
+	helper, ok := findParsedFunction(helpers, "originalFrame")
+	if !ok || helper.FunctionType != "(frames: Record<number, FrameType>, frameId: any) => FrameType" {
+		t.Fatalf(
+			"expected imported indexed builder helper %q, got %+v",
+			"(frames: Record<number, FrameType>, frameId: any) => FrameType",
+			helpers,
+		)
+	}
+}
+
+func TestSourceSelectorInferredTypeRecoversImportedNullableFindLookupWithOpaqueKey(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir := t.TempDir()
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2019",`,
+		`    "module": "CommonJS",`,
+		`    "strict": true,`,
+		`    "esModuleInterop": true,`,
+		`    "skipLibCheck": true`,
+		"  },",
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "types.ts"),
+		[]byte(strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    scenes?: FrameScene[]",
+			"}",
+		}, "\n")),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "diagramLogic.ts")
+	source := strings.Join([]string{
+		"import { kea } from 'kea'",
+		"import type { FrameType } from './types'",
+		"",
+		"export const diagramLogic = kea({",
+		"    selectors: {",
+		"        scene: [",
+		"            (s) => [s.editingFrame, s.sceneId],",
+		"            (editingFrame, sceneId) => (editingFrame.scenes ?? []).find((s) => s.id === sceneId) || null,",
+		"        ],",
+		"    },",
+		"})",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	state := &buildState{
+		binaryPath:    tsgoapi.PreferredBinary(repoRoot(t)),
+		projectDir:    tempDir,
+		configFile:    tsconfigPath,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "editingFrame", Type: "Partial<FrameType>"},
+			{Name: "sceneId", Type: "any"},
+		},
+	}
+	expression := "[(s) => [s.editingFrame, s.sceneId], (editingFrame, sceneId) => (editingFrame.scenes ?? []).find((s) => s.id === sceneId) || null]"
+	if got := sourceSelectorInferredType(logic, source, logicFile, expression, state); got != "FrameScene | null" {
+		t.Fatalf("expected imported nullable find selector type %q, got %q", "FrameScene | null", got)
+	}
+	if got := sourceInternalSelectorFunctionTypeWithFallbackReturn(logic, source, logicFile, expression, "any", state); got != "(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null" {
+		t.Fatalf(
+			"expected imported nullable find helper type %q, got %q",
+			"(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null",
+			got,
+		)
+	}
+}
+
+func TestSourceSelectorInferredTypeRecoversImportedNullableFindLookupWithOpaqueKeyFromTSXTypeFile(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir, tsconfigPath := writeTempProject(t, map[string]string{
+		"src/types.tsx": strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    scenes?: FrameScene[]",
+			"}",
+		}, "\n"),
+		"src/diagramLogic.tsx": strings.Join([]string{
+			"import { kea } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export const diagramLogic = kea({",
+			"    selectors: {",
+			"        scene: [",
+			"            (s) => [s.editingFrame, s.sceneId],",
+			"            (editingFrame, sceneId) => (editingFrame.scenes ?? []).find((s) => s.id === sceneId) || null,",
+			"        ],",
+			"    },",
+			"})",
+		}, "\n"),
+	})
+
+	logicFile := filepath.Join(tempDir, "src", "diagramLogic.tsx")
+	source := mustReadFile(t, logicFile)
+	state := &buildState{
+		binaryPath:    tsgoapi.PreferredBinary(repoRoot(t)),
+		projectDir:    tempDir,
+		configFile:    tsconfigPath,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "editingFrame", Type: "Partial<FrameType>"},
+			{Name: "sceneId", Type: "any"},
+		},
+	}
+	expression := "[(s) => [s.editingFrame, s.sceneId], (editingFrame, sceneId) => (editingFrame.scenes ?? []).find((s) => s.id === sceneId) || null]"
+	if got := sourceSelectorInferredType(logic, source, logicFile, expression, state); got != "FrameScene | null" {
+		t.Fatalf("expected imported TSX nullable find selector type %q, got %q", "FrameScene | null", got)
+	}
+	if got := sourceInternalSelectorFunctionTypeWithFallbackReturn(logic, source, logicFile, expression, "any", state); got != "(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null" {
+		t.Fatalf(
+			"expected imported TSX nullable find helper type %q, got %q",
+			"(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null",
+			got,
+		)
+	}
+}
+
+func TestParseInternalSelectorTypesWithSourceRecoversImportedNullableFindLookupHelperInBuilders(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	tempDir, tsconfigPath := writeTempProject(t, map[string]string{
+		"src/types.tsx": strings.Join([]string{
+			"export interface FrameScene {",
+			"    id: string",
+			"}",
+			"",
+			"export interface FrameType {",
+			"    scenes?: FrameScene[]",
+			"}",
+		}, "\n"),
+		"src/diagramLogic.tsx": strings.Join([]string{
+			"import { kea, selectors } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export const diagramLogic = kea([",
+			"    selectors(() => ({",
+			"        scene: [",
+			"            (s) => [s.editingFrame, s.sceneId],",
+			"            (editingFrame, sceneId) => (editingFrame.scenes ?? []).find((s) => s.id === sceneId) || null,",
+			"        ],",
+			"    })),",
+			"])",
+		}, "\n"),
+	})
+
+	logicFile := filepath.Join(tempDir, "src", "diagramLogic.tsx")
+	source := mustReadFile(t, logicFile)
+	state := &buildState{
+		binaryPath:    tsgoapi.PreferredBinary(repoRoot(t)),
+		projectDir:    tempDir,
+		configFile:    tsconfigPath,
+		timeout:       15 * time.Second,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+	helpers := parseInternalSelectorTypesWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{
+					Name:             "scene",
+					TypeString:       "((editingFrame: any, sceneId: any) => any)[]",
+					ReturnTypeString: "any",
+				},
+			},
+		},
+		ParsedLogic{
+			InputKind: "builders",
+			Selectors: []ParsedField{
+				{Name: "editingFrame", Type: "Partial<FrameType>"},
+				{Name: "sceneId", Type: "any"},
+				{Name: "scene", Type: "any"},
+			},
+		},
+		source,
+		selectorsProperty,
+		logicFile,
+		state,
+	)
+
+	helper, ok := findParsedFunction(helpers, "scene")
+	if !ok || helper.FunctionType != "(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null" {
+		t.Fatalf(
+			"expected imported nullable find builder helper %q, got %+v",
+			"(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null",
+			helpers,
+		)
+	}
+}
+
+func TestParseInternalSelectorTypesWithSourceKeepsConcreteNullableLookupReturnFromRefinedSelectorDependenciesInBuilders(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { kea, selectors } from 'kea'",
+		"",
+		"type FrameScene = { id: string }",
+		"type FrameType = { scenes?: FrameScene[] }",
+		"",
+		"export const diagramLogic = kea([",
+		"    selectors(() => ({",
+		"        originalFrame: [",
+		"            (s) => [s.frames, s.frameId],",
+		"            (frames, frameId) => frames[frameId] || null,",
+		"        ],",
+		"        editingFrame: [",
+		"            (s) => [s.frameForm, s.originalFrame],",
+		"            (frameForm, originalFrame) => frameForm || originalFrame || null,",
+		"        ],",
+		"        scene: [",
+		"            (s) => [s.editingFrame, s.sceneId],",
+		"            (editingFrame, sceneId) => (editingFrame.scenes ?? []).find((s) => s.id === sceneId) || null,",
+		"        ],",
+		"    })),",
+		"])",
+	}, "\n")
+
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		t.Fatalf("FindLogics returned error: %v", err)
+	}
+	selectorsProperty := mustFindLogicProperty(t, sourceLogics[0], "selectors")
+	helpers := parseInternalSelectorTypesWithSource(
+		SectionReport{
+			Name: "selectors",
+			Members: []MemberReport{
+				{
+					Name:             "originalFrame",
+					TypeString:       "((frames: any, frameId: any) => any)[]",
+					ReturnTypeString: "any",
+				},
+				{
+					Name:             "editingFrame",
+					TypeString:       "((frameForm: any, originalFrame: any) => any)[]",
+					ReturnTypeString: "any",
+				},
+				{
+					Name:             "scene",
+					TypeString:       "((editingFrame: any, sceneId: any) => any)[]",
+					ReturnTypeString: "any",
+				},
+			},
+		},
+		ParsedLogic{
+			InputKind: "builders",
+			Reducers: []ParsedField{
+				{Name: "frames", Type: "Record<number, FrameType>"},
+				{Name: "frameForm", Type: "Partial<FrameType>"},
+			},
+			Selectors: []ParsedField{
+				{Name: "frameId", Type: "any"},
+				{Name: "sceneId", Type: "any"},
+				{Name: "originalFrame", Type: "FrameType"},
+				{Name: "editingFrame", Type: "Partial<FrameType>"},
+				{Name: "scene", Type: "any"},
+			},
+		},
+		source,
+		selectorsProperty,
+		"/tmp/diagramLogic.ts",
+		nil,
+	)
+
+	originalFrame, ok := findParsedFunction(helpers, "originalFrame")
+	if !ok || originalFrame.FunctionType != "(frames: Record<number, FrameType>, frameId: any) => FrameType" {
+		t.Fatalf(
+			"expected originalFrame helper type %q, got %+v",
+			"(frames: Record<number, FrameType>, frameId: any) => FrameType",
+			helpers,
+		)
+	}
+	editingFrame, ok := findParsedFunction(helpers, "editingFrame")
+	if !ok ||
+		!strings.HasPrefix(editingFrame.FunctionType, "(frameForm: Partial<FrameType>, originalFrame: FrameType) => ") ||
+		!strings.Contains(editingFrame.FunctionType, "Partial<FrameType>") {
+		t.Fatalf(
+			"expected editingFrame helper to keep concrete frameForm/originalFrame params and a Partial<FrameType> return, got %+v",
+			helpers,
+		)
+	}
+	scene, ok := findParsedFunction(helpers, "scene")
+	if !ok ||
+		!strings.HasPrefix(scene.FunctionType, "(editingFrame: ") ||
+		!strings.Contains(scene.FunctionType, "sceneId: any") ||
+		!strings.HasSuffix(scene.FunctionType, "=> FrameScene | null") {
+		t.Fatalf(
+			"expected scene helper to keep a concrete nullable FrameScene return, got %+v",
+			helpers,
+		)
+	}
+}
+
 func TestSelectorOpaqueNullableLookupRecoveryShouldStayConcrete(t *testing.T) {
 	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
 
@@ -6634,6 +8216,53 @@ func TestParityModeRecoveredInternalHelperFunctionTypePrefersRecoveredPrimitiveN
 	}
 }
 
+func TestParityModeRecoveredInternalHelperFunctionTypeKeepsConcreteNullableLookupReturn(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	expression := "[(s) => [s.editingFrame, s.sceneId], (editingFrame, sceneId) => (editingFrame.scenes ?? []).find((s) => s.id === sceneId) || null]"
+	current := "(editingFrame: any, sceneId: any) => any"
+	recovered := "(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null"
+
+	if got := parityModeRecoveredInternalHelperFunctionType(expression, current, recovered, true); got != recovered {
+		t.Fatalf("expected recovered nullable lookup helper type %q, got %q", recovered, got)
+	}
+}
+
+func TestParityModeRecoveredInternalHelperFunctionTypeKeepsDirectConcreteFallbackReturn(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	expression := "[(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm || frame || null]"
+	current := "(frameForm: any, frame: any) => any"
+	recovered := "(frameForm: Partial<FrameType>, frame: any) => Partial<FrameType>"
+
+	if got := parityModeRecoveredInternalHelperFunctionType(expression, current, recovered, true); got != recovered {
+		t.Fatalf("expected recovered direct fallback helper type %q, got %q", recovered, got)
+	}
+}
+
+func TestParityModeConcreteLogicalFallbackHelperShouldPreferRecovered(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	expression := "[(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm || frame || null]"
+	current := "(frameForm: any, frame: any) => any"
+	candidate := "(frameForm: Partial<FrameType>, frame: any) => Partial<FrameType>"
+
+	if !parityModeConcreteLogicalFallbackHelperShouldPreferRecovered("", "", expression, current, candidate, nil) {
+		t.Fatalf("expected direct logical fallback helper to prefer recovered concrete return")
+	}
+}
+
+func TestParityModeRecoveredInternalHelperFunctionTypeKeepsConcreteObjectArrayReturn(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	current := "(assets: any, frame: any) => any[]"
+	recovered := "(assets: AssetType[], frame: any) => { size: number; mtime: number; is_dir?: boolean | undefined; path: string; }[]"
+
+	if got := parityModeRecoveredInternalHelperFunctionType("", current, recovered, true); got != recovered {
+		t.Fatalf("expected recovered object-array helper type %q, got %q", recovered, got)
+	}
+}
+
 func TestRefineSelectorTypesFromInternalHelpersPrefersRicherObjectArrayReturn(t *testing.T) {
 	selectors := []ParsedField{
 		{Name: "cleanedAssets", Type: "{ path: boolean; }[]"},
@@ -6652,6 +8281,26 @@ func TestRefineSelectorTypesFromInternalHelpersPrefersRicherObjectArrayReturn(t 
 			"{ size: number; mtime: number; is_dir?: boolean | undefined; path: string; }[]",
 			refined,
 		)
+	}
+}
+
+func TestRefineSelectorTypesFromInternalHelpersPrefersConcreteNullableReturnFromMixedOpaqueHelper(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	refined := refineSelectorTypesFromInternalHelpers(
+		[]ParsedField{
+			{Name: "scene", Type: "any"},
+		},
+		[]ParsedFunction{
+			{
+				Name:         "scene",
+				FunctionType: "(editingFrame: Partial<FrameType>, sceneId: any) => FrameScene | null",
+			},
+		},
+		false,
+	)
+	if len(refined) != 1 || refined[0].Type != "FrameScene | null" {
+		t.Fatalf("expected refined selector type %q, got %+v", "FrameScene | null", refined)
 	}
 }
 
@@ -6692,6 +8341,94 @@ func TestSourceSelectorInferredTypeAvoidsLiteralFalseFallbackForBlockBooleanSele
 	)
 	if got != "boolean" {
 		t.Fatalf("expected boolean selector return, got %q", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextObjectEntriesSomeReturnsBoolean(t *testing.T) {
+	got := sourceExpressionTypeTextWithContext(
+		"",
+		"",
+		"Object.entries(sources).some(([file, source]) => source !== initialSources[file])",
+		map[string]string{
+			"sources":        "Record<string, string>",
+			"initialSources": "Record<string, string>",
+		},
+		nil,
+	)
+	if got != "boolean" {
+		t.Fatalf("expected Object.entries(...).some(...) to infer boolean, got %q", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextRecoversArrayElementFromNumericIndexExpression(t *testing.T) {
+	got := sourceExpressionTypeTextWithContext(
+		"type AiSceneLogType = { message: string; timestamp: string }",
+		"",
+		"logs[logs.length - 1]",
+		map[string]string{
+			"logs": "AiSceneLogType[]",
+		},
+		nil,
+	)
+	if got != "AiSceneLogType" {
+		t.Fatalf("expected numeric index expression to infer %q, got %q", "AiSceneLogType", got)
+	}
+}
+
+func TestSourceExpressionTypeTextWithContextUnaryBangDoesNotOverrideConditional(t *testing.T) {
+	got := sourceExpressionTypeTextWithContext(
+		"",
+		"",
+		"!activeScene && activeSceneId ? activeSceneId : null",
+		map[string]string{
+			"activeScene":   "FrameScene | null",
+			"activeSceneId": "string",
+		},
+		nil,
+	)
+	if got != "string | null" {
+		t.Fatalf("expected ternary with leading ! condition to infer %q, got %q", "string | null", got)
+	}
+}
+
+func TestSourceSelectorInferredTypeRecoversBlockNullableIndexedLookupWithOpaqueKey(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"type AiSceneLogType = {",
+		"    message: string",
+		"    status?: string",
+		"    stage?: string",
+		"    timestamp: string",
+		"}",
+	}, "\n")
+	logic := ParsedLogic{
+		Selectors: []ParsedField{
+			{Name: "aiSceneRequestId", Type: "string | null"},
+			{Name: "aiSceneLogsByRequestId", Type: "Record<string, AiSceneLogType[]>"},
+		},
+	}
+	expression := strings.Join([]string{
+		"[(s) => [s.aiSceneRequestId, s.aiSceneLogsByRequestId],",
+		"    (requestId, logsByRequestId) => {",
+		"        if (!requestId) {",
+		"            return null",
+		"        }",
+		"        const logs = logsByRequestId[requestId] ?? []",
+		"        return logs.length ? logs[logs.length - 1] : null",
+		"    }",
+		"]",
+	}, "\n")
+
+	if got := sourceSelectorInferredType(logic, source, "", expression, nil); got != "null | AiSceneLogType" {
+		t.Fatalf("expected block nullable indexed selector type %q, got %q", "null | AiSceneLogType", got)
+	}
+	if got := sourceInternalSelectorFunctionTypeWithFallbackReturn(logic, source, "", expression, "any", nil); got != "(aiSceneRequestId: string | null, aiSceneLogsByRequestId: Record<string, AiSceneLogType[]>) => null | AiSceneLogType" {
+		t.Fatalf(
+			"expected block nullable indexed helper type %q, got %q",
+			"(aiSceneRequestId: string | null, aiSceneLogsByRequestId: Record<string, AiSceneLogType[]>) => null | AiSceneLogType",
+			got,
+		)
 	}
 }
 
@@ -15526,6 +17263,171 @@ func TestSourceInternalSelectorFunctionTypeWithFallbackReturnKeepsEditingFrameHe
 			"expected editingFrame helper type %q, got %q",
 			"(frameForm: Partial<FrameType>, frame: any) => Partial<FrameType>",
 			functionType,
+		)
+	}
+}
+
+func TestBuildParsedLogicsRecoversConnectedEditingFrameLogicalFallbackHelper(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logics := inspectTempLogicFile(t, map[string]string{
+		"src/types.ts": strings.Join([]string{
+			"export interface FrameType {",
+			"    id?: string",
+			"}",
+		}, "\n"),
+		"src/frameLogic.ts": strings.Join([]string{
+			"import { defaults, kea, path, props } from 'kea'",
+			"import type { FrameType } from './types'",
+			"",
+			"export interface FrameLogicProps {",
+			"    frameId: number",
+			"}",
+			"",
+			"export const frameLogic = kea([",
+			"    path(['frameLogic']),",
+			"    props({} as FrameLogicProps),",
+			"    defaults({",
+			"        frame: null as any,",
+			"        frameForm: {} as Partial<FrameType>,",
+			"    }),",
+			"])",
+		}, "\n"),
+		"src/scenesLogic.ts": strings.Join([]string{
+			"import { connect, kea, path, props, selectors } from 'kea'",
+			"import { frameLogic } from './frameLogic'",
+			"import type { FrameType } from './types'",
+			"",
+			"export interface ScenesLogicProps {",
+			"    frameId: number",
+			"}",
+			"",
+			"export const scenesLogic = kea([",
+			"    path(['scenesLogic']),",
+			"    props({} as ScenesLogicProps),",
+			"    connect(({ frameId }: ScenesLogicProps) => ({",
+			"        values: [frameLogic({ frameId }), ['frame', 'frameForm']],",
+			"    })),",
+			"    selectors({",
+			"        editingFrame: [(s) => [s.frameForm, s.frame], (frameForm, frame) => frameForm || frame || null],",
+			"    }),",
+			"])",
+		}, "\n"),
+	}, "src/scenesLogic.ts")
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "editingFrame"); !ok || selector.Type != "Partial<FrameType>" {
+		t.Fatalf("expected editingFrame selector type %q, got %+v", "Partial<FrameType>", logic.Selectors)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "editingFrame"); !ok || helper.FunctionType != "(frameForm: Partial<FrameType>, frame: any) => Partial<FrameType>" {
+		t.Fatalf(
+			"expected editingFrame helper type %q, got %+v",
+			"(frameForm: Partial<FrameType>, frame: any) => Partial<FrameType>",
+			logic.InternalSelectorTypes,
+		)
+	}
+}
+
+func TestBuildParsedLogicsRecoversConcreteNullableLookupWithConcreteDependencies(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logics := inspectTempLogicFile(t, map[string]string{
+		"src/logic.ts": strings.Join([]string{
+			"import { kea, path, reducers, selectors } from 'kea'",
+			"",
+			"type AiSceneLogType = {",
+			"    message: string",
+			"    status?: string",
+			"    stage?: string",
+			"    timestamp: string",
+			"}",
+			"",
+			"export const logic = kea([",
+			"    path(['logic']),",
+			"    reducers({",
+			"        aiSceneRequestId: [null as string | null, {}],",
+			"        aiSceneLogsByRequestId: [{} as Record<string, AiSceneLogType[]>, {}],",
+			"    }),",
+			"    selectors({",
+			"        aiSceneLastLog: [",
+			"            (s) => [s.aiSceneRequestId, s.aiSceneLogsByRequestId],",
+			"            (requestId, logsByRequestId) => {",
+			"                if (!requestId) {",
+			"                    return null",
+			"                }",
+			"                const logs = logsByRequestId[requestId] ?? []",
+			"                return logs.length ? logs[logs.length - 1] : null",
+			"            },",
+			"        ],",
+			"    }),",
+			"])",
+		}, "\n"),
+	}, "src/logic.ts")
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if selector, ok := findParsedField(logic.Selectors, "aiSceneLastLog"); !ok || selector.Type != "null | AiSceneLogType" {
+		t.Fatalf("expected aiSceneLastLog selector type %q, got %+v", "null | AiSceneLogType", logic.Selectors)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "aiSceneLastLog"); !ok || helper.FunctionType != "(aiSceneRequestId: string | null, aiSceneLogsByRequestId: Record<string, AiSceneLogType[]>) => null | AiSceneLogType" {
+		t.Fatalf(
+			"expected aiSceneLastLog helper type %q, got %+v",
+			"(aiSceneRequestId: string | null, aiSceneLogsByRequestId: Record<string, AiSceneLogType[]>) => null | AiSceneLogType",
+			logic.InternalSelectorTypes,
+		)
+	}
+}
+
+func TestBuildParsedLogicsRecoversStructuredMappedArrayReturnWithOpaqueSiblingDependency(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logics := inspectTempLogicFile(t, map[string]string{
+		"src/types.ts": strings.Join([]string{
+			"export interface AssetType {",
+			"    size: number",
+			"    mtime: number",
+			"    is_dir?: boolean",
+			"    path: string",
+			"}",
+		}, "\n"),
+		"src/logic.ts": strings.Join([]string{
+			"import { kea, path, reducers, selectors } from 'kea'",
+			"import type { AssetType } from './types'",
+			"",
+			"export const logic = kea([",
+			"    path(['logic']),",
+			"    reducers({",
+			"        assets: [[] as AssetType[], {}],",
+			"        frame: [{} as any, {}],",
+			"    }),",
+			"    selectors({",
+			"        cleanedAssets: [",
+			"            (s) => [s.assets, s.frame],",
+			"            (assets, frame) => assets.map((asset) => ({ ...asset, path: asset.path })),",
+			"        ],",
+			"    }),",
+			"])",
+		}, "\n"),
+	}, "src/logic.ts")
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	expectedArray := "{ is_dir?: boolean | undefined; mtime: number; path: string; size: number; }[]"
+	if selector, ok := findParsedField(logic.Selectors, "cleanedAssets"); !ok || selector.Type != expectedArray {
+		t.Fatalf("expected cleanedAssets selector type %q, got %+v", expectedArray, logic.Selectors)
+	}
+	if helper, ok := findParsedFunction(logic.InternalSelectorTypes, "cleanedAssets"); !ok || helper.FunctionType != "(assets: AssetType[], frame: any) => { is_dir?: boolean | undefined; mtime: number; path: string; size: number; }[]" {
+		t.Fatalf(
+			"expected cleanedAssets helper type %q, got %+v",
+			"(assets: AssetType[], frame: any) => { is_dir?: boolean | undefined; mtime: number; path: string; size: number; }[]",
+			logic.InternalSelectorTypes,
 		)
 	}
 }

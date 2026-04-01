@@ -1456,6 +1456,74 @@ func runProbePseudoMethod(
 			Params: params,
 			Result: raw,
 		}, true, nil
+	case "printTypeAtLocationNode", "printContextualTypeNode":
+		location := probeLocationFromParams(params)
+		if location == "" {
+			location = probeLocationHandleForMethod("getTypeAtLocation", session)
+		}
+		if location == "" {
+			return &probeMethodResult{
+				Method: method,
+				Status: "known-method-bad-params",
+				Params: params,
+				Error:  "missing location",
+			}, true, nil
+		}
+		var (
+			typ *tsgoapi.TypeResponse
+			err error
+		)
+		switch method {
+		case "printContextualTypeNode":
+			typ, err = session.Client.GetContextualType(tsgoapi.WithTimeout(ctx, timeout), session.Snapshot, session.ProjectID, location)
+		default:
+			typ, err = session.Client.GetTypeAtLocation(tsgoapi.WithTimeout(ctx, timeout), session.Snapshot, session.ProjectID, location)
+		}
+		if err != nil {
+			return &probeMethodResult{
+				Method: method,
+				Status: classifyProbeError(err),
+				Params: params,
+				Error:  err.Error(),
+			}, true, nil
+		}
+		if typ == nil || typ.ID == "" {
+			raw, err := json.Marshal("")
+			if err != nil {
+				return nil, true, err
+			}
+			return &probeMethodResult{
+				Method: method,
+				Status: "success",
+				Params: params,
+				Result: raw,
+			}, true, nil
+		}
+		printed, err := session.Client.PrintTypeNodeAtLocation(
+			tsgoapi.WithTimeout(ctx, timeout),
+			session.Snapshot,
+			session.ProjectID,
+			typ.ID,
+			location,
+		)
+		if err != nil {
+			return &probeMethodResult{
+				Method: method,
+				Status: classifyProbeError(err),
+				Params: params,
+				Error:  err.Error(),
+			}, true, nil
+		}
+		raw, err := json.Marshal(printed)
+		if err != nil {
+			return nil, true, err
+		}
+		return &probeMethodResult{
+			Method: method,
+			Status: "success",
+			Params: params,
+			Result: raw,
+		}, true, nil
 	case "printReturnTypeNode", "returnTypeToString":
 		signatureID := probeSignatureIDFromParams(params)
 		if signatureID == "" {
@@ -2358,6 +2426,19 @@ func probeSignatureIDFromParams(params any) string {
 	return strings.TrimSpace(text)
 }
 
+func probeLocationFromParams(params any) string {
+	typed, ok := params.(map[string]any)
+	if !ok {
+		return ""
+	}
+	value, ok := typed["location"]
+	if !ok {
+		return ""
+	}
+	text, _ := value.(string)
+	return strings.TrimSpace(text)
+}
+
 func probeParamCandidates(method string, session *probeSession) []any {
 	locationHandles := probeLocationHandlesForMethod(method, session)
 	if !probeMethodUsesLocation(method) || len(locationHandles) <= 1 {
@@ -2402,7 +2483,7 @@ func probeSameFileLocationHandles(handles []string, file string) []string {
 
 func probeMethodUsesLocation(method string) bool {
 	switch method {
-	case "getContextualType", "getSymbolAtLocation", "getSymbolsAtLocations", "getTypeAtLocation", "getTypeOfSymbolAtLocation":
+	case "getContextualType", "getSymbolAtLocation", "getSymbolsAtLocations", "getTypeAtLocation", "getTypeOfSymbolAtLocation", "printTypeAtLocationNode", "printContextualTypeNode":
 		return true
 	default:
 		return false
@@ -2528,7 +2609,7 @@ func paramsForProbeMethodWithLocation(method string, session *probeSession, loca
 		params["file"] = session.File
 		params["positions"] = []int{probeTypePosition(session)}
 		return params
-	case "getContextualType", "getSymbolAtLocation", "getTypeAtLocation":
+	case "getContextualType", "getSymbolAtLocation", "getTypeAtLocation", "printTypeAtLocationNode", "printContextualTypeNode":
 		params := base()
 		params["location"] = location
 		return params

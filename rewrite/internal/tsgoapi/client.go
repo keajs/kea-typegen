@@ -381,12 +381,20 @@ func (c *Client) TypeToString(ctx context.Context, snapshot, projectID, typeID s
 }
 
 func (c *Client) PrintTypeNode(ctx context.Context, snapshot, projectID, typeID string) (string, error) {
+	return c.PrintTypeNodeAtLocation(ctx, snapshot, projectID, typeID, "")
+}
+
+func (c *Client) PrintTypeNodeAtLocation(ctx context.Context, snapshot, projectID, typeID, location string) (string, error) {
 	var encoded *base64Data
-	if err := c.call(ctx, "typeToTypeNode", map[string]any{
+	params := map[string]any{
 		"snapshot": snapshot,
 		"project":  projectID,
 		"type":     typeID,
-	}, &encoded); err != nil {
+	}
+	if strings.TrimSpace(location) != "" {
+		params["location"] = location
+	}
+	if err := c.call(ctx, "typeToTypeNode", params, &encoded); err != nil {
 		return "", err
 	}
 	if encoded == nil || encoded.Data == "" {

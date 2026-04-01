@@ -2234,6 +2234,118 @@
   - the naive pass proved that the raw checker surfaces alone are too loose in many already-correct files
   - keep those fields as inspection scaffolding only for now
 
+## March 30, 2026 Run
+
+### Current Reproducible Baseline
+
+- The older `36/38` note above is no longer the live state of the current worktree:
+  - the rebuilt Go binary on the current tree now measures lower than that earlier checkpoint
+  - so the next pass must use the March 30 numbers below as the real baseline
+- Full Go package command:
+  - `cd rewrite && go test ./internal/keainspect -count=1`
+  - result: pass
+- Focused parity regression command:
+  - `cd rewrite && go test ./internal/keainspect -run 'TestTemplateRowTrySceneConfigSourcePropertyRecoversConcreteHelper|TestBuildParsedLogicsParityRecoversTemplateRowHelperAndSelectorSurfaces|TestBuildParsedLogicsParityModeKeepsLooseReportedStructuredSelectorAndHelperTypes|TestBuildParsedLogicsParityRecoversImportedTemplateRowScenesSelector|TestBuildParsedLogicsParityKeepsInstalledTemplatesByNameLiteralTrueMap' -count=1`
+  - result: pass
+- Rebuilt Go binary command:
+  - `cd rewrite && go build -o bin/kea-typegen-go ./cmd/kea-typegen-go && cp bin/kea-typegen-go ../bin/kea-typegen-go`
+  - result: pass
+- Sample benchmark command:
+  - `./bin/benchmark -c write -n 1 -w 0 --skip-prepare`
+  - result:
+    - TypeScript mean: `9703.2 ms`
+    - Go mean: `4441.5 ms`
+    - semantic accuracy: `19/20`
+    - semantic diffs: `1`
+    - remaining sample diff: `autoImportLogicType.ts`
+- Fresh FrameOS compare command:
+  - `node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees`
+  - result:
+    - semantic matches: `28/38`
+    - semantic accuracy: `73.68%`
+    - semantic diffs: `10`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-modmwW`
+    - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-modmwW/frameos-baseline.json`
+
+### What Changed
+
+- Fixed the `templateRow` parity regression in `rewrite/internal/keainspect/model.go` by letting helper-driven selector refinement replace same-shape opaque structured selector surfaces with stronger recovered helper returns.
+- Narrowed the parity-only loose-helper preservation path so it only stays loose for selectors whose input callback explicitly uses `(s: any)`.
+- Added a parity override that lets strong recovered array helper returns beat opaque current helper surfaces, which was needed for selectors like `trySceneFields`.
+- Kept the existing explicit-`any` selector preservation behavior intact, so the earlier `chat`-style loose public/helper surfaces still stay loose where intended.
+- Added and kept focused regression coverage in `rewrite/internal/keainspect/model_test.go` for:
+  - `TestTemplateRowTrySceneConfigSourcePropertyRecoversConcreteHelper`
+  - `TestBuildParsedLogicsParityRecoversTemplateRowHelperAndSelectorSurfaces`
+
+### Files Removed From The Diff Set
+
+- `src/scenes/frame/panels/Templates/templateRowLogicType.ts`
+- `src/scenes/frame/panels/Templates/templatesLogicType.ts`
+
+### Current Reading
+
+- This was a real parity win on the current tree, even though it did not move the sample benchmark:
+  - the benchmark stayed flat at `19/20`
+  - the full FrameOS corpus improved from the earlier March 30 rebuilt-binary check of `26/38` to `28/38`
+- The `templateRow` family is now out of the FrameOS semantic diff set:
+  - `trySceneConfig` now keeps the concrete `FrameScene` / `payloadScenes` surface
+  - `trySceneFields` now keeps the `StateField[]` helper/selector surface instead of collapsing back to opaque `any`
+- The remaining FrameOS semantic diffs are now:
+  - `src/scenes/frame/panels/Assets/assetsLogicType.ts`
+  - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+  - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+  - `src/scenes/frame/panels/Diagram/diagramLogicType.ts`
+  - `src/scenes/frame/panels/Diagram/newNodePickerLogicType.ts`
+  - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+  - `src/scenes/frame/panels/Scenes/controlLogicType.ts`
+  - `src/scenes/frame/panels/Scenes/expandedSceneLogicType.ts`
+  - `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+  - `src/scenes/settings/systemInfoLogicType.ts`
+- The next pass should stay on the remaining selector/helper parity family:
+  - the current sample benchmark miss is still `autoImportLogicType.ts`
+  - the larger FrameOS work is now concentrated in `Scenes`, `Diagram`, `Chat`, `Assets`, `EditApp`, and `systemInfo`
+
+## March 31, 2026
+
+- Fixed the remaining `diagramLogic` nullable lookup parity path so recovered selector/helper surfaces survive the loose reported `any` builder surface when the helper still has an opaque key slot:
+  - `diagramLogic.scene` now resolves to `FrameScene | null`
+  - `diagramLogic.sceneName` now consumes `scene: FrameScene | null`
+  - downstream `appNodeLogic.currentScene` now resolves to `FrameScene | null`
+- Added focused regression coverage for:
+  - imported nullable `.find(...) || null` recovery from `.tsx` type files
+  - builder helper recovery for collapsed `((...) => any)[]` selector surfaces
+  - preserving concrete nullable helper returns only when the reported helper still has an opaque parameter slot
+  - refining opaque selector returns from mixed concrete/opaque nullable helpers without breaking the older parity fixtures that must stay loose
+- Verification on the current tree:
+  - `cd rewrite && go test ./internal/keainspect -count=1` passes
+  - parity-mode spot checks now show:
+    - `diagramLogic.scene: FrameScene | null`
+    - `appNodeLogic.currentScene: FrameScene | null`
+- After rebuilding `rewrite/bin/kea-typegen-go`, the FrameOS real-world compare improved from `28/38` to `32/38`
+- The remaining FrameOS semantic diffs are now:
+  - `src/scenes/frame/panels/Assets/assetsLogicType.ts`
+  - `src/scenes/frame/panels/Chat/chatLogicType.ts`
+  - `src/scenes/frame/panels/Diagram/appNodeLogicType.ts`
+  - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+  - `src/scenes/frame/panels/Scenes/expandedSceneLogicType.ts`
+  - `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+- `diagramLogicType.ts`, `newNodePickerLogicType.ts`, `controlLogicType.ts`, and `systemInfoLogicType.ts` are no longer in the FrameOS semantic diff set.
+- A later March 31 follow-up fixed the last collapsed selector-input tuple parity miss for connected selector dependencies:
+  - when the reported selector input tuple surface falls back to `any[]`, parity-mode helper repair now prefers checker-backed dependency types resolved from connected selectors such as `framesModel.selectors.frames`
+  - the same fallback still keeps truly unknown dependencies opaque as `any`
+  - and it still preserves known loose array dependencies such as `any[]` instead of collapsing them to plain `any`
+- Added regression coverage for the final builder imported-selector case by making `TestParseInternalSelectorTypesWithSourceRecoversImportedIndexedRecordLookupHelperInBuilders` exercise `SelectorInputReturnTypeString: "any[]"`.
+- Verification on the current tree:
+  - `cd rewrite && go test ./internal/keainspect -count=1` passes
+  - `./bin/prepare-go` passes
+  - parity-mode live probe now shows:
+    - `diagramLogic.originalFrame: (frames: Record<number, FrameType>, frameId: any) => FrameType`
+  - `node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees` now reports:
+    - semantic matches: `38/38`
+    - semantic diffs: `0`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-VWuC7r`
+- The FrameOS semantic diff set is now empty.
+
 ## Guardrails
 
 - Do not optimize for the current normalized compare score alone.

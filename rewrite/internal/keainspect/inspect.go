@@ -443,7 +443,7 @@ func enrichSelectorCallbackTypes(
 						location,
 					)
 					if err == nil && inputType != nil {
-						members[index] = populateSelectorInputTypeReport(ctx, client, timeout, snapshot, projectID, members[index], inputType.ID)
+						members[index] = populateSelectorInputTypeReport(ctx, client, timeout, snapshot, projectID, members[index], inputType.ID, location)
 					}
 				}
 			}
@@ -469,7 +469,7 @@ func enrichSelectorCallbackTypes(
 					location,
 				)
 				if err == nil && projectorType != nil {
-					members[index] = populateProjectorDirectTypeReport(ctx, client, timeout, snapshot, projectID, members[index], projectorType.ID)
+					members[index] = populateProjectorDirectTypeReport(ctx, client, timeout, snapshot, projectID, members[index], projectorType.ID, location)
 				}
 
 				contextualType, err := client.GetContextualType(
@@ -479,7 +479,7 @@ func enrichSelectorCallbackTypes(
 					location,
 				)
 				if err == nil && contextualType != nil {
-					members[index] = populateProjectorContextualTypeReport(ctx, client, timeout, snapshot, projectID, members[index], contextualType.ID)
+					members[index] = populateProjectorContextualTypeReport(ctx, client, timeout, snapshot, projectID, members[index], contextualType.ID, location)
 				}
 			}
 		}
@@ -553,10 +553,11 @@ func typeSurfaceReport(
 	snapshot string,
 	projectID string,
 	typeID string,
+	location string,
 ) (string, string, string, string) {
 	typeString := safeTypeString(ctx, client, timeout, snapshot, projectID, typeID)
 	printedType := ""
-	if printed, err := client.PrintTypeNode(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, typeID); err == nil {
+	if printed, err := client.PrintTypeNodeAtLocation(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, typeID, location); err == nil {
 		printedType = printed
 	}
 
@@ -577,7 +578,7 @@ func typeSurfaceReport(
 
 	returnTypeString := safeTypeString(ctx, client, timeout, snapshot, projectID, returnType.ID)
 	printedReturnType := ""
-	if printed, err := client.PrintTypeNode(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, returnType.ID); err == nil {
+	if printed, err := client.PrintTypeNodeAtLocation(tsgoapi.WithTimeout(ctx, timeout), snapshot, projectID, returnType.ID, location); err == nil {
 		printedReturnType = printed
 	}
 	return typeString, printedType, returnTypeString, printedReturnType
@@ -591,8 +592,9 @@ func populateSelectorInputTypeReport(
 	projectID string,
 	member MemberReport,
 	typeID string,
+	location string,
 ) MemberReport {
-	_, _, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID)
+	_, _, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID, location)
 	member.SelectorInputReturnTypeString = returnTypeString
 	member.SelectorInputPrintedReturnTypeNode = printedReturnType
 	return member
@@ -606,8 +608,9 @@ func populateProjectorDirectTypeReport(
 	projectID string,
 	member MemberReport,
 	typeID string,
+	location string,
 ) MemberReport {
-	typeString, printedType, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID)
+	typeString, printedType, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID, location)
 	member.ProjectorDirectTypeString = typeString
 	member.ProjectorDirectPrintedTypeNode = printedType
 	member.ProjectorDirectReturnTypeString = returnTypeString
@@ -623,8 +626,9 @@ func populateProjectorContextualTypeReport(
 	projectID string,
 	member MemberReport,
 	typeID string,
+	location string,
 ) MemberReport {
-	typeString, printedType, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID)
+	typeString, printedType, returnTypeString, printedReturnType := typeSurfaceReport(ctx, client, timeout, snapshot, projectID, typeID, location)
 	member.ProjectorTypeString = typeString
 	member.ProjectorPrintedTypeNode = printedType
 	member.ProjectorReturnTypeString = returnTypeString
