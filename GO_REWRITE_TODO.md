@@ -2346,6 +2346,446 @@
     - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-VWuC7r`
 - The FrameOS semantic diff set is now empty.
 
+## April 1, 2026
+
+### What Changed
+
+- Fixed the remaining clean-baseline sample benchmark miss for `autoImportLogicType.ts` without disturbing the `38/38` FrameOS parity baseline.
+- The underlying mismatch was not a semantic-type recovery bug:
+  - fresh clean writes were keeping the reported projector parameter name `a` for an unnamed selector dependency helper
+  - the current JS generator still emits the canonical placeholder helper name `arg` for that same surface
+  - reduced-write-round coverage had been hiding this because existing checked-in sample output already used the placeholder name
+- Kept the existing parity-mode placeholder rule intact and added the same preference to the non-parity fresh-generation path only when:
+  - the current helper and recovered helper have the same parameter types
+  - the same return type
+  - and the recovered candidate is the canonical placeholder form for an unnamed dependency slot
+- Added focused regression coverage for:
+  - `TestUnnamedDependencyPlaceholderHelperShouldPreferRecovered`
+  - `TestRunTypegenRoundsFromCleanBaselineKeepsAutoImportPlaceholderHelperNames`
+
+### Verification
+
+- Focused regressions command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "Test(UnnamedDependencyPlaceholderHelperShouldPreferRecovered|ParityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered|RunTypegenRoundsFromCleanBaselineKeepsAutoImportPlaceholderHelperNames|RunTypegenRoundsPreservesReducedWriteRoundTypes|BuildParsedLogicsAutoImportRichTypes)" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - result:
+    - TypeScript mean: `11006.2 ms`
+    - Go mean: `5303.2 ms`
+    - semantic accuracy: `20/20`
+    - semantic diffs: `0`
+- FrameOS compare command:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+  - result:
+    - semantic matches: `38/38`
+    - semantic diffs: `0`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-NJrj2I`
+    - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-NJrj2I/frameos-baseline.json`
+
+### Current Reading
+
+- This was a real clean-write parity bug, but it was narrowly about helper signature naming rather than type recovery:
+  - fresh writes now match the JS placeholder helper surface for unnamed selector dependencies
+  - reduced-write-round output still stays stable
+  - the broader FrameOS corpus stays at `38/38`
+- The benchmark regression had been easy to misread because:
+  - existing checked-in sample output already used the JS placeholder name
+  - in-package reduced-write-round tests copied those generated files forward
+  - the benchmark cleans generated files first, which exposed the first-write mismatch directly
+- This fix stays within the strategy-reset guardrails:
+  - it does not add a new source-shape type heuristic
+  - it only resolves which helper parameter name to print once the parameter types and return type already match
+  - semantic type recovery still comes from the existing checker-backed paths
+
+### Later April 1, 2026 Targeted PostHog Follow-Up
+
+- Started the next post-FrameOS corpus pass against PostHog, but the full `--target posthog` compare still did not finish quickly enough on this host to be a good edit loop:
+  - the JS side completed and preserved a usable baseline worktree at `.cache/kea-typegen/tmp/posthog-corpus-mOYzz8/posthog-js`
+  - the long-running Go write phase was stopped and reused as a seeded single-file diagnostic instead of waiting blindly for the whole corpus
+- Used that preserved JS baseline to isolate the first concrete current PostHog parity bucket:
+  - copied the JS-generated `*Type.ts` files into `.cache/kea-typegen/tmp/posthog-corpus-mOYzz8/posthog-go`
+  - regenerated only `frontend/src/lib/utils/eventUsageLogic.ts` with parity mode enabled
+  - compared `frontend/src/lib/utils/eventUsageLogicType.ts` directly against the JS-generated file
+- Fixed one real parity bug in `rewrite/internal/keainspect/model.go`:
+  - parity-mode shorthand-action payload preservation was too broad
+  - it correctly kept reported `any` for local opaque unions like the earlier FrameOS `Edge | Connection` / `XYPosition | null` cases
+  - but it also incorrectly preserved reported `any` for imported union members such as `Node | null` and `Partial<QueryBasedInsightModel> | null` in PostHog
+  - the rule is now narrower:
+    - keep the old parity looseness only when the shorthand payload member union does not reference imported type identifiers
+    - allow imported union shorthand members to recover from the source parameter type instead of being frozen at reported `any`
+- Added focused regression coverage:
+  - `TestBuildParsedLogicsParityKeepsReportedAnyForUnionShorthandActionPayloadMembers`
+  - `TestBuildParsedLogicsParityRecoversImportedUnionShorthandActionPayloadMembers`
+
+### Verification
+
+- Focused parity action-payload regressions command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "TestBuildParsedLogicsParity(KeepsReportedAnyForUnionShorthandActionPayloadMembers|RecoversImportedUnionShorthandActionPayloadMembers)" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - result:
+    - TypeScript mean: `13513.6 ms`
+    - Go mean: `5385.8 ms`
+    - semantic accuracy: `20/20`
+    - semantic diffs: `0`
+- FrameOS compare command:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+  - result:
+    - semantic matches: `38/38`
+    - semantic diffs: `0`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-CEF6eq`
+    - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-CEF6eq/frameos-baseline.json`
+- Targeted PostHog slice diagnostic:
+  - seeded JS baseline worktree root: `.cache/kea-typegen/tmp/posthog-corpus-mOYzz8`
+  - regenerated file:
+    - `frontend/src/lib/utils/eventUsageLogic.ts`
+  - result:
+    - the file still remains a semantic diff overall
+    - but the intended imported shorthand payload members no longer collapse to reported `any`
+    - examples now recovered from source:
+      - `reportInsightCreated.payload.query` => `Node | null`
+      - `reportInsightSaved.payload.insight` => `Partial<QueryBasedInsightModel> | null`
+      - `reportInsightViewed.payload.query` => `Node | null`
+
+### Current Reading
+
+- This is a real PostHog-directed parity improvement even though it is not yet a full-corpus score movement:
+  - the old parity guard was suppressing recoverable imported union shorthand payload members
+  - the narrowed rule keeps the earlier FrameOS local-union behavior intact while unblocking imported-action payload recovery
+- The targeted `eventUsageLogicType.ts` slice still does not match JS semantically after this change:
+  - JS still specializes some imported defaulted generic surfaces more aggressively there, for example `Node<Record<string, any>> | null`
+  - and the file still has broader import/order/surface drift outside this one payload-members lane
+- So the next PostHog pass should stay in this same action-payload/import-surface family:
+  - first finish or replace the too-slow full PostHog compare loop with a reliable sliced harness
+  - then target imported default-generic expansion inside shorthand payload members before moving on to unrelated surface families
+
+### Even Later April 1, 2026 PostHog Action-Payload Follow-Up
+
+- Kept pushing on the same seeded PostHog `eventUsageLogic.ts` slice and landed the next two real parity fixes in `rewrite/internal/keainspect/model.go`:
+  - shorthand payload parameter hints now specialize imported defaulted generic aliases inside compound unions, so imported members like `Node | null` recover to `Node<Record<string, any>> | null` instead of staying at the unspecialized alias
+  - top-level object-member parsing now keeps multiline union / intersection property declarations together instead of splitting on every newline, so imported object types like:
+    - `result_type:`
+    - `| FunnelCorrelationResultsType.Events`
+    - `| FunnelCorrelationResultsType.Properties`
+    - `| FunnelCorrelationResultsType.EventWithProperties`
+    are preserved as one property surface and can feed indexed-access recovery correctly
+- The real PostHog `reportCorrelationInteraction` mismatch also exposed one stale merge problem:
+  - when `InspectFile` reports extra action sections beyond the real source-backed `actions(...)` builder properties, those report-only sections should be allowed to add missing actions
+  - but they should not overwrite a better source-backed action surface already parsed from the real `actions(...)` property
+  - `buildParsedLogic(...)` now uses `mergeParsedActionsPreferExisting(...)` for those extra report-only action sections while keeping the normal overwrite behavior for source-backed action sections
+- Added focused regression coverage for this follow-up:
+  - `TestParseObjectTypeMembersWithOptionalUndefinedKeepsMultilineUnionPropertyTypes`
+  - `TestBuildParsedLogicsRecoversImportedDefaultedGenericShorthandActionPayloads`
+  - `TestBuildParsedLogicsRecoversImportedIndexedAccessEnumAliasPayloadsForAliasedMultiParameterShorthandActions`
+  - `TestBuildParsedLogicsKeepsSourceActionPayloadsWhenGenericLogicTypeImportsStaleActionCreators`
+
+### Verification
+
+- Focused PostHog action-payload regressions command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "Test(ParseObjectTypeMembersWithOptionalUndefinedKeepsMultilineUnionPropertyTypes|BuildParsedLogicsRecoversImportedIndexedAccessEnumAliasPayloadsFor(AliasedMultiParameterShorthandActions|ShorthandActions)|BuildParsedLogicsRecoversIndexedAccessEnumAliasPayloadsForShorthandActions|BuildParsedLogicsKeepsSourceActionPayloadsWhenGenericLogicTypeImportsStaleActionCreators)" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - result:
+    - TypeScript mean: `11364.5 ms`
+    - Go mean: `5496.0 ms`
+    - semantic accuracy: `20/20`
+    - semantic diffs: `0`
+- FrameOS compare command:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+  - result:
+    - semantic matches: `38/38`
+    - semantic diffs: `0`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-8QuDdW`
+    - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-8QuDdW/frameos-baseline.json`
+- Targeted PostHog slice diagnostic after rebuilding the Go binary:
+  - seeded JS baseline worktree root: `.cache/kea-typegen/tmp/posthog-corpus-mOYzz8`
+  - regenerated file:
+    - `frontend/src/lib/utils/eventUsageLogic.ts`
+  - result:
+    - the file still remains a semantic diff overall
+    - but the concrete action-payload/import-surface mismatches fixed in this lane now match the JS-emitted types:
+      - `reportInsightCreated.payload.query` => `Node<Record<string, any>> | null`
+      - `reportInsightSaved.payload.query` => `Node<Record<string, any>> | null`
+      - `reportInsightViewed.payload.query` => `Node<Record<string, any>> | null`
+      - `reportCorrelationViewed.payload.query` => `Node<Record<string, any>> | null`
+      - `reportCorrelationInteraction.payload.correlationType` => `FunnelCorrelationResultsType`
+
+### Current Reading
+
+- This follow-up closed the remaining concrete `eventUsageLogic` action-payload bugs that were already isolated inside the seeded PostHog slice:
+  - imported defaulted generic shorthand members no longer stay unspecialized
+  - imported multiline indexed-access enum aliases now recover correctly
+  - stale generic-logic-type `actionCreators` surfaces no longer clobber better source-backed action payloads
+- The targeted `eventUsageLogicType.ts` file still does not match JS semantically overall after these fixes:
+  - the remaining differences are now outside the specific `query` / `correlationType` payload lane that this pass targeted
+  - the next sliced PostHog pass should diff the rest of that file again with the fixed payload surfaces removed from the noise floor
+- FrameOS remains `38/38` and the sample benchmark remains `20/20`, so this narrower PostHog follow-up did not reopen the already-clean baseline surfaces
+
+### April 2, 2026 PostHog Action-Shape Follow-Up
+
+- Kept pushing on the same seeded PostHog `eventUsageLogic.ts` slice and landed the remaining action-shape fixes that were still keeping `frontend/src/lib/utils/eventUsageLogicType.ts` semantically different from JS:
+  - untyped destructured action parameters like `({ table }) => ({ table })` now preserve the JS-emitted `({ table }: any)` surface instead of retyping the destructured object members from the low-quality action report
+  - destructured typed payload members like `({ holdoutId }: { holdoutId: ExperimentHoldoutType['id']; ... }) => ({ holdoutId })` now recover the indexed-access payload member itself, instead of widening back to the enclosing alias type
+  - spread payloads sourced from `Record<string, any>` now keep their index-signature surface when rebuilding object literals, instead of falling through to unrelated later local `properties` bindings from the same file
+- The concrete `reportAxisUnitsChanged` bug turned out to be a real source-resolution leak:
+  - the action source was `reportAxisUnitsChanged: (properties: Record<string, any>) => ({ ...properties })`
+  - the old spread-object path could only expand brace-wrapped object types, so `Record<string, any>` was dropped and the fallback source-expression lookup later picked up an unrelated local `properties` initializer with `custom_properties_count` / `posthog_properties_count`
+  - `sourceObjectLiteralTypeTextWithHintsOptions(...)` and `sourceObjectLiteralTypeTextWithContextOptions(...)` now understand `Record<...>` spreads and keep the intended `[x: string]: any` surface instead
+- Added focused regression coverage for this follow-up:
+  - `TestBuildParsedLogicsPreservesUntypedDestructuredAnyActionParameters`
+  - `TestBuildParsedLogicsRecoversDestructuredIndexedAccessActionPayloadMembers`
+  - `TestBuildParsedLogicsKeepsActionIndexSignaturePayloadWhenListenerTypeWidens`
+  - `TestBuildParsedLogicsKeepsSpreadRecordActionPayloadFromLeakingLaterLocalProperties`
+
+### Verification
+
+- Focused PostHog action-shape regressions command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "Test(BuildParsedLogicsPreservesUntypedDestructuredAnyActionParameters|BuildParsedLogicsRecoversDestructuredIndexedAccessActionPayloadMembers|BuildParsedLogicsKeepsActionIndexSignaturePayloadWhenListenerTypeWidens|BuildParsedLogicsKeepsSpreadRecordActionPayloadFromLeakingLaterLocalProperties|BuildParsedLogicsRecoversImportedDefaultedGenericShorthandActionPayloads|BuildParsedLogicsParityKeepsReportedAnyForUnionShorthandActionPayloadMembers|RefineActionPayloadTypeFromFunctionRecoversLowQualityMemberTypes|BuildParsedLogicsRecoversSummarizedActionPayloadMembersFromFunctionParameters)" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Sample benchmark command:
+  - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - result:
+    - TypeScript mean: `14291.8 ms`
+    - Go mean: `5454.5 ms`
+    - semantic accuracy: `20/20`
+    - semantic diffs: `0`
+- FrameOS compare command:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json --keep-worktrees'`
+  - result:
+    - semantic matches: `38/38`
+    - semantic diffs: `0`
+    - preserved worktree root: `.cache/kea-typegen/tmp/frameos-corpus-NNSxRK`
+    - preserved baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-NNSxRK/frameos-baseline.json`
+- Targeted PostHog slice diagnostic after rebuilding the Go binary:
+  - seeded JS baseline worktree root: `.cache/kea-typegen/tmp/posthog-corpus-mOYzz8`
+  - regenerated file:
+    - `frontend/src/lib/utils/eventUsageLogic.ts`
+  - compare command:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir .cache/kea-typegen/tmp/posthog-corpus-mOYzz8/posthog-js/frontend/src/lib/utils --go-dir .cache/kea-typegen/tmp/posthog-corpus-mOYzz8/posthog-go/frontend/src/lib/utils --json`
+  - result:
+    - comparable files: `1`
+    - semantic matches: `1/1`
+    - semantic diffs: `0`
+    - `eventUsageLogicType.ts` is now a semantic match
+
+### Current Reading
+
+- This follow-up closes the seeded `eventUsageLogic` slice rather than just narrowing the diff:
+  - `reportCustomerAnalytics*` action creators now preserve the JS `({ ... }: any)` destructured parameter surface
+  - `reportExperimentHoldoutAssigned` now keeps `holdoutId: ExperimentHoldoutType['id']` in the action creator and `holdoutId: number | null` in the payload/listener surface
+  - `reportAxisUnitsChanged` now keeps the intended `{ [x: string]: any }` payload surface instead of leaking later unrelated local fields
+- FrameOS remains `38/38` and the sample benchmark remains `20/20`, so this action-shape follow-up still did not reopen the already-clean baseline surfaces.
+- The next PostHog pass should move off `eventUsageLogicType.ts` entirely:
+  - that file is now closed in the seeded slice
+  - the next useful step is to recover the next real PostHog diff list with either a slower full compare run or a better sliced harness, rather than staying in this finished action-payload lane
+
+### Later April 2, 2026 PostHog Transitive Reducer-Import Follow-Up
+
+- Started the next post-`eventUsageLogic` PostHog pass from the preserved slice worktree:
+  - seeded JS baseline worktree root: `.cache/kea-typegen/tmp/posthog-corpus-hDN6yo`
+  - target file: `frontend/src/scenes/sceneLogic.tsx`
+- The first concrete next diff bucket was an imported reducer seed with transitive generic dependencies:
+  - `preloadedScenes` is imported from `./scenes`
+  - `preloadedScenes` is declared as `Record<string, SceneExport>`
+  - `SceneExport<T = SceneProps>` lives in `./sceneTypes`
+  - the symbol-backed reducer-seed recovery now gets the reducer state itself back to `Record<string, SceneExport<SceneProps>>`
+  - but the old import collector only searched the current file's direct import/type surface, so it failed to recover `SceneExport` / `SceneProps` when they were only reachable through that imported value source
+- Landed the next narrow fix in `rewrite/internal/keainspect/model.go`:
+  - `collectTypeImportsForTypeTexts(...)` now has a recursion-guarded fallback for unresolved bare identifiers that walks imported value source files, collects the needed type imports there, and rebases those imports back to the original file
+  - this keeps the import search scoped to the source files already proven relevant by the current value-import graph, rather than adding another source-shape type guess
+- Added focused regression coverage for this follow-up:
+  - `TestCollectTypeImportsForTypeTextsRecoversTransitiveLocalImportsFromValueImportSources`
+  - `TestBuildParsedLogicsRecoversImportedReducerStateFromDefaultedGenericSeed`
+
+### Verification
+
+- Focused transitive-import regressions command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "Test(CollectTypeImportsForTypeTextsRecoversTransitiveLocalImportsFromValueImportSources|BuildParsedLogicsRecoversImportedReducerStateFromTypedIdentifierSeed|BuildParsedLogicsRecoversImportedReducerStateFromDefaultedGenericSeed|BuildParsedLogicsResolvesExternalConnectActionsFromSymbols|BuildParsedLogicsRecoversConnectedActionPayloadsWithDefaultedSourceParameters)" -count=1'`
+  - result: pass
+- Full Go package command:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+- Rebuilt Go binary command:
+  - `flox activate -c './bin/prepare-go'`
+  - result: pass
+- Preserved PostHog slice write attempt:
+  - command:
+    - `flox activate -c 'cd /home/ubuntu/Projects/kea-typegen && KEA_TYPEGEN_CWD=/home/ubuntu/Projects/kea-typegen/.cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go KEA_TYPEGEN_PARITY_MODE=1 ./rewrite/bin/kea-typegen-go write --file frontend/src/scenes/sceneLogic.tsx --root frontend/src --types frontend/src --write-paths --delete --show-ts-errors -q'`
+  - result:
+    - not accepted as a verification gate on this host
+    - after more than seven minutes, the command still had not rewritten `frontend/src/scenes/sceneLogicType.ts`
+    - so this follow-up is verified by focused regression coverage and the full `keainspect` package pass, not by a completed real-world slice write yet
+
+### Current Reading
+
+- This is a real parity fix in the imported-reducer/import-surface lane:
+  - imported reducer seeds with defaulted generic dependencies no longer collapse to missing imports just because the type names sit behind another value import hop
+  - the new regression is much closer to the real `sceneLogic` shape than the earlier plain imported-identifier case
+- The remaining gap is now the verification harness, not the concrete reducer-seed repro:
+  - the preserved `sceneLogic.tsx` slice still needs either a lighter inspection path or a faster write loop before it can be marked closed the same way `eventUsageLogic.ts` was
+  - once that harness is in place, the next step should be to diff the remaining real `sceneLogicType.ts` surface after removing this transitive-import bucket from the noise floor
+
+### Even Later April 2, 2026 Slice-Compare Harness Fix
+
+- The next blocker turned out to be in the scorekeeping layer, not the generator:
+  - the ad-hoc `sceneLogicType.ts` semantic-diff check had been using `normalizeGeneratedFile(tsText, tsPath) === normalizeGeneratedFile(goText, goPath)` with two different absolute filenames
+  - that is not filename-stable for some generated surfaces that mix imported aliases with `import("...absolute path...").Type` nodes
+  - on the preserved PostHog `scenes` worktree, that bug was severe enough to report only `262/384` semantic matches even though all `384/384` files were byte-identical
+- Fixed the compare harness in `scripts/benchmark-sample-typegen.js` and `scripts/compare-generated-typegen.js`:
+  - semantic normalization now uses the shared logical relative generated filename for both sides instead of their different absolute on-disk paths
+  - `compare-generated-typegen.js` now also supports `--file <relative-generated-file>` so preserved-corpus slice checks can target one generated file directly
+- Added script-level regression coverage:
+  - `scripts/benchmark-sample-typegen.test.js`
+  - covers the exact false-positive shape:
+    - two byte-identical files
+    - same logical generated filename
+    - imported alias surface mixed with an `import("...absolute path...").SceneProps` node that used to compare differently under `posthog-js` vs `posthog-go` absolute filenames
+
+### Verification
+
+- Script regression command:
+  - `node --experimental-vm-modules ./node_modules/.bin/jest scripts/benchmark-sample-typegen.test.js --runInBand --roots scripts --modulePathIgnorePatterns='/.cache/' --modulePathIgnorePatterns='/dist/'`
+  - result: pass
+- Preserved PostHog `scenes` slice compare command:
+  - `node ./scripts/compare-generated-typegen.js --ts-dir .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-js/frontend/src/scenes --go-dir .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend/src/scenes --json`
+  - result:
+    - comparable files: `384`
+    - exact matches: `384/384`
+    - semantic matches: `384/384`
+    - semantic diffs: `0`
+- Single-file preserved slice compare command:
+  - `node ./scripts/compare-generated-typegen.js --ts-dir .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-js/frontend/src/scenes --go-dir .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend/src/scenes --file sceneLogicType.ts --json`
+  - result:
+    - comparable files: `1`
+    - exact matches: `1/1`
+    - semantic matches: `1/1`
+    - semantic diffs: `0`
+- New one-file emitter sanity check:
+  - command:
+    - `./rewrite/bin/kea-typegen-go render --config samples/tsconfig.json --file samples/logic.ts`
+  - result:
+    - pass
+    - prints the expected single-file typegen to stdout without running the write-round pipeline
+- Preserved PostHog one-file emitter attempt:
+  - command:
+    - `./rewrite/bin/kea-typegen-go render --project-dir .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend --config .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend/tsconfig.json --file .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend/src/scenes/sceneLogic.tsx >/tmp/sceneLogicTypegen.out`
+  - result:
+    - still not fast enough to be the finished slice harness for this specific PostHog file on this host
+    - the command was stopped after roughly ninety seconds without completing
+
+### Current Reading
+
+- The earlier one-off `sceneLogicType.ts` semantic-diff read was a false positive from the compare harness itself:
+  - comparing identical bytes under different absolute filenames is not safe for these generated import-type surfaces
+  - the new `--file` compare path is the correct slice verifier going forward
+- This does not by itself prove the real `sceneLogic.tsx` generator output is fixed:
+  - the preserved file compared above was the copied JS baseline, not a freshly generated Go output
+  - the remaining blocker for that exact file is now narrowed to the generation path/runtime, not semantic comparison correctness
+- The new `render` subcommand is still worth keeping:
+  - it exposes the existing inspect/build/emit stack as a supported one-file CLI path
+  - it is already useful for focused local/sample checks and for future slice automation once the tsgo project-start cost is reduced
+- The next useful step in the PostHog loop is therefore:
+  - either finish a lighter one-file generation path using the existing inspect/build/emit stack
+  - or make the existing single-file write path fast enough to feed the new `compare-generated-typegen.js --file ...` verifier reliably
+
+### Even Later Still April 2, 2026 Fresh `sceneLogic.tsx` Slice Follow-Up
+
+### What Changed
+
+- Promoted the one-file renderer to the real normalized file emitter:
+  - `rewrite/internal/keainspect/typegen.go` now exposes `RenderTypegenFile(...)`
+  - `rewrite/cmd/kea-typegen-go/main.go` uses that helper for `render --format typegen`
+  - added `TestRenderTypegenFileMatchesWriteRoundEmission` in `rewrite/internal/keainspect/typegen_test.go`
+- Fixed the remaining reducer-seed degradation seen on the fresh PostHog `sceneLogic.tsx` slice:
+  - `parseReducerStateType(...)` now recovers the reducer state from typed handler-state parameters when the reported seed element is `any`
+  - regression coverage:
+    - `TestParseReducerStateTypeRecoversTypedHandlerStateWhenSeedIsAny`
+    - the earlier imported defaulted-generic reducer-seed regression still passes
+- Normalized import-qualified printed types back to bare names for emitted surfaces:
+  - `normalizeInferredTypeText(...)` / `normalizeSourceTypeTextWithOptions(...)` now strip `import("...").TypeName` qualifiers
+  - `collectExplicitImportTypeImports(...)` preserves those explicit module paths for import collection when needed
+  - regression coverage:
+    - `TestNormalizeInferredTypeTextStripsImportTypeQualifiers`
+    - `TestCollectExplicitImportTypeImportsExtractsModulePaths`
+    - `TestSynthesizeConnectedActionFromSymbolsCollectsExplicitImportTypeImports`
+
+### Verification
+
+- Targeted renderer parity + reducer/import regressions:
+  - `cd rewrite && go test ./internal/keainspect -run 'Test(ParseReducerStateTypeRecoversTypedHandlerStateWhenSeedIsAny|NormalizeInferredTypeTextStripsImportTypeQualifiers|CollectExplicitImportTypeImportsExtractsModulePaths|SynthesizeConnectedActionFromSymbols|BuildParsedLogicsRecoversImportedReducerStateFromDefaultedGenericSeed|RenderTypegenFileMatchesWriteRoundEmission)' -count=1`
+  - result: pass
+- Fresh preserved PostHog slice render:
+  - `TIMEFORMAT='real %R'; time env KEA_TYPEGEN_PARITY_MODE=1 ./rewrite/bin/kea-typegen-go render --format typegen --project-dir .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend --config .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend/tsconfig.scene-slice.json --file .cache/kea-typegen/tmp/posthog-corpus-hDN6yo/posthog-go/frontend/src/scenes/sceneLogic.tsx >/tmp/sceneLogic.typegen.ts`
+  - result:
+    - completed successfully
+    - latest measured wall time: about `76.381s`
+
+### Current Reading
+
+- The fresh emitted `sceneLogicType.ts` now clears the earlier connected-router import gap:
+  - connected symbol/member recovery now falls back through declared/signature parameter type symbols and their declaration files
+  - fresh output emits `import type { LocationChangedPayload } from 'kea-router/lib/types'`
+  - the absolute pnpm-store declaration path is normalized back to the bare package subpath during emit
+- The remaining fresh-file parity drift on this slice was in the helper and verifier layers, not the router import itself:
+  - parity-mode internal selector helper recovery was over-refining some primitive-like named selector dependency params from reported `any` to concrete selector types
+  - the single-file compare harness still treated equivalent `node_modules` store imports and copied absolute local `import("...")` paths as semantic diffs
+- Those follow-up gaps are now closed too:
+  - `parityModeRecoveredInternalHelperParameterTypes(...)` now preserves loose named primitive-like helper params in parity mode when the reported surface was intentionally opaque
+  - `scripts/benchmark-sample-typegen.js` now canonicalizes:
+    - `node_modules/.pnpm/.../node_modules/pkg/...` imports back to package paths
+    - copied absolute local import-type paths back to stable local identities for semantic compare
+  - regression coverage added:
+    - `TestTypeImportsFromSymbolUsesDeclarationPath`
+    - `TestTypeImportsFromSymbolSkipsSameFileAndLibDeclarations`
+    - `TestSynthesizeConnectedActionFromSymbolsMergesMemberTypeImports`
+    - `TestNormalizedTypeImportsCollapsesAbsoluteExternalNodeModulesDeclarationPath`
+    - `TestCanonicalizeInternalHelperFunctionTypeWithSelectorDependenciesParityPreservesLooseSelectorParameters`
+    - `TestParityModeRecoveredInternalHelperParameterTypesKeepsLooseNamedPrimitiveParameters`
+    - `scripts/benchmark-sample-typegen.test.js`
+- Fresh single-file compare is now green again on the real preserved slice:
+  - command:
+    - `node ./scripts/compare-generated-typegen.js --ts-dir /tmp/scene-compare/js --go-dir /tmp/scene-compare/go --file sceneLogicType.ts --json`
+  - result:
+    - comparable files: `1`
+    - exact matches: `0/1`
+    - semantic matches: `1/1`
+    - semantic diffs: `0`
+- Latest measured preserved one-file render wall times on this host:
+  - `74.921s`
+  - `77.377s`
+  - `74.982s`
+  - `72.910s`
+- The next exact target has moved past `sceneLogic.tsx` slice semantics:
+  - either promote this restored one-file verification flow to a documented repeatable command for broader preserved PostHog slices
+  - or move to the next preserved fresh-render semantic diff bucket instead of reopening the now-closed router/import/helper/compare lane
+
 ## Guardrails
 
 - Do not optimize for the current normalized compare score alone.
@@ -2371,6 +2811,8 @@
   - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target posthog --json'`
 - Probe hidden `tsgo` methods:
   - `flox activate -c 'cd rewrite && go run ./cmd/kea-typegen-go probe-api --json'`
+- Render one file through the inspect/build/emit path without the write-round pipeline:
+  - `./rewrite/bin/kea-typegen-go render --config samples/tsconfig.json --file samples/logic.ts`
 - Probe a specific Kea section:
   - `flox activate -c './bin/kea-typegen-go probe-api --sample selectors --json'`
 - Probe a nested member inside a section:

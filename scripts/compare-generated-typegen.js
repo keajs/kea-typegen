@@ -11,6 +11,7 @@ function printHelp() {
 Options:
       --ts-dir <dir>       Directory containing the TypeScript-generated files
       --go-dir <dir>       Directory containing the Go-generated files
+      --file <path>        Compare one generated file relative to both roots
       --top <count>        Number of notable diffs to print (default: 20)
       --json               Print the full summary as JSON
       --html-out <file>    Write a self-contained HTML compare report
@@ -22,6 +23,7 @@ function parseArgs(argv) {
     const options = {
         tsDir: '',
         goDir: '',
+        file: '',
         top: 20,
         json: false,
         htmlOut: '',
@@ -33,6 +35,8 @@ function parseArgs(argv) {
             options.tsDir = path.resolve(argv[++i])
         } else if (arg === '--go-dir' && argv[i + 1]) {
             options.goDir = path.resolve(argv[++i])
+        } else if (arg === '--file' && argv[i + 1]) {
+            options.file = String(argv[++i]).replace(/\\/g, '/')
         } else if (arg === '--top' && argv[i + 1]) {
             options.top = Number(argv[++i])
         } else if (arg === '--json') {
@@ -73,11 +77,13 @@ function exactComparableText(text) {
     return normalized
 }
 
-function buildComparisonReport(tsDir, goDir) {
-    const summary = compareOutputs(tsDir, goDir)
+function buildComparisonReport(tsDir, goDir, selectedFile = '') {
+    const summary = compareOutputs(tsDir, goDir, selectedFile ? { files: [selectedFile] } : {})
     const tsFiles = new Map(listGeneratedTypeFiles(tsDir).map((file) => [file, path.join(tsDir, file)]))
     const goFiles = new Map(listGeneratedTypeFiles(goDir).map((file) => [file, path.join(goDir, file)]))
-    const allFiles = [...new Set([...tsFiles.keys(), ...goFiles.keys()])].sort()
+    const allFiles = [...new Set([...tsFiles.keys(), ...goFiles.keys()])]
+        .filter((file) => !selectedFile || file === selectedFile)
+        .sort()
 
     const files = allFiles.map((file) => {
         const tsPath = tsFiles.get(file) || null
@@ -111,7 +117,7 @@ function buildComparisonReport(tsDir, goDir) {
         }
 
         const exactMatch = exactComparableText(tsText) === exactComparableText(goText)
-        const semanticMatch = normalizeGeneratedFile(tsText, tsPath) === normalizeGeneratedFile(goText, goPath)
+        const semanticMatch = normalizeGeneratedFile(tsText, file) === normalizeGeneratedFile(goText, file)
 
         return {
             file,
@@ -137,6 +143,7 @@ function buildComparisonReport(tsDir, goDir) {
         generatedAt: new Date().toISOString(),
         tsDir,
         goDir,
+        file: selectedFile || null,
         summary: { ...summary, statusCounts },
         files,
     }
@@ -953,10 +960,11 @@ function generateHtml(report) {
 
 function main() {
     const options = parseArgs(process.argv.slice(2))
-    const summary = compareOutputs(options.tsDir, options.goDir)
+    const compareOptions = options.file ? { files: [options.file] } : {}
+    const summary = compareOutputs(options.tsDir, options.goDir, compareOptions)
 
     if (options.htmlOut) {
-        const report = buildComparisonReport(options.tsDir, options.goDir)
+        const report = buildComparisonReport(options.tsDir, options.goDir, options.file)
         fs.mkdirSync(path.dirname(options.htmlOut), { recursive: true })
         fs.writeFileSync(options.htmlOut, generateHtml(report))
     }
@@ -971,6 +979,9 @@ function main() {
 
     console.log(`TS dir: ${options.tsDir}`)
     console.log(`Go dir: ${options.goDir}`)
+    if (options.file) {
+        console.log(`File: ${options.file}`)
+    }
     console.log(`Total files: ${summary.totalFiles}`)
     console.log(`Comparable files: ${summary.comparableFiles}`)
     console.log(`Semantic matches: ${summary.semanticMatches} (${formatPercent(summary.semanticAccuracy)})`)

@@ -14,22 +14,23 @@ import (
 )
 
 type MemberReport struct {
-	Name                                 string `json:"name"`
-	TypeString                           string `json:"typeString,omitempty"`
-	PrintedTypeNode                      string `json:"printedTypeNode,omitempty"`
-	ReturnTypeString                     string `json:"returnTypeString,omitempty"`
-	PrintedReturnTypeNode                string `json:"printedReturnTypeNode,omitempty"`
-	SelectorInputReturnTypeString        string `json:"selectorInputReturnTypeString,omitempty"`
-	SelectorInputPrintedReturnTypeNode   string `json:"selectorInputPrintedReturnTypeNode,omitempty"`
-	ProjectorDirectTypeString            string `json:"projectorDirectTypeString,omitempty"`
-	ProjectorDirectPrintedTypeNode       string `json:"projectorDirectPrintedTypeNode,omitempty"`
-	ProjectorDirectReturnTypeString      string `json:"projectorDirectReturnTypeString,omitempty"`
-	ProjectorDirectPrintedReturnTypeNode string `json:"projectorDirectPrintedReturnTypeNode,omitempty"`
-	ProjectorTypeString                  string `json:"projectorTypeString,omitempty"`
-	ProjectorPrintedTypeNode             string `json:"projectorPrintedTypeNode,omitempty"`
-	ProjectorReturnTypeString            string `json:"projectorReturnTypeString,omitempty"`
-	ProjectorPrintedReturnTypeNode       string `json:"projectorPrintedReturnTypeNode,omitempty"`
-	SignatureCount                       int    `json:"signatureCount,omitempty"`
+	Name                                 string       `json:"name"`
+	TypeString                           string       `json:"typeString,omitempty"`
+	PrintedTypeNode                      string       `json:"printedTypeNode,omitempty"`
+	ReturnTypeString                     string       `json:"returnTypeString,omitempty"`
+	PrintedReturnTypeNode                string       `json:"printedReturnTypeNode,omitempty"`
+	SelectorInputReturnTypeString        string       `json:"selectorInputReturnTypeString,omitempty"`
+	SelectorInputPrintedReturnTypeNode   string       `json:"selectorInputPrintedReturnTypeNode,omitempty"`
+	ProjectorDirectTypeString            string       `json:"projectorDirectTypeString,omitempty"`
+	ProjectorDirectPrintedTypeNode       string       `json:"projectorDirectPrintedTypeNode,omitempty"`
+	ProjectorDirectReturnTypeString      string       `json:"projectorDirectReturnTypeString,omitempty"`
+	ProjectorDirectPrintedReturnTypeNode string       `json:"projectorDirectPrintedReturnTypeNode,omitempty"`
+	ProjectorTypeString                  string       `json:"projectorTypeString,omitempty"`
+	ProjectorPrintedTypeNode             string       `json:"projectorPrintedTypeNode,omitempty"`
+	ProjectorReturnTypeString            string       `json:"projectorReturnTypeString,omitempty"`
+	ProjectorPrintedReturnTypeNode       string       `json:"projectorPrintedReturnTypeNode,omitempty"`
+	TypeImports                          []TypeImport `json:"typeImports,omitempty"`
+	SignatureCount                       int          `json:"signatureCount,omitempty"`
 }
 
 type SectionReport struct {

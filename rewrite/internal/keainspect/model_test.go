@@ -162,6 +162,49 @@ func TestCollectTypeImportsForTypeTextsParityOmitsReactFlowImports(t *testing.T)
 	}
 }
 
+func TestCollectTypeImportsForTypeTextsRecoversTransitiveLocalImportsFromValueImportSources(t *testing.T) {
+	tempDir, _ := writeTempProject(t, map[string]string{
+		"src/sceneTypes.ts": strings.Join([]string{
+			"export type SceneProps = Record<string, any>",
+			"",
+			"export interface SceneExport<T = SceneProps> {",
+			"    props?: T",
+			"}",
+		}, "\n"),
+		"src/scenes.ts": strings.Join([]string{
+			"import { SceneExport } from './sceneTypes'",
+			"",
+			"export const preloadedScenes: Record<string, SceneExport> = {}",
+		}, "\n"),
+		"src/sceneLogic.ts": strings.Join([]string{
+			"import { preloadedScenes } from './scenes'",
+			"",
+			"type ExportedScenes = Record<string, SceneExport<SceneProps>>",
+		}, "\n"),
+	})
+
+	logicFile := filepath.Join(tempDir, "src", "sceneLogic.ts")
+	sourceBytes, err := os.ReadFile(logicFile)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+
+	imports := collectTypeImportsForTypeTexts(
+		string(sourceBytes),
+		logicFile,
+		[]string{"Record<string, SceneExport<SceneProps>>"},
+		nil,
+		nil,
+	)
+
+	if !hasImport(imports, "./sceneTypes", "SceneExport") {
+		t.Fatalf("expected transitive SceneExport import from ./sceneTypes, got %+v", imports)
+	}
+	if !hasImport(imports, "./sceneTypes", "SceneProps") {
+		t.Fatalf("expected transitive SceneProps import from ./sceneTypes, got %+v", imports)
+	}
+}
+
 func TestBuildParsedLogicsFromSourcePropsLogic(t *testing.T) {
 	root := repoRoot(t)
 	sourcePath := filepath.Join(root, "samples", "propsLogic.ts")
@@ -2230,6 +2273,69 @@ func TestParseReducerStateTypeRecoversCollapsedTupleArrayUnion(t *testing.T) {
 	}
 	if stateType != "boolean" {
 		t.Fatalf("expected collapsed reducer state type %q, got %q", "boolean", stateType)
+	}
+}
+
+func TestParseReducerStateTypeRecoversTypedHandlerStateWhenSeedIsAny(t *testing.T) {
+	stateType, ok := parseReducerStateType("[any, { setExportedScene: (state: Record<string, SceneExport<SceneProps>>, { exportedScene, sceneId }: { exportedScene: SceneExport<SceneProps>; params: SceneParams; sceneId: string; sceneKey: string | undefined; tabId: string; }) => { ...; }; }]")
+	if !ok {
+		t.Fatalf("expected reducer state type to parse")
+	}
+	if stateType != "Record<string, SceneExport<SceneProps>>" {
+		t.Fatalf("expected recovered reducer state type %q, got %q", "Record<string, SceneExport<SceneProps>>", stateType)
+	}
+}
+
+func TestNormalizeInferredTypeTextStripsImportTypeQualifiers(t *testing.T) {
+	got := normalizeInferredTypeText(`{ iconType: import("../queries/schema").FileSystemIconType | "blank"; scene: SceneExport<import("./sceneTypes").SceneProps>; }`)
+	want := `{ iconType: FileSystemIconType | "blank"; scene: SceneExport<SceneProps>; }`
+	if got != want {
+		t.Fatalf("expected normalized type %q, got %q", want, got)
+	}
+}
+
+func TestCollectExplicitImportTypeImportsExtractsModulePaths(t *testing.T) {
+	imports := collectExplicitImportTypeImports([]string{
+		`import("../queries/schema").FileSystemIconType | import("./sceneTypes").SceneExport<import("./sceneTypes").SceneProps>`,
+		`(payload: import("/tmp/node_modules/kea-router/lib/types").LocationChangedPayload) => void`,
+	})
+
+	if !hasImport(imports, "../queries/schema", "FileSystemIconType") {
+		t.Fatalf("expected FileSystemIconType import, got %+v", imports)
+	}
+	if !hasImport(imports, "./sceneTypes", "SceneExport") || !hasImport(imports, "./sceneTypes", "SceneProps") {
+		t.Fatalf("expected sceneTypes imports, got %+v", imports)
+	}
+	if !hasImport(imports, "/tmp/node_modules/kea-router/lib/types", "LocationChangedPayload") {
+		t.Fatalf("expected LocationChangedPayload import, got %+v", imports)
+	}
+}
+
+func TestTypeImportsFromSymbolUsesDeclarationPath(t *testing.T) {
+	imports := typeImportsFromSymbol(&tsgoapi.SymbolResponse{
+		Name:         "LocationChangedPayload",
+		Declarations: []string{"123.131.277./tmp/node_modules/kea-router/lib/types.d.ts"},
+	}, "/tmp/project/src/scenes/sceneLogic.tsx")
+
+	if !hasImport(imports, "/tmp/node_modules/kea-router/lib/types.d.ts", "LocationChangedPayload") {
+		t.Fatalf("expected declaration-backed import, got %+v", imports)
+	}
+}
+
+func TestTypeImportsFromSymbolSkipsSameFileAndLibDeclarations(t *testing.T) {
+	for _, symbol := range []*tsgoapi.SymbolResponse{
+		{
+			Name:         "LocationChangedPayload",
+			Declarations: []string{"123.131.277./tmp/project/src/scenes/sceneLogic.tsx"},
+		},
+		{
+			Name:         "Record",
+			Declarations: []string{"123.131.277./tmp/node_modules/typescript/lib/lib.es5.d.ts"},
+		},
+	} {
+		if imports := typeImportsFromSymbol(symbol, "/tmp/project/src/scenes/sceneLogic.tsx"); len(imports) != 0 {
+			t.Fatalf("expected no import for %+v, got %+v", symbol, imports)
+		}
 	}
 }
 
@@ -6191,6 +6297,18 @@ func TestParityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(t *te
 	untypedRecovered := "(scenes: any, arg: any, arg2: any) => FrameScene | null"
 	if !parityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(untypedExpression, untypedCurrent, untypedRecovered) {
 		t.Fatalf("expected untyped unnamed dependency helper to prefer recovered placeholder names")
+	}
+}
+
+func TestUnnamedDependencyPlaceholderHelperShouldPreferRecovered(t *testing.T) {
+	expression := "[() => [(): S6 => ({})], (a) => a]"
+	current := "(a: S6) => Partial<Record<string, S7>>"
+	recovered := "(arg: S6) => Partial<Record<string, S7>>"
+	if !unnamedDependencyPlaceholderHelperShouldPreferRecovered(expression, current, recovered) {
+		t.Fatalf("expected placeholder helper to beat reported source parameter name")
+	}
+	if unnamedDependencyPlaceholderHelperShouldPreferRecovered(expression, recovered, current) {
+		t.Fatalf("did not expect reported source parameter name to replace placeholder helper")
 	}
 }
 
@@ -12909,6 +13027,19 @@ func TestRefineActionFunctionTypeRecoversLowQualityParameterTypesFromPayload(t *
 	}
 }
 
+func TestRefineActionPayloadTypeFromFunctionRecoversLowQualityMemberTypes(t *testing.T) {
+	functionType := "(experimentId: ExperimentIdType, metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery, teamId: number | null | undefined, queryId: string | null, context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; metric_kind: string; error_type: 'timeout' | 'out_of_memory' | 'server_error' | 'network_error' | 'unknown'; error_code: string | null; error_message: string | null; status_code: number | null; }) => { context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; ... 4 more ...; status_code: number | null; }; experimentId: ExperimentIdType; metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery; queryId: string | null; teamId: number | null | undefined; }"
+	payloadType := "{ context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; ... 4 more ...; status_code: number | null; }; experimentId: ExperimentIdType; metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery; queryId: string | null; teamId: number | null | undefined; }"
+
+	refined := refineActionPayloadTypeFromFunction(functionType, payloadType)
+	if strings.Contains(refined, "... 4 more ...") {
+		t.Fatalf("expected refined payload type to remove summarized object placeholder, got %q", refined)
+	}
+	if !strings.Contains(refined, "metric_kind: string") {
+		t.Fatalf("expected refined payload type to recover nested context members, got %q", refined)
+	}
+}
+
 func TestRefineActionFunctionTypeKeepsSpecificParameterTypesWhenPayloadDiffers(t *testing.T) {
 	functionType := "({ experimentId, holdoutId }: { experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType['id']; }) => { experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType; }"
 	payloadType := "{ experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType; }"
@@ -12916,6 +13047,282 @@ func TestRefineActionFunctionTypeKeepsSpecificParameterTypesWhenPayloadDiffers(t
 	refined := refineActionFunctionType(functionType, payloadType)
 	if refined != functionType {
 		t.Fatalf("expected specific parameter types to stay unchanged, got %q", refined)
+	}
+}
+
+func TestBuildParsedLogicsPreservesUntypedDestructuredAnyActionParameters(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"export const customerLogic = kea([",
+		"    path(['customerLogic']),",
+		"    actions({",
+		"        reportCustomerAnalyticsAddJoinButtonClicked: ({ table }) => ({ table }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/customerLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "customerLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "reportCustomerAnalyticsAddJoinButtonClicked",
+								TypeString:       "({ table }: { table: any; }) => { table: any; }",
+								ReturnTypeString: "{ table: any; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportCustomerAnalyticsAddJoinButtonClicked")
+	if !ok {
+		t.Fatalf("expected reportCustomerAnalyticsAddJoinButtonClicked action, got %+v", logics[0].Actions)
+	}
+	expectedFunctionType := "({ table }: any) => { table: any; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected untyped destructured any action function type %q, got %+v", expectedFunctionType, action)
+	}
+}
+
+func TestBuildParsedLogicsRecoversDestructuredIndexedAccessActionPayloadMembers(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"type ExperimentIdType = string",
+		"type ExperimentHoldoutType = {",
+		"    id: number | null",
+		"}",
+		"",
+		"export const experimentLogic = kea([",
+		"    path(['experimentLogic']),",
+		"    actions({",
+		"        reportExperimentHoldoutAssigned: ({",
+		"            experimentId,",
+		"            holdoutId,",
+		"        }: {",
+		"            experimentId: ExperimentIdType",
+		"            holdoutId: ExperimentHoldoutType['id']",
+		"        }) => ({ experimentId, holdoutId }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/experimentLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "experimentLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "reportExperimentHoldoutAssigned",
+								TypeString:       "({ experimentId, holdoutId }: { experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType['id']; }) => { experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType; }",
+								ReturnTypeString: "{ experimentId: ExperimentIdType; holdoutId: ExperimentHoldoutType; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportExperimentHoldoutAssigned")
+	if !ok {
+		t.Fatalf("expected reportExperimentHoldoutAssigned action, got %+v", logics[0].Actions)
+	}
+	expectedPayloadType := "{ experimentId: ExperimentIdType; holdoutId: number | null; }"
+	if action.PayloadType != expectedPayloadType {
+		t.Fatalf("expected destructured indexed-access payload %q, got %+v", expectedPayloadType, action)
+	}
+	if !strings.Contains(action.FunctionType, "holdoutId: ExperimentHoldoutType['id']") {
+		t.Fatalf("expected function type to preserve indexed-access parameter, got %+v", action)
+	}
+	if !strings.Contains(action.FunctionType, "holdoutId: number | null") {
+		t.Fatalf("expected function type to recover indexed-access payload member, got %+v", action)
+	}
+}
+
+func TestBuildParsedLogicsKeepsActionIndexSignaturePayloadWhenListenerTypeWidens(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, listeners, path } from 'kea'",
+		"",
+		"export const analyticsLogic = kea([",
+		"    path(['analyticsLogic']),",
+		"    actions({",
+		"        reportAxisUnitsChanged: (properties: Record<string, any>) => ({ ...properties }),",
+		"    }),",
+		"    listeners(() => ({",
+		"        reportAxisUnitsChanged: (properties) => {",
+		"            console.log(properties)",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/analyticsLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "analyticsLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "reportAxisUnitsChanged",
+								TypeString:       "(properties: Record<string, any>) => { [x: string]: any; }",
+								ReturnTypeString: "{ [x: string]: any; }",
+							},
+						},
+					},
+					{
+						Name: "listeners",
+						Members: []MemberReport{
+							{
+								Name:       "reportAxisUnitsChanged",
+								TypeString: "(properties: { [x: string]: any; custom_properties_count: number; posthog_properties_count: number; }) => void",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportAxisUnitsChanged")
+	if !ok {
+		t.Fatalf("expected reportAxisUnitsChanged action, got %+v", logics[0].Actions)
+	}
+	expectedPayloadType := "{ [x: string]: any; }"
+	if action.PayloadType != expectedPayloadType {
+		t.Fatalf("expected index-signature action payload %q, got %+v", expectedPayloadType, action)
+	}
+
+	listener, ok := findParsedListener(logics[0].Listeners, "reportAxisUnitsChanged")
+	if !ok {
+		t.Fatalf("expected reportAxisUnitsChanged listener, got %+v", logics[0].Listeners)
+	}
+	if listener.PayloadType != expectedPayloadType {
+		t.Fatalf("expected listener payload to stay aligned with action payload %q, got %+v", expectedPayloadType, listener)
+	}
+}
+
+func TestBuildParsedLogicsKeepsSpreadRecordActionPayloadFromLeakingLaterLocalProperties(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, listeners, path } from 'kea'",
+		"",
+		"export const analyticsLogic = kea([",
+		"    path(['analyticsLogic']),",
+		"    actions({",
+		"        reportAxisUnitsChanged: (properties: Record<string, any>) => ({ ...properties }),",
+		"    }),",
+		"    listeners(() => ({",
+		"        reportAxisUnitsChanged: (properties) => {",
+		"            console.log(properties)",
+		"        },",
+		"        reportLaterPropertiesShape: () => {",
+		"            const properties = {",
+		"                custom_properties_count: 1,",
+		"                posthog_properties_count: 1,",
+		"            }",
+		"            console.log(properties)",
+		"        },",
+		"    })),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/analyticsLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "analyticsLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "reportAxisUnitsChanged",
+								TypeString:       "(properties: Record<string, any>) => { [x: string]: any; }",
+								ReturnTypeString: "{ [x: string]: any; }",
+							},
+						},
+					},
+					{
+						Name: "listeners",
+						Members: []MemberReport{
+							{
+								Name:       "reportAxisUnitsChanged",
+								TypeString: "(properties: { [x: string]: any; custom_properties_count: number; posthog_properties_count: number; }) => void",
+							},
+							{
+								Name:       "reportLaterPropertiesShape",
+								TypeString: "() => void",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportAxisUnitsChanged")
+	if !ok {
+		t.Fatalf("expected reportAxisUnitsChanged action, got %+v", logics[0].Actions)
+	}
+	expectedPayloadType := "{ [x: string]: any; }"
+	if action.PayloadType != expectedPayloadType {
+		t.Fatalf("expected spread-record action payload %q, got %+v", expectedPayloadType, action)
 	}
 }
 
@@ -13265,6 +13672,491 @@ func TestBuildParsedLogicsRecoversImportedIndexedAccessPayloadsForShorthandActio
 	expectedFunctionType = "(roleId: RoleType['id']) => { roleId: string; }"
 	if action.FunctionType != expectedFunctionType {
 		t.Fatalf("expected deleteRole function type %q, got %+v", expectedFunctionType, action)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedDefaultedGenericShorthandActionPayloads(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface Node<T = Record<string, any>> {",
+		"    value: T",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "eventUsageLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import { Node } from './types'",
+		"",
+		"export const eventUsageLogic = kea([",
+		"    path(['eventUsageLogic']),",
+		"    actions({",
+		"        reportInsightCreated: (query: Node | null) => ({ query }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportInsightCreated")
+	if !ok {
+		t.Fatalf("expected reportInsightCreated action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ query: Node<Record<string, any>> | null; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected defaulted generic shorthand payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(query: Node | null) => { query: Node<Record<string, any>> | null; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected function type %q, got %+v", expectedFunctionType, action)
+	}
+}
+
+func TestBuildParsedLogicsRecoversIndexedAccessEnumAliasPayloadsForShorthandActions(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"export interface FunnelCorrelation {",
+		"    result_type: FunnelCorrelationResultsType.Events | FunnelCorrelationResultsType.Properties | FunnelCorrelationResultsType.EventWithProperties",
+		"}",
+		"",
+		"export enum FunnelCorrelationResultsType {",
+		"    Events = 'events',",
+		"    Properties = 'properties',",
+		"    EventWithProperties = 'event_with_properties',",
+		"}",
+		"",
+		"export const eventUsageLogic = kea([",
+		"    path(['eventUsageLogic']),",
+		"    actions({",
+		"        reportCorrelationInteraction: (correlationType: FunnelCorrelation['result_type']) => ({ correlationType }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/eventUsageLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "eventUsageLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "reportCorrelationInteraction",
+								TypeString:       "(correlationType: FunnelCorrelation['result_type']) => { correlationType: FunnelCorrelation; }",
+								ReturnTypeString: "{ correlationType: FunnelCorrelation; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportCorrelationInteraction")
+	if !ok {
+		t.Fatalf("expected reportCorrelationInteraction action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ correlationType: FunnelCorrelationResultsType; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected enum alias payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(correlationType: FunnelCorrelation['result_type']) => { correlationType: FunnelCorrelationResultsType; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected function type %q, got %+v", expectedFunctionType, action)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedIndexedAccessEnumAliasPayloadsForShorthandActions(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface FunnelCorrelation {",
+		"    result_type: FunnelCorrelationResultsType.Events | FunnelCorrelationResultsType.Properties | FunnelCorrelationResultsType.EventWithProperties",
+		"}",
+		"",
+		"export enum FunnelCorrelationResultsType {",
+		"    Events = 'events',",
+		"    Properties = 'properties',",
+		"    EventWithProperties = 'event_with_properties',",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "eventUsageLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import { FunnelCorrelation } from './types'",
+		"",
+		"export const eventUsageLogic = kea([",
+		"    path(['eventUsageLogic']),",
+		"    actions({",
+		"        reportCorrelationInteraction: (correlationType: FunnelCorrelation['result_type']) => ({ correlationType }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportCorrelationInteraction")
+	if !ok {
+		t.Fatalf("expected reportCorrelationInteraction action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ correlationType: FunnelCorrelationResultsType; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected imported enum alias payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(correlationType: FunnelCorrelation['result_type']) => { correlationType: FunnelCorrelationResultsType; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected function type %q, got %+v", expectedFunctionType, action)
+	}
+	if !hasImport(logics[0].Imports, "./types", "FunnelCorrelationResultsType") {
+		t.Fatalf("expected FunnelCorrelationResultsType import, got %+v", logics[0].Imports)
+	}
+}
+
+func TestParseObjectTypeMembersWithOptionalUndefinedKeepsMultilineUnionPropertyTypes(t *testing.T) {
+	typeText := strings.Join([]string{
+		"{",
+		"    result_type:",
+		"        | FunnelCorrelationResultsType.Events",
+		"        | FunnelCorrelationResultsType.Properties",
+		"    label: string",
+		"}",
+	}, "\n")
+
+	members, ok := parseObjectTypeMembersWithOptionalUndefined(typeText, true)
+	if !ok {
+		t.Fatalf("expected multiline object type to parse")
+	}
+	expectedResultType := "FunnelCorrelationResultsType.Events | FunnelCorrelationResultsType.Properties"
+	if members["result_type"] != expectedResultType {
+		t.Fatalf("expected multiline union property %q, got %+v", expectedResultType, members)
+	}
+	if members["label"] != "string" {
+		t.Fatalf("expected sibling property to remain intact, got %+v", members)
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedIndexedAccessEnumAliasPayloadsForAliasedMultiParameterShorthandActions(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "baseUrl": "./src",`,
+		`    "paths": {`,
+		`      "~/*": ["*"]`,
+		`    },`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["src/**/*"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "src", "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface SDK {",
+		"    name: string",
+		"}",
+		"",
+		"export interface FunnelCorrelation {",
+		"    result_type:",
+		"        | FunnelCorrelationResultsType.Events",
+		"        | FunnelCorrelationResultsType.Properties",
+		"        | FunnelCorrelationResultsType.EventWithProperties",
+		"}",
+		"",
+		"export enum FunnelCorrelationResultsType {",
+		"    Events = 'events',",
+		"    Properties = 'properties',",
+		"    EventWithProperties = 'event_with_properties',",
+		"}",
+	}, "\n")
+	if err := os.MkdirAll(filepath.Dir(typesFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "src", "lib", "utils", "eventUsageLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import { FunnelCorrelation, type SDK } from '~/types'",
+		"",
+		"export const eventUsageLogic = kea([",
+		"    path(['eventUsageLogic']),",
+		"    actions({",
+		"        reportCorrelationInteraction: (",
+		"            correlationType: FunnelCorrelation['result_type'],",
+		"            action: string,",
+		"            props?: Record<string, any>",
+		"        ) => ({ correlationType, action, props }),",
+		"    }),",
+		"])",
+		"",
+		"export type _SDKOnlyImport = SDK | null",
+	}, "\n")
+	if err := os.MkdirAll(filepath.Dir(logicFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportCorrelationInteraction")
+	if !ok {
+		t.Fatalf("expected reportCorrelationInteraction action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ action: string; correlationType: FunnelCorrelationResultsType; props: Record<string, any> | undefined; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected aliased enum alias payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(correlationType: FunnelCorrelation['result_type'], action: string, props?: Record<string, any>) => { action: string; correlationType: FunnelCorrelationResultsType; props: Record<string, any> | undefined; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected function type %q, got %+v", expectedFunctionType, action)
+	}
+	if !hasImport(logics[0].Imports, "~/types", "FunnelCorrelationResultsType") {
+		t.Fatalf("expected FunnelCorrelationResultsType import, got %+v", logics[0].Imports)
+	}
+}
+
+func TestBuildParsedLogicsKeepsSourceActionPayloadsWhenGenericLogicTypeImportsStaleActionCreators(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface FunnelCorrelation {",
+		"    result_type:",
+		"        | FunnelCorrelationResultsType.Events",
+		"        | FunnelCorrelationResultsType.Properties",
+		"        | FunnelCorrelationResultsType.EventWithProperties",
+		"}",
+		"",
+		"export enum FunnelCorrelationResultsType {",
+		"    Events = 'events',",
+		"    Properties = 'properties',",
+		"    EventWithProperties = 'event_with_properties',",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typeFile := filepath.Join(tempDir, "eventUsageLogicType.ts")
+	typeSource := strings.Join([]string{
+		"import type { Logic } from 'kea'",
+		"import type { FunnelCorrelation } from './types'",
+		"",
+		"export interface eventUsageLogicType extends Logic {",
+		"    actionCreators: {",
+		"        reportCorrelationInteraction: (correlationType: FunnelCorrelation['result_type'], action: string, props?: Record<string, any>) => {",
+		"            type: 'report correlation interaction (eventUsageLogic)'",
+		"            payload: { action: string; correlationType: FunnelCorrelation; props: Record<string, any> | undefined; }",
+		"        }",
+		"    }",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(typeFile, []byte(typeSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "eventUsageLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"import { FunnelCorrelation } from './types'",
+		"import type { eventUsageLogicType } from './eventUsageLogicType'",
+		"",
+		"export const eventUsageLogic = kea<eventUsageLogicType>([",
+		"    path(['eventUsageLogic']),",
+		"    actions({",
+		"        reportCorrelationInteraction: (",
+		"            correlationType: FunnelCorrelation['result_type'],",
+		"            action: string,",
+		"            props?: Record<string, any>",
+		"        ) => ({ correlationType, action, props }),",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportCorrelationInteraction")
+	if !ok {
+		t.Fatalf("expected reportCorrelationInteraction action, got %+v", logics[0].Actions)
+	}
+	expectedPayload := "{ action: string; correlationType: FunnelCorrelationResultsType; props: Record<string, any> | undefined; }"
+	if action.PayloadType != expectedPayload {
+		t.Fatalf("expected source-backed payload %q, got %+v", expectedPayload, action)
+	}
+	expectedFunctionType := "(correlationType: FunnelCorrelation['result_type'], action: string, props?: Record<string, any>) => { action: string; correlationType: FunnelCorrelationResultsType; props: Record<string, any> | undefined; }"
+	if action.FunctionType != expectedFunctionType {
+		t.Fatalf("expected source-backed function type %q, got %+v", expectedFunctionType, action)
+	}
+	if !hasImport(logics[0].Imports, "./types", "FunnelCorrelationResultsType") {
+		t.Fatalf("expected FunnelCorrelationResultsType import, got %+v", logics[0].Imports)
 	}
 }
 
@@ -14831,6 +15723,39 @@ func TestCanonicalizeInternalHelperFunctionTypeWithSelectorDependenciesPreserves
 	}
 }
 
+func TestCanonicalizeInternalHelperFunctionTypeWithSelectorDependenciesParityPreservesLooseSelectorParameters(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	logic := ParsedLogic{
+		Reducers: []ParsedField{
+			{Name: "exportedScenes", Type: "Record<string, SceneExport<SceneProps>>"},
+		},
+		Selectors: []ParsedField{
+			{Name: "activeSceneId", Type: "string | undefined"},
+		},
+	}
+	expression := "[(s) => [s.activeSceneId, s.exportedScenes], (activeSceneId, exportedScenes) => activeSceneId ? exportedScenes[activeSceneId] ?? null : null]"
+	functionType := "(activeSceneId: any, exportedScenes: Record<string, SceneExport<SceneProps>>) => SceneExport<SceneProps> | null"
+
+	got := canonicalizeInternalHelperFunctionTypeWithSelectorDependencies(logic, "", "", expression, functionType, nil)
+	if got != functionType {
+		t.Fatalf("expected parity canonicalization to preserve loose selector dependency parameter, got %q", got)
+	}
+}
+
+func TestParityModeRecoveredInternalHelperParameterTypesKeepsLooseNamedPrimitiveParameters(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	expression := "[(s) => [s.activeSceneId, s.exportedScenes], (activeSceneId, exportedScenes) => activeSceneId ? exportedScenes[activeSceneId] ?? null : null]"
+	current := "(activeSceneId: any, exportedScenes: Record<string, SceneExport<SceneProps>>) => SceneExport<SceneProps> | null"
+	recovered := "(activeSceneId: string | undefined, exportedScenes: Record<string, SceneExport<SceneProps>>) => SceneExport<SceneProps> | null"
+
+	got := parityModeRecoveredInternalHelperParameterTypes(expression, current, recovered)
+	if got != current {
+		t.Fatalf("expected parity merge to preserve loose primitive-like named parameter, got %q", got)
+	}
+}
+
 func TestBuildParsedLogicsFallsBackToLoaderDefaultTypeForBarePromiseReturn(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea, path } from 'kea'",
@@ -15810,6 +16735,204 @@ func TestBuildParsedLogicsLogicSampleRecoversDerivedSelectorReturnTypes(t *testi
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected emitted output to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedReducerStateFromTypedIdentifierSeed(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	typesFile := filepath.Join(tempDir, "types.ts")
+	typesSource := strings.Join([]string{
+		"export interface ExportedItem {",
+		"    id: string",
+		"}",
+		"",
+		"export const preloadedItems: Record<string, ExportedItem> = {}",
+	}, "\n")
+	if err := os.WriteFile(typesFile, []byte(typesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "itemLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path, reducers } from 'kea'",
+		"import { preloadedItems } from './types'",
+		"",
+		"export const itemLogic = kea([",
+		"    path(['itemLogic']),",
+		"    reducers({",
+		"        exportedItems: [",
+		"            preloadedItems,",
+		"            {",
+		"                setExportedItem: (state, { key, item }) => ({",
+		"                    ...state,",
+		"                    [key]: item,",
+		"                }),",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if reducer, ok := findParsedField(logic.Reducers, "exportedItems"); !ok || reducer.Type != "Record<string, ExportedItem>" {
+		t.Fatalf("expected imported reducer seed type %q, got %+v", "Record<string, ExportedItem>", logic.Reducers)
+	}
+	if !hasImport(logic.Imports, "./types", "ExportedItem") {
+		t.Fatalf("expected ExportedItem import from ./types, got %+v", logic.Imports)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.April, 2, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"import type { ExportedItem } from './types'",
+		"exportedItems: Record<string, ExportedItem>",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected rendered typegen to contain %q:\n%s", expected, rendered)
+		}
+	}
+}
+
+func TestBuildParsedLogicsRecoversImportedReducerStateFromDefaultedGenericSeed(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tsconfigPath := filepath.Join(tempDir, "tsconfig.json")
+	tsconfig := strings.Join([]string{
+		"{",
+		`  "compilerOptions": {`,
+		`    "target": "ES2020",`,
+		`    "module": "commonjs",`,
+		`    "moduleResolution": "node",`,
+		`    "skipLibCheck": true`,
+		`  },`,
+		`  "include": ["**/*.ts"]`,
+		"}",
+	}, "\n")
+	if err := os.WriteFile(tsconfigPath, []byte(tsconfig), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	sceneTypesFile := filepath.Join(tempDir, "sceneTypes.ts")
+	sceneTypesSource := strings.Join([]string{
+		"export type SceneProps = Record<string, any>",
+		"",
+		"export interface SceneExport<T = SceneProps> {",
+		"    props?: T",
+		"}",
+	}, "\n")
+	if err := os.WriteFile(sceneTypesFile, []byte(sceneTypesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	scenesFile := filepath.Join(tempDir, "scenes.ts")
+	scenesSource := strings.Join([]string{
+		"import { SceneExport } from './sceneTypes'",
+		"",
+		"export const preloadedScenes: Record<string, SceneExport> = {}",
+	}, "\n")
+	if err := os.WriteFile(scenesFile, []byte(scenesSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	logicFile := filepath.Join(tempDir, "sceneLogic.ts")
+	logicSource := strings.Join([]string{
+		"import { kea, path, reducers } from 'kea'",
+		"import { preloadedScenes } from './scenes'",
+		"",
+		"export const sceneLogic = kea([",
+		"    path(['sceneLogic']),",
+		"    reducers({",
+		"        exportedScenes: [",
+		"            preloadedScenes,",
+		"            {",
+		"                setExportedScene: (state, { sceneId, exportedScene }) => ({",
+		"                    ...state,",
+		"                    [sceneId]: exportedScene,",
+		"                }),",
+		"            },",
+		"        ],",
+		"    }),",
+		"])",
+	}, "\n")
+	if err := os.WriteFile(logicFile, []byte(logicSource), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	root := repoRoot(t)
+	report, err := InspectFile(context.Background(), InspectOptions{
+		BinaryPath: tsgoapi.PreferredBinary(root),
+		ProjectDir: tempDir,
+		ConfigFile: tsconfigPath,
+		File:       logicFile,
+		Timeout:    15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("InspectFile returned error: %v", err)
+	}
+
+	logics, err := BuildParsedLogics(report)
+	if err != nil {
+		t.Fatalf("BuildParsedLogics returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	logic := logics[0]
+	if reducer, ok := findParsedField(logic.Reducers, "exportedScenes"); !ok || reducer.Type != "Record<string, SceneExport<SceneProps>>" {
+		t.Fatalf("expected defaulted generic reducer seed type %q, got %+v", "Record<string, SceneExport<SceneProps>>", logic.Reducers)
+	}
+	if !hasImport(logic.Imports, "./sceneTypes", "SceneProps") {
+		t.Fatalf("expected SceneProps import from ./sceneTypes, got %+v", logic.Imports)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.April, 2, 12, 0, 0, 0, time.UTC))
+	for _, expected := range []string{
+		"import type { SceneExport, SceneProps } from './sceneTypes'",
+		"exportedScenes: Record<string, SceneExport<SceneProps>>",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected rendered typegen to contain %q:\n%s", expected, rendered)
 		}
 	}
 }
@@ -17969,6 +19092,80 @@ func TestBuildParsedLogicsPreservesNullableActionPayloadProperties(t *testing.T)
 	}
 }
 
+func TestBuildParsedLogicsRecoversSummarizedActionPayloadMembersFromFunctionParameters(t *testing.T) {
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"export const eventUsageLogic = kea([",
+		"    path(['eventUsageLogic']),",
+		"    actions({",
+		"        reportExperimentMetricError: (",
+		"            experimentId: ExperimentIdType,",
+		"            metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery,",
+		"            teamId: number | null | undefined,",
+		"            queryId: string | null,",
+		"            context: {",
+		"                duration_ms: number",
+		"                metric_index: number",
+		"                is_primary: boolean",
+		"                is_retry: boolean",
+		"                refresh_id: string",
+		"                metric_kind: string",
+		"                error_type: 'timeout' | 'out_of_memory' | 'server_error' | 'network_error' | 'unknown'",
+		"                error_code: string | null",
+		"                error_message: string | null",
+		"                status_code: number | null",
+		"            }",
+		"        ) => ({ experimentId, metric, teamId, queryId, context }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/eventUsageLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "eventUsageLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "reportExperimentMetricError",
+								TypeString:       "(experimentId: ExperimentIdType, metric: ExperimentMetric | ExperimentTrendsQuery | ExperimentFunnelsQuery, teamId: number | null | undefined, queryId: string | null, context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; metric_kind: string; error_type: 'timeout' | 'out_of_memory' | 'server_error' | 'network_error' | 'unknown'; error_code: string | null; error_message: string | null; status_code: number | null; }) => { experimentId: ExperimentIdType; metric: any; teamId: number | null | undefined; queryId: string | null; context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; ... 4 more ...; status_code: number | null; }; }",
+								ReturnTypeString: "{ experimentId: ExperimentIdType; metric: any; teamId: number | null | undefined; queryId: string | null; context: { duration_ms: number; metric_index: number; is_primary: boolean; is_retry: boolean; refresh_id: string; ... 4 more ...; status_code: number | null; }; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	action, ok := findParsedAction(logics[0].Actions, "reportExperimentMetricError")
+	if !ok {
+		t.Fatalf("expected reportExperimentMetricError action, got %+v", logics[0].Actions)
+	}
+	if strings.Contains(action.PayloadType, "... 4 more ...") {
+		t.Fatalf("expected payload type to drop summarized placeholder, got %q", action.PayloadType)
+	}
+
+	rendered := EmitTypegenAt(logics, time.Date(2026, time.April, 2, 12, 0, 0, 0, time.UTC))
+	if strings.Contains(rendered, "... 4 more ...") {
+		t.Fatalf("expected rendered typegen to avoid summarized action payload placeholder:\n%s", rendered)
+	}
+}
+
 func TestBuildParsedLogicsKeepsReportedActionPayloadAliasWhenSourceAddsNullish(t *testing.T) {
 	source := strings.Join([]string{
 		"import { actions, kea, path } from 'kea'",
@@ -18096,6 +19293,77 @@ func TestBuildParsedLogicsParityKeepsReportedAnyForUnionShorthandActionPayloadMe
 		}
 		if action.FunctionType != expected.functionType || action.PayloadType != expected.payloadType {
 			t.Fatalf("expected %s to preserve reported shorthand payload looseness, got %+v", expected.name, action)
+		}
+	}
+}
+
+func TestBuildParsedLogicsParityRecoversImportedUnionShorthandActionPayloadMembers(t *testing.T) {
+	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
+
+	source := strings.Join([]string{
+		"import { actions, kea, path } from 'kea'",
+		"",
+		"import { Node, QueryBasedInsightModel } from './types'",
+		"",
+		"export const eventUsageLogic = kea([",
+		"    path(['eventUsageLogic']),",
+		"    actions({",
+		"        reportInsightCreated: (query: Node | null) => ({ query }),",
+		"        reportInsightSaved: (insight: Partial<QueryBasedInsightModel> | null) => ({ insight }),",
+		"    }),",
+		"])",
+	}, "\n")
+
+	report := &Report{
+		ProjectDir: "/tmp",
+		File:       "/tmp/eventUsageLogic.ts",
+		Logics: []LogicReport{
+			{
+				Name:      "eventUsageLogic",
+				InputKind: "builders",
+				Sections: []SectionReport{
+					{
+						Name: "actions",
+						Members: []MemberReport{
+							{
+								Name:             "reportInsightCreated",
+								TypeString:       "(query: Node | null) => { query: any; }",
+								ReturnTypeString: "{ query: any; }",
+							},
+							{
+								Name:             "reportInsightSaved",
+								TypeString:       "(insight: Partial<QueryBasedInsightModel> | null) => { insight: any; }",
+								ReturnTypeString: "{ insight: any; }",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	logics, err := BuildParsedLogicsFromSource(report, source)
+	if err != nil {
+		t.Fatalf("BuildParsedLogicsFromSource returned error: %v", err)
+	}
+	if len(logics) != 1 {
+		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
+	}
+
+	for _, expected := range []struct {
+		name         string
+		functionType string
+		payloadType  string
+	}{
+		{name: "reportInsightCreated", functionType: "(query: Node | null) => { query: Node | null; }", payloadType: "{ query: Node | null; }"},
+		{name: "reportInsightSaved", functionType: "(insight: Partial<QueryBasedInsightModel> | null) => { insight: Partial<QueryBasedInsightModel> | null; }", payloadType: "{ insight: Partial<QueryBasedInsightModel> | null; }"},
+	} {
+		action, ok := findParsedAction(logics[0].Actions, expected.name)
+		if !ok {
+			t.Fatalf("expected action %q, got %+v", expected.name, logics[0].Actions)
+		}
+		if action.FunctionType != expected.functionType || action.PayloadType != expected.payloadType {
+			t.Fatalf("expected %s to recover imported shorthand payload type, got %+v", expected.name, action)
 		}
 	}
 }
@@ -18896,7 +20164,7 @@ func TestListenerPayloadHelpersPreferPrintedFunctionType(t *testing.T) {
 }
 
 func TestSynthesizeConnectedActionFromSymbolsPrefersPrintedFunctionType(t *testing.T) {
-	action, ok := synthesizeConnectedActionFromSymbols(
+	action, imports, ok := synthesizeConnectedActionFromSymbols(
 		connectedName{SourceName: "loadThing", LocalName: "loadThing"},
 		[]MemberReport{
 			{
@@ -18924,6 +20192,57 @@ func TestSynthesizeConnectedActionFromSymbolsPrefersPrintedFunctionType(t *testi
 	expectedPayload := "{ foo: string; bar: number; }"
 	if action.PayloadType != expectedPayload {
 		t.Fatalf("expected synthesized action payload %q, got %q", expectedPayload, action.PayloadType)
+	}
+	if len(imports) != 0 {
+		t.Fatalf("expected no explicit import-type imports, got %+v", imports)
+	}
+}
+
+func TestSynthesizeConnectedActionFromSymbolsCollectsExplicitImportTypeImports(t *testing.T) {
+	_, imports, ok := synthesizeConnectedActionFromSymbols(
+		connectedName{SourceName: "locationChanged", LocalName: "locationChanged"},
+		[]MemberReport{
+			{
+				Name:            "locationChanged",
+				PrintedTypeNode: `(payload: import("/tmp/node_modules/kea-router/lib/types").LocationChangedPayload) => void`,
+			},
+		},
+		[]MemberReport{
+			{
+				Name:                  "locationChanged",
+				PrintedTypeNode:       `(payload: import("/tmp/node_modules/kea-router/lib/types").LocationChangedPayload) => { type: 'location changed'; payload: import("/tmp/node_modules/kea-router/lib/types").LocationChangedPayload }`,
+				PrintedReturnTypeNode: `{ type: 'location changed'; payload: import("/tmp/node_modules/kea-router/lib/types").LocationChangedPayload }`,
+			},
+		},
+	)
+	if !ok {
+		t.Fatalf("expected connected action to be synthesized")
+	}
+	if !hasImport(imports, "/tmp/node_modules/kea-router/lib/types", "LocationChangedPayload") {
+		t.Fatalf("expected explicit import-type import, got %+v", imports)
+	}
+}
+
+func TestSynthesizeConnectedActionFromSymbolsMergesMemberTypeImports(t *testing.T) {
+	_, imports, ok := synthesizeConnectedActionFromSymbols(
+		connectedName{SourceName: "locationChanged", LocalName: "locationChanged"},
+		[]MemberReport{
+			{
+				Name:            "locationChanged",
+				PrintedTypeNode: `(payload: LocationChangedPayload) => void`,
+				TypeImports: []TypeImport{{
+					Path:  "/tmp/node_modules/kea-router/lib/types.d.ts",
+					Names: []string{"LocationChangedPayload"},
+				}},
+			},
+		},
+		nil,
+	)
+	if !ok {
+		t.Fatalf("expected connected action to be synthesized")
+	}
+	if !hasImport(imports, "/tmp/node_modules/kea-router/lib/types.d.ts", "LocationChangedPayload") {
+		t.Fatalf("expected member-backed import, got %+v", imports)
 	}
 }
 

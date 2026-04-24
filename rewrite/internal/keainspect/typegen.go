@@ -491,6 +491,90 @@ func RunTypegen(ctx context.Context, options AppOptions) error {
 	return nil
 }
 
+func RenderTypegenFile(ctx context.Context, options AppOptions, projectDir string) (string, error) {
+	_ = ctx
+
+	sourceFile := filepath.Clean(strings.TrimSpace(options.SourceFilePath))
+	if sourceFile == "" {
+		return "", fmt.Errorf("missing source file path")
+	}
+	if strings.TrimSpace(options.TsConfigPath) == "" {
+		return "", fmt.Errorf("missing tsconfig path")
+	}
+
+	projectDir = firstNonEmpty(
+		strings.TrimSpace(projectDir),
+		options.RootPath,
+		filepath.Dir(options.TsConfigPath),
+		filepath.Dir(sourceFile),
+	)
+	if projectDir == "" {
+		return "", fmt.Errorf("missing project directory")
+	}
+
+	state := &buildState{
+		binaryPath:    options.BinaryPath,
+		projectDir:    projectDir,
+		configFile:    options.TsConfigPath,
+		timeout:       options.Timeout,
+		parsedByFile:  map[string][]ParsedLogic{},
+		building:      map[string]bool{},
+		projectByFile: map[string]string{},
+	}
+	defer state.close()
+
+	state.building[sourceFile] = true
+	report, source, err := state.inspectFile(sourceFile)
+	if err != nil {
+		delete(state.building, sourceFile)
+		return "", err
+	}
+	sourceLogics, err := FindLogics(source)
+	if err != nil {
+		delete(state.building, sourceFile)
+		return "", err
+	}
+	logics, err := buildParsedLogicsFromSource(report, source, state)
+	delete(state.building, sourceFile)
+	if err != nil {
+		return "", err
+	}
+	if len(logics) == 0 {
+		return "", nil
+	}
+
+	state.parsedByFile[sourceFile] = logics
+	if state.parsedFileByFile == nil {
+		state.parsedFileByFile = map[string]parsedFileCache{}
+	}
+	state.parsedFileByFile[sourceFile] = parsedFileCache{
+		File:         sourceFile,
+		Source:       source,
+		SourceLogics: sourceLogics,
+		Logics:       logics,
+	}
+
+	typeFile := typeFileNameForSource(options, sourceFile)
+	compilerTypes := state.compilerTypes()
+	ignoredPrefixes := ignoredImportPrefixes(options, compilerTypes)
+	outputsByTypeFile := map[string]string{
+		typeFile: emitTypegenFile(logics, fileEmitOptions{
+			TypeFile:          typeFile,
+			SourceFile:        sourceFile,
+			PackageJSONPath:   options.PackageJSONPath,
+			RootPath:          options.RootPath,
+			ImportState:       state,
+			AddTsNocheck:      options.AddTsNocheck,
+			ImportGlobalTypes: options.ImportGlobalTypes,
+			IgnoreImportPaths: ignoredPrefixes,
+			CompilerTypes:     compilerTypes,
+			GeneratedAt:       time.Now().UTC(),
+		}),
+	}
+	outputsByTypeFile = formatTypegenOutputs(outputsByTypeFile, options)
+	return outputsByTypeFile[typeFile], nil
+}
+
 func runTypegenRounds(ctx context.Context, options AppOptions) (runSummary, error) {
 	if !options.Write {
 		return processProjectOnce(ctx, options, nil)
@@ -1438,17 +1522,8 @@ func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath strin
 		}
 	}
 
-	if strings.HasPrefix(finalPath, nodeModulesPath+string(os.PathSeparator)) {
-		finalPath = strings.TrimPrefix(finalPath, nodeModulesPath+string(os.PathSeparator))
-		if strings.HasPrefix(finalPath, ".pnpm/") {
-			regex := regexp.MustCompile(`\.pnpm/[^/]+@[^/]+/node_modules/(.*)`)
-			if matches := regex.FindStringSubmatch(finalPath); len(matches) == 2 {
-				finalPath = matches[1]
-			}
-		}
-		if strings.HasPrefix(finalPath, "@types/") {
-			finalPath = strings.TrimPrefix(finalPath, "@types/")
-		}
+	if packagePath, ok := normalizeNodeModulesImportPath(finalPath, nodeModulesPath); ok {
+		finalPath = packagePath
 	} else if filepath.IsAbs(finalPath) {
 		relative, err := filepath.Rel(filepath.Dir(typeFile), finalPath)
 		if err == nil {
@@ -1468,6 +1543,42 @@ func normalizeImportPath(importPath, sourceFile, typeFile, packageJSONPath strin
 		finalPath = strings.TrimSuffix(finalPath, "/index")
 	}
 	return filepath.ToSlash(finalPath), fullPath
+}
+
+func normalizeNodeModulesImportPath(finalPath, nodeModulesPath string) (string, bool) {
+	finalPath = filepath.Clean(finalPath)
+	nodeModulesPath = filepath.Clean(nodeModulesPath)
+
+	if strings.HasPrefix(finalPath, nodeModulesPath+string(os.PathSeparator)) {
+		return collapseNodeModulesImportPath(strings.TrimPrefix(finalPath, nodeModulesPath+string(os.PathSeparator)))
+	}
+
+	marker := string(os.PathSeparator) + "node_modules" + string(os.PathSeparator)
+	last := strings.LastIndex(finalPath, marker)
+	if last == -1 {
+		return "", false
+	}
+	return collapseNodeModulesImportPath(finalPath[last+len(marker):])
+}
+
+func collapseNodeModulesImportPath(importPath string) (string, bool) {
+	importPath = filepath.ToSlash(strings.TrimSpace(importPath))
+	if importPath == "" {
+		return "", false
+	}
+	if strings.HasPrefix(importPath, ".pnpm/") {
+		regex := regexp.MustCompile(`\.pnpm/[^/]+@[^/]+/node_modules/(.*)`)
+		if matches := regex.FindStringSubmatch(importPath); len(matches) == 2 {
+			importPath = matches[1]
+		}
+	}
+	if strings.HasPrefix(importPath, "@types/") {
+		importPath = strings.TrimPrefix(importPath, "@types/")
+	}
+	if importPath == "" {
+		return "", false
+	}
+	return importPath, true
 }
 
 func typeFileNameForSource(options AppOptions, sourceFile string) string {

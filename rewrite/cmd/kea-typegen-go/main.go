@@ -83,7 +83,7 @@ func isTypegenCommand(argument string) bool {
 
 func isAuxCommand(argument string) bool {
 	switch argument {
-	case "probe-api":
+	case "probe-api", "render":
 		return true
 	default:
 		return false
@@ -98,6 +98,7 @@ func printTypegenUsage(output io.Writer) {
 		"  kea-typegen-go check  - check what should be done",
 		"  kea-typegen-go write  - write logicType.ts files",
 		"  kea-typegen-go watch  - watch for changes and write logicType.ts files",
+		"  kea-typegen-go render - inspect one file and print report/model/typegen",
 		"  kea-typegen-go probe-api - probe hidden tsgo API methods",
 		"",
 		"Options:",
@@ -116,6 +117,7 @@ func printTypegenUsage(output io.Writer) {
 		"      --show-ts-errors       Show TypeScript errors",
 		"      --use-cache            Cache generated logic files into .typegen",
 		"      --verbose              Slightly more verbose output log",
+		"      --project-dir          TypeScript project directory for render (defaults to resolved root)",
 		"      --tsgo-bin             Path to the tsgo binary",
 		"      --timeout              Per-request timeout",
 		"      --poll-interval        Watch polling interval",
@@ -130,6 +132,8 @@ func runAuxCommand(ctx context.Context, command string, args []string) error {
 	switch command {
 	case "probe-api":
 		return runProbeAPICommand(ctx, args)
+	case "render":
+		return runRenderCommand(ctx, args)
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
@@ -231,6 +235,88 @@ func runLegacyCommand() error {
 			return err
 		}
 		_, err = fmt.Fprint(os.Stdout, keainspect.EmitTypegen(model))
+		return err
+	default:
+		return fmt.Errorf("unknown format %q", *format)
+	}
+}
+
+func runRenderCommand(ctx context.Context, args []string) error {
+	baseDir := findBaseDir()
+
+	flags := flag.NewFlagSet("render", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+
+	projectDir := flags.String("project-dir", "", "TypeScript project directory (defaults to the config file directory)")
+	var options keainspect.AppOptions
+	var ignoreImportPaths stringSliceFlag
+
+	options.Timeout = 15 * time.Second
+
+	flags.StringVar(&options.TsConfigPath, "config", "", "tsconfig path")
+	flags.StringVar(&options.SourceFilePath, "file", "", "TypeScript file with kea logic")
+	flags.StringVar(&options.RootPath, "root", "", "Root for logic paths. E.g: ./frontend/src")
+	flags.StringVar(&options.TypesPath, "types", "", "Folder to write logicType.ts files to.")
+	flags.BoolVar(&options.AddTsNocheck, "add-ts-nocheck", false, "Add @ts-nocheck to top of logicType.ts files")
+	flags.BoolVar(&options.ImportGlobalTypes, "import-global-types", false, "Add import statements in logicType.ts files for global types")
+	flags.Var(&ignoreImportPaths, "ignore-import-paths", "List of paths we will never import from inside logicType.ts files")
+	flags.StringVar(&options.BinaryPath, "tsgo-bin", tsgoapi.PreferredBinary(baseDir), "Path to the tsgo binary")
+	format := flags.String("format", "typegen", "Output format: report, model, or typegen")
+	flags.DurationVar(&options.Timeout, "timeout", 15*time.Second, "Per-request timeout")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	options.IgnoreImportPaths = ignoreImportPaths
+	resolved, err := keainspect.ResolveAppOptions(options, visitedFlags(flags), cliWorkingDir())
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(resolved.TsConfigPath) == "" {
+		return fmt.Errorf("missing --config")
+	}
+	if strings.TrimSpace(resolved.SourceFilePath) == "" {
+		return fmt.Errorf("missing --file")
+	}
+
+	workingDir := cliWorkingDir()
+	resolvedProjectDir := strings.TrimSpace(*projectDir)
+	if resolvedProjectDir == "" {
+		resolvedProjectDir = resolved.RootPath
+	} else {
+		resolvedProjectDir = mustAbsFrom(workingDir, resolvedProjectDir)
+	}
+
+	report, err := keainspect.InspectFile(ctx, keainspect.InspectOptions{
+		BinaryPath: resolved.BinaryPath,
+		ProjectDir: resolvedProjectDir,
+		ConfigFile: resolved.TsConfigPath,
+		File:       resolved.SourceFilePath,
+		Timeout:    resolved.Timeout,
+	})
+	if err != nil {
+		return err
+	}
+
+	switch *format {
+	case "report":
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(report)
+	case "model":
+		model, err := keainspect.BuildParsedLogics(report)
+		if err != nil {
+			return err
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(model)
+	case "typegen":
+		typegen, err := keainspect.RenderTypegenFile(ctx, resolved, resolvedProjectDir)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprint(os.Stdout, typegen)
 		return err
 	default:
 		return fmt.Errorf("unknown format %q", *format)

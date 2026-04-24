@@ -25,6 +25,7 @@ var (
 	loaderSpreadReturnPattern      = regexp.MustCompile(`\breturn\s+\[[^\]]*\.\.\.\s*values\.`)
 	loaderAwaitedJSONLocalPattern  = regexp.MustCompile(`\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+[^\n;]*?\.json\s*\(`)
 	importTypeQualifierPattern     = regexp.MustCompile(`import\([^)]*\)\.`)
+	importTypeReferencePattern     = regexp.MustCompile(`import\((?:'([^']+)'|"([^"]+)")\)\.([A-Z][A-Za-z0-9_$]*)`)
 	namespaceTypeQualifierPattern  = regexp.MustCompile(`\b(?:[A-Za-z_$][A-Za-z0-9_$]*\.)+([A-Z][A-Za-z0-9_$]*)\b`)
 )
 
@@ -99,25 +100,30 @@ type ParsedLogic struct {
 }
 
 type buildState struct {
-	binaryPath         string
-	projectDir         string
-	configFile         string
-	timeout            time.Duration
-	parsedByFile       map[string][]ParsedLogic
-	parsedFileByFile   map[string]parsedFileCache
-	building           map[string]bool
-	apiClient          *tsgoapi.Client
-	apiSnapshot        string
-	config             *tsgoapi.ConfigResponse
-	primaryProjectID   string
-	projectByFile      map[string]string
-	typeTextByTypeID   map[string]string
-	typeTextByPos      map[string]string
-	typeTextByLocation map[string]string
-	callbackByPos      map[string]string
-	signatureByPos     map[string]string
-	sourceOffsetByFile map[string]sourceOffsetMap
-	sourceNodesByFile  map[string]sourceFileNodeCache
+	binaryPath                    string
+	projectDir                    string
+	configFile                    string
+	timeout                       time.Duration
+	parsedByFile                  map[string][]ParsedLogic
+	parsedFileByFile              map[string]parsedFileCache
+	building                      map[string]bool
+	apiClient                     *tsgoapi.Client
+	apiSnapshot                   string
+	config                        *tsgoapi.ConfigResponse
+	primaryProjectID              string
+	projectByFile                 map[string]string
+	typeTextByTypeID              map[string]string
+	typeTextByPos                 map[string]string
+	typeTextBySymbolPos           map[string]string
+	typeTextByLocation            map[string]string
+	callbackByPos                 map[string]string
+	signatureByPos                map[string]string
+	exportedTypeNamesByFile       map[string]map[string]bool
+	packageExportCandidatesByPath map[string]map[string]importCandidate
+	importedValueSourcesByFile    map[string][]importedSourceFile
+	transitiveTypeImportsByRef    map[string]cachedTypeImportsResult
+	sourceOffsetByFile            map[string]sourceOffsetMap
+	sourceNodesByFile             map[string]sourceFileNodeCache
 }
 
 type parsedFileCache struct {
@@ -197,6 +203,7 @@ func buildParsedLogicsFromSource(report *Report, source string, state *buildStat
 }
 
 func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, logicReport LogicReport, state *buildState) (ParsedLogic, error) {
+	logicStart := time.Now()
 	sections := map[string][]SectionReport{}
 	for _, section := range logicReport.Sections {
 		sections[section.Name] = append(sections[section.Name], section)
@@ -222,6 +229,7 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		Path:       path,
 		PathString: strings.Join(path, "."),
 	}
+	defer maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "total", logicStart)
 
 	reportedPropsType := ""
 	missingLocalLogicTypeImport := hasMissingLocalLogicTypeImport(source, report.File)
@@ -268,21 +276,35 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 			}
 		}
 	}
+	actionsStart := time.Now()
 	for index, section := range sections["actions"] {
-		parsed.Actions = mergeParsedActions(parsed.Actions, parseActionsWithSource(section, source, sourcePropertyAt(properties["actions"], index), logicReport.InputKind, report.File, state)...)
+		actions, actionImports := parseActionsWithSourceAndImports(section, source, sourcePropertyAt(properties["actions"], index), logicReport.InputKind, report.File, state)
+		if source != "" && index >= len(properties["actions"]) {
+			parsed.Actions = mergeParsedActionsPreferExisting(parsed.Actions, actions...)
+			parsed.Imports = mergeTypeImports(parsed.Imports, actionImports)
+			continue
+		}
+		parsed.Actions = mergeParsedActions(parsed.Actions, actions...)
+		parsed.Imports = mergeTypeImports(parsed.Imports, actionImports)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "actions", actionsStart)
+	defaultsStart := time.Now()
 	for index, section := range sections["defaults"] {
 		parsed.Reducers = mergeParsedFields(
 			parsed.Reducers,
 			parseDefaultFieldsWithSource(section, source, sourcePropertyAt(properties["defaults"], index), report.File, state)...,
 		)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "defaults", defaultsStart)
+	reducersStart := time.Now()
 	for index, section := range sections["reducers"] {
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseReducersWithSource(section, source, sourcePropertyAt(properties["reducers"], index), report.File, state)...)
 	}
 	for _, section := range sections["windowValues"] {
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, parseWindowValues(section)...)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "reducers", reducersStart)
+	formsStart := time.Now()
 	for _, section := range sections["form"] {
 		formActions, formReducers, extraInputForm := parseFormPluginSection(section)
 		parsed.Actions = mergeParsedActions(parsed.Actions, formActions...)
@@ -305,6 +327,8 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.Selectors = mergeParsedFieldsPreferExisting(parsed.Selectors, formSelectors...)
 		parsed.Imports = mergeTypeImports(parsed.Imports, formImports)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "forms", formsStart)
+	loadersStart := time.Now()
 	for index, section := range sections["loaders"] {
 		loaderActions, loaderReducers := parseLoadersWithSource(section, source, sourcePropertyAt(properties["loaders"], index), report.File, state)
 		parsed.Actions = mergeParsedActionsPreferLoaderRecovery(parsed.Actions, loaderActions...)
@@ -315,12 +339,16 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.Actions = mergeParsedActionsPreferLoaderRecovery(parsed.Actions, loaderActions...)
 		parsed.Reducers = mergeParsedFields(parsed.Reducers, loaderReducers...)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "loaders", loadersStart)
+	connectStart := time.Now()
 	for _, property := range properties["connect"] {
 		parsed.Imports = mergeTypeImports(
 			parsed.Imports,
 			enrichConnectedSections(source, report.File, property, sections["listeners"], &parsed, state),
 		)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "connect", connectStart)
+	selectorsStart := time.Now()
 	for index, section := range sections["selectors"] {
 		property := sourcePropertyAt(properties["selectors"], index)
 		if parityModeSuppressesBuilderCallbackSelectors(logicReport.InputKind, source, property, properties["forms"]) {
@@ -342,6 +370,8 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 			parsed.Selectors = refineSelectorTypesFromInternalHelpers(parsed.Selectors, parsed.InternalSelectorTypes, missingLocalLogicTypeImport)
 		}
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "selectors", selectorsStart)
+	sharedListenersStart := time.Now()
 	for index, section := range sections["sharedListeners"] {
 		parsed.SharedListeners = mergeParsedSharedListeners(
 			parsed.SharedListeners,
@@ -355,9 +385,13 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 			)...,
 		)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "sharedListeners", sharedListenersStart)
+	eventsStart := time.Now()
 	for index, section := range sections["events"] {
 		parsed.Events = mergeEventNames(parsed.Events, parseEventNamesWithSource(section, source, sourcePropertyAt(properties["events"], index))...)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "events", eventsStart)
+	internalReducerActionsStart := time.Now()
 	if len(sections["reducers"]) > 0 || len(sections["listeners"]) > 0 {
 		parsed.InternalReducerActions = parseInternalReducerActions(
 			source,
@@ -368,6 +402,7 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 			state,
 		)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "internalReducerActions", internalReducerActionsStart)
 	reducerPayloadHints := map[string]string{}
 	for _, section := range sections["reducers"] {
 		for name, payloadType := range collectReducerActionPayloadHints(section) {
@@ -380,14 +415,20 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 		parsed.Actions = refineActionPayloadTypes(parsed.Actions, reducerPayloadHints)
 	}
 	parsed.Actions = refineLoaderSuccessActionPayloadTypes(parsed.Actions)
+	listenersStart := time.Now()
 	for index, section := range sections["listeners"] {
 		listeners, listenerImports := parseListenersWithSource(section, parsed, source, sourcePropertyAt(properties["listeners"], index), report.File, state)
 		parsed.Listeners = mergeParsedListeners(parsed.Listeners, listeners...)
 		parsed.Imports = mergeTypeImports(parsed.Imports, listenerImports)
 	}
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "listeners", listenersStart)
+	reorderStart := time.Now()
 	parsed = reorderParsedLogicForSourceProperties(source, sourceLogic, sections, properties, parsed, report.File, state)
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "reorder", reorderStart)
 
+	importsStart := time.Now()
 	parsed.Imports = mergeTypeImports(parsed.Imports, collectTypeImports(source, report.File, parsed, state))
+	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "imports", importsStart)
 	return parsed, nil
 }
 
@@ -434,6 +475,25 @@ func shouldKeepReportedAnyForBuilderKey(inputKind, expression string) bool {
 
 func parityModeEnabled() bool {
 	return os.Getenv("KEA_TYPEGEN_PARITY_MODE") == "1"
+}
+
+func buildTimingsEnabled() bool {
+	return os.Getenv("KEA_TYPEGEN_DEBUG_TIMINGS") == "1"
+}
+
+func maybeLogBuildTiming(fileName, logicName, phase string, started time.Time) {
+	if !buildTimingsEnabled() || started.IsZero() {
+		return
+	}
+	elapsed := time.Since(started)
+	if elapsed < 10*time.Millisecond {
+		return
+	}
+	if logicName != "" {
+		fmt.Fprintf(os.Stderr, "[kea-typegen timing] %s :: %s :: %s = %s\n", fileName, logicName, phase, elapsed.Round(time.Millisecond))
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[kea-typegen timing] %s :: %s = %s\n", fileName, phase, elapsed.Round(time.Millisecond))
 }
 
 func sectionUsesBuilderCallback(source string, property SourceProperty) bool {
@@ -507,6 +567,18 @@ func parseActionsWithSource(
 	file string,
 	state *buildState,
 ) []ParsedAction {
+	actions, _ := parseActionsWithSourceAndImports(section, source, property, inputKind, file, state)
+	return actions
+}
+
+func parseActionsWithSourceAndImports(
+	section SectionReport,
+	source string,
+	property SourceProperty,
+	inputKind string,
+	file string,
+	state *buildState,
+) ([]ParsedAction, []TypeImport) {
 	sourceMembers := sectionSourceProperties(source, property)
 	sourceEntries := sourceEntriesByName(sectionSourceEntries(source, property))
 	memberByName := map[string]MemberReport{}
@@ -516,6 +588,7 @@ func parseActionsWithSource(
 	orderedNames := sourceOrderedSectionMemberNames(source, property, section.Members)
 
 	actions := make([]ParsedAction, 0, len(orderedNames))
+	var imports []TypeImport
 	for _, name := range orderedNames {
 		var member *MemberReport
 		if parsedMember, ok := memberByName[name]; ok {
@@ -532,9 +605,10 @@ func parseActionsWithSource(
 		action, ok := parseSingleActionWithSource(name, member, source, nested, entryExpression, inputKind, file, state)
 		if ok {
 			actions = append(actions, action)
+			imports = mergeTypeImports(imports, sourceIndexedAccessActionPayloadOverrideImports(source, file, sourceActionExpressionText(source, nested, entryExpression), state))
 		}
 	}
-	return actions
+	return actions, imports
 }
 
 func parseSingleActionWithSource(
@@ -547,10 +621,7 @@ func parseSingleActionWithSource(
 	file string,
 	state *buildState,
 ) (ParsedAction, bool) {
-	expression := entryExpression
-	if property.ValueEnd > property.ValueStart {
-		expression = sourcePropertyText(source, property)
-	}
+	expression := sourceActionExpressionText(source, property, entryExpression)
 	if strings.TrimSpace(expression) == "true" {
 		return ParsedAction{
 			Name:         name,
@@ -562,6 +633,7 @@ func parseSingleActionWithSource(
 	functionType := ""
 	payloadType := ""
 	sourceParametersAvailable := false
+	sourceParameters := ""
 	preserveSourceUnknownParameters := map[string]bool{}
 	if member != nil {
 		functionType = strings.TrimSpace(preferredMemberTypeText(*member))
@@ -586,6 +658,7 @@ func parseSingleActionWithSource(
 			preserveSourceUnknownParameters = sourceExplicitUnknownParameterNames(parameters)
 			indexedAccessOverrides := sourceIndexedAccessActionPayloadOverrides(source, file, expression, parameters, state)
 			parameters = normalizeFunctionParametersText(parameters)
+			sourceParameters = parameters
 			defaultedParameters := sourceDefaultedParameterNames(parameters)
 			if explicitReturn != "" {
 				payloadType = explicitReturn
@@ -595,7 +668,7 @@ func parseSingleActionWithSource(
 					payloadType = mergePreferredActionPayloadTypePreservingCurrentMembers(
 						payloadType,
 						inferred,
-						parityModeReportedAnyShorthandPayloadMembers(expression, parameters, payloadType),
+						parityModeReportedAnyShorthandPayloadMembers(source, expression, parameters, payloadType),
 					)
 				}
 				if len(indexedAccessOverrides) > 0 {
@@ -622,6 +695,7 @@ func parseSingleActionWithSource(
 				}
 			}
 			functionType = parameters + " => " + payloadType
+			functionType = preserveUntypedDestructuredActionParameters(functionType, sourceParameters)
 		}
 	}
 
@@ -634,6 +708,8 @@ func parseSingleActionWithSource(
 	} else {
 		functionType = refineActionFunctionTypePreservingSourceUnknowns(functionType, payloadType, preserveSourceUnknownParameters)
 	}
+	payloadType = refineActionPayloadTypeFromFunction(functionType, payloadType)
+	functionType = refineActionFunctionReturnType(functionType, payloadType)
 	if functionType == "" && payloadType == "" {
 		return ParsedAction{}, false
 	}
@@ -642,6 +718,13 @@ func parseSingleActionWithSource(
 		FunctionType: functionType,
 		PayloadType:  payloadType,
 	}, true
+}
+
+func sourceActionExpressionText(source string, property SourceProperty, entryExpression string) string {
+	if property.ValueEnd > property.ValueStart {
+		return sourcePropertyText(source, property)
+	}
+	return entryExpression
 }
 
 func sourceExplicitUnknownParameterNames(parameters string) map[string]bool {
@@ -695,15 +778,36 @@ func sourceIndexedAccessActionPayloadOverrides(source, file, expression, paramet
 	}
 	indexedAccessParameterTypes := map[string]string{}
 	for _, parameter := range parsedParameters {
-		name, ok := sourceParameterName(parameter.Text)
-		if !ok || name == "" || !strings.Contains(parameter.Type, "[") {
+		if !strings.Contains(parameter.Type, "[") {
 			continue
 		}
-		expanded := normalizeSourceTypeText(expandSourceParameterHintTypeText(source, file, parameter.Type, state))
-		if expanded == "" || !isUsableIndexedAccessActionPayloadOverrideType(expanded) {
+		if name, ok := sourceParameterName(parameter.Text); ok && name != "" {
+			expanded := normalizeSourceTypeText(expandSourceParameterHintTypeText(source, file, parameter.Type, state))
+			if expanded == "" || !isUsableIndexedAccessActionPayloadOverrideType(expanded) {
+				continue
+			}
+			indexedAccessParameterTypes[name] = expanded
 			continue
 		}
-		indexedAccessParameterTypes[name] = expanded
+		if destructuredText := sourceParameterDestructuringText(parameter.Text); destructuredText != "" {
+			originalMembers, ok := parseObjectTypeMembersWithOptionalUndefined(parameter.Type, true)
+			if !ok || len(originalMembers) == 0 {
+				continue
+			}
+			expandedHints := sourceDestructuredParameterTypeHints(source, file, destructuredText, parameter.Type, state)
+			for name, sourceName := range sourceDestructuredParameterBindings(destructuredText) {
+				originalType := normalizeSourceTypeText(strings.TrimSpace(originalMembers[sourceName]))
+				if !strings.Contains(originalType, "[") {
+					continue
+				}
+				typeText := normalizeSourceTypeText(expandedHints[name])
+				typeText = normalizeSourceTypeText(typeText)
+				if typeText == "" || !isUsableIndexedAccessActionPayloadOverrideType(typeText) {
+					continue
+				}
+				indexedAccessParameterTypes[name] = typeText
+			}
+		}
 	}
 	if len(indexedAccessParameterTypes) == 0 {
 		return nil
@@ -743,6 +847,101 @@ func sourceIndexedAccessActionPayloadOverrides(source, file, expression, paramet
 	return overrides
 }
 
+func sourceIndexedAccessActionPayloadOverrideImports(source, file, expression string, state *buildState) []TypeImport {
+	if state == nil || file == "" {
+		return nil
+	}
+	info, ok := parseSourceArrowInfo(expression)
+	if !ok {
+		return nil
+	}
+	parsedParameters, ok := parseFunctionParameters(info.Parameters)
+	if !ok || len(parsedParameters) == 0 {
+		return nil
+	}
+
+	exportCache := map[string]map[string]bool{}
+	packageExportCache := map[string]map[string]importCandidate{}
+	imports := []TypeImport{}
+	seenExpanded := map[string]bool{}
+	for _, parameter := range parsedParameters {
+		if !strings.Contains(parameter.Type, "[") {
+			continue
+		}
+		expanded := normalizeSourceTypeText(expandSourceParameterHintTypeText(source, file, parameter.Type, state))
+		if expanded == "" || !isUsableIndexedAccessActionPayloadOverrideType(expanded) || seenExpanded[expanded] {
+			continue
+		}
+		seenExpanded[expanded] = true
+		if direct := collectTypeImportsForTypeTexts(source, file, []string{expanded}, state, nil); len(direct) > 0 {
+			imports = mergeTypeImports(imports, direct)
+			continue
+		}
+		candidate, ok := resolveIndexedAccessExpandedImportCandidate(source, file, parameter.Type, expanded, state, exportCache, packageExportCache)
+		if !ok {
+			continue
+		}
+		imports = mergeTypeImports(imports, []TypeImport{{
+			Path:  candidate.Path,
+			Names: []string{candidate.Name},
+		}})
+	}
+	return imports
+}
+
+func resolveIndexedAccessExpandedImportCandidate(
+	source string,
+	file string,
+	originalType string,
+	expanded string,
+	state *buildState,
+	exportCache map[string]map[string]bool,
+	packageExportCache map[string]map[string]importCandidate,
+) (importCandidate, bool) {
+	baseReference := indexedAccessBaseImportReference(originalType)
+	if baseReference == "" {
+		return importCandidate{}, false
+	}
+
+	importsByAlias := map[string]importCandidate{}
+	for alias, candidate := range parseNamedImports(source) {
+		importsByAlias[alias] = candidate
+	}
+	for alias, candidate := range parseDefaultImports(source) {
+		importsByAlias[alias] = candidate
+	}
+	for alias, candidate := range parseNamespaceImports(source) {
+		importsByAlias[alias] = candidate
+	}
+
+	candidate, ok := importsByAlias[baseReference]
+	if !ok || candidate.Path == "" {
+		return importCandidate{}, false
+	}
+	return resolveImportedExportCandidate(file, []string{candidate.Path}, expanded, state, exportCache, packageExportCache)
+}
+
+func indexedAccessBaseImportReference(typeText string) string {
+	text := strings.TrimSpace(typeText)
+	bracketIndex := strings.Index(text, "[")
+	if bracketIndex == -1 {
+		return ""
+	}
+	base := strings.TrimSpace(text[:bracketIndex])
+	if dotIndex := strings.Index(base, "."); dotIndex != -1 {
+		base = strings.TrimSpace(base[:dotIndex])
+	}
+	if base == "" || !isIdentifierStart(base[0]) {
+		return ""
+	}
+	for index := 1; index < len(base); index++ {
+		if !isIdentifierPart(base[index]) {
+			return ""
+		}
+	}
+	return base
+}
+
 func mergeIndexedAccessActionPayloadOverrides(current string, overrides map[string]string) string {
 	if len(overrides) == 0 {
 		return current
@@ -768,7 +967,7 @@ func mergeIndexedAccessActionPayloadOverrides(current string, overrides map[stri
 	return renderActionPayloadObjectMembers(members)
 }
 
-func parityModeReportedAnyShorthandPayloadMembers(expression, parameters, currentPayloadType string) map[string]bool {
+func parityModeReportedAnyShorthandPayloadMembers(source, expression, parameters, currentPayloadType string) map[string]bool {
 	if !parityModeEnabled() {
 		return nil
 	}
@@ -842,7 +1041,7 @@ func parityModeReportedAnyShorthandPayloadMembers(expression, parameters, curren
 			continue
 		}
 		parameterType := normalizeSourceTypeText(parameterTypes[identifier])
-		if !actionShorthandPayloadShouldPreserveReportedAny(parameterType) {
+		if !actionShorthandPayloadShouldPreserveReportedAny(source, parameterType) {
 			continue
 		}
 		preserved[propertyName] = true
@@ -853,9 +1052,12 @@ func parityModeReportedAnyShorthandPayloadMembers(expression, parameters, curren
 	return preserved
 }
 
-func actionShorthandPayloadShouldPreserveReportedAny(typeText string) bool {
+func actionShorthandPayloadShouldPreserveReportedAny(source, typeText string) bool {
 	typeText = normalizeSourceTypeText(strings.TrimSpace(typeText))
 	if typeText == "" || !strings.Contains(typeText, "|") {
+		return false
+	}
+	if len(collectTypeImportsForTypeTexts(source, "", []string{typeText}, nil, nil)) > 0 {
 		return false
 	}
 	if typeTextContainsUnquotedStandaloneToken(typeText, "null") || typeTextContainsUnquotedStandaloneToken(typeText, "undefined") {
@@ -4668,6 +4870,7 @@ func parseInternalSelectorTypesWithSource(
 				sourceSupportsInternalHelper = true
 				recovered = parityModeRecoveredInternalHelperFunctionType(selectorExpression, functionType, recovered, keepParityReportedSelectorType)
 				if shouldPreferRecoveredInternalHelperFunctionType(functionType, recovered) ||
+					(!parityModeEnabled() && unnamedDependencyPlaceholderHelperShouldPreferRecovered(selectorExpression, functionType, recovered)) ||
 					parityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(selectorExpression, functionType, recovered) ||
 					helperBooleanRecoveryShouldPreferRecovered(selectorExpression, functionType, recovered) ||
 					parityModeConcreteLogicalFallbackHelperShouldPreferRecovered(source, file, selectorExpression, functionType, recovered, state) ||
@@ -4682,6 +4885,7 @@ func parseInternalSelectorTypesWithSource(
 				sourceSupportsInternalHelper = true
 				probed = parityModeRecoveredInternalHelperFunctionType(selectorExpression, functionType, probed, keepParityReportedSelectorType)
 				if shouldPreferRecoveredInternalHelperFunctionType(functionType, probed) ||
+					(!parityModeEnabled() && unnamedDependencyPlaceholderHelperShouldPreferRecovered(selectorExpression, functionType, probed)) ||
 					parityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(selectorExpression, functionType, probed) ||
 					helperBooleanRecoveryShouldPreferRecovered(selectorExpression, functionType, probed) ||
 					parityModeConcreteLogicalFallbackHelperShouldPreferRecovered(source, file, selectorExpression, functionType, probed, state) ||
@@ -4696,6 +4900,7 @@ func parseInternalSelectorTypesWithSource(
 			if recovered := sourceInternalSelectorFunctionType(contextLogic, source, file, entry.Value, state); recovered != "" {
 				recovered = parityModeRecoveredInternalHelperFunctionType(selectorExpression, functionType, recovered, keepParityReportedSelectorType)
 				if shouldPreferRecoveredInternalHelperFunctionType(functionType, recovered) ||
+					(!parityModeEnabled() && unnamedDependencyPlaceholderHelperShouldPreferRecovered(selectorExpression, functionType, recovered)) ||
 					parityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(selectorExpression, functionType, recovered) ||
 					helperBooleanRecoveryShouldPreferRecovered(selectorExpression, functionType, recovered) ||
 					parityModeConcreteLogicalFallbackHelperShouldPreferRecovered(source, file, selectorExpression, functionType, recovered, state) ||
@@ -4851,21 +5056,29 @@ func canonicalizeInternalHelperFunctionTypeWithSelectorDependencies(logic Parsed
 		if index < len(dependencyTypes) {
 			if dependencyType := normalizeInternalHelperSignatureParameterType(dependencyTypes[index], true); dependencyType != "" {
 				dependencyName := ""
+				isSelectorDependency := false
 				if index < len(dependencyNames) {
 					dependencyName = strings.TrimSpace(dependencyNames[index])
 				}
 				preferConcreteSelectorDependencyType := false
 				if dependencyName != "" {
-					if _, ok := findParsedField(logic.Selectors, dependencyName); ok &&
+					if _, ok := findParsedField(logic.Selectors, dependencyName); ok {
+						isSelectorDependency = true
+					}
+					if isSelectorDependency &&
 						!isAnyLikeType(dependencyType) &&
 						!isLooselyTypedType(dependencyType) {
 						preferConcreteSelectorDependencyType = true
 					}
 				}
+				preserveLooseParitySelectorDependency := parityModeEnabled() &&
+					isSelectorDependency &&
+					(isAnyLikeType(paramType) || isLooselyTypedType(paramType))
 				if paramType == "" ||
-					isAnyLikeType(paramType) ||
-					isLooselyTypedType(paramType) ||
-					(preferConcreteSelectorDependencyType && dependencyType != paramType) {
+					(!preserveLooseParitySelectorDependency &&
+						(isAnyLikeType(paramType) ||
+							isLooselyTypedType(paramType) ||
+							(preferConcreteSelectorDependencyType && dependencyType != paramType))) {
 					paramType = dependencyType
 				}
 			}
@@ -5190,11 +5403,11 @@ func parityModeRecoveredInternalHelperParameterTypes(expression, current, recove
 		}
 
 		paramType := normalizeInferredTypeText(strings.TrimSpace(param.Type))
+		currentType := normalizeInferredTypeText(strings.TrimSpace(currentParams[index].Type))
 		if strings.TrimSpace(dependencyNames[index]) == "" {
 			keepRecoveredUnnamedType := index < len(dependencyExpressions) &&
 				sourceSelectorUnnamedDependencyKeepsRecoveredType(dependencyExpressions[index])
 			if !keepRecoveredUnnamedType {
-				currentType := normalizeInferredTypeText(strings.TrimSpace(currentParams[index].Type))
 				if isAnyLikeType(currentType) || isLooselyTypedType(currentType) {
 					paramType = currentType
 				} else {
@@ -5203,6 +5416,12 @@ func parityModeRecoveredInternalHelperParameterTypes(expression, current, recove
 				if paramType != normalizeInferredTypeText(strings.TrimSpace(param.Type)) {
 					changed = true
 				}
+			}
+		} else if (isAnyLikeType(currentType) || isLooselyTypedType(currentType)) &&
+			parityModeRecoveredInternalHelperKeepsLooseNamedPrimitiveParameter(paramType) {
+			paramType = currentType
+			if paramType != normalizeInferredTypeText(strings.TrimSpace(param.Type)) {
+				changed = true
 			}
 		}
 		if paramType == "" {
@@ -5215,6 +5434,18 @@ func parityModeRecoveredInternalHelperParameterTypes(expression, current, recove
 		return recovered
 	}
 	return "(" + strings.Join(rebuilt, ", ") + ") => " + normalizeInferredTypeText(strings.TrimSpace(recoveredReturnType))
+}
+
+func parityModeRecoveredInternalHelperKeepsLooseNamedPrimitiveParameter(typeText string) bool {
+	typeText = normalizeInferredTypeText(strings.TrimSpace(typeText))
+	if typeText == "" || isAnyLikeType(typeText) || isLooselyTypedType(typeText) {
+		return false
+	}
+	return isBroadPrimitiveSelectorType(typeText) ||
+		isPrimitiveLikeUnionType(typeText) ||
+		selectorTypeIsLiteralUnionOfKind(typeText, "string") ||
+		selectorTypeIsLiteralUnionOfKind(typeText, "number") ||
+		selectorTypeIsLiteralUnionOfKind(typeText, "boolean")
 }
 
 func shouldPreferRecoveredInternalHelperFunctionType(current, candidate string) bool {
@@ -5315,11 +5546,76 @@ func parityModeOpaqueArrayHelperShouldPreferRecovered(expression, current, candi
 	return candidateReturn != "" && isArrayLikeType(candidateReturn)
 }
 
+func unnamedDependencyPlaceholderHelperShouldPreferRecovered(expression, current, candidate string) bool {
+	currentParameters, currentReturn, ok := splitFunctionType(current)
+	if !ok {
+		return false
+	}
+	candidateParameters, candidateReturn, ok := splitFunctionType(candidate)
+	if !ok {
+		return false
+	}
+
+	currentParams, ok := parseFunctionParameters(currentParameters)
+	if !ok {
+		return false
+	}
+	candidateParams, ok := parseFunctionParameters(candidateParameters)
+	if !ok || len(currentParams) != len(candidateParams) {
+		return false
+	}
+
+	dependencyNames := sourceSelectorDependencyNamesWithPlaceholders(expression)
+	if len(dependencyNames) != len(candidateParams) {
+		return false
+	}
+	placeholderNames := internalHelperParameterNames(dependencyNames, nil)
+	if len(placeholderNames) != len(candidateParams) {
+		return false
+	}
+
+	if normalizeInternalHelperParameterType(currentReturn) != normalizeInternalHelperParameterType(candidateReturn) {
+		return false
+	}
+
+	sawPlaceholderRename := false
+	for index := range candidateParams {
+		currentName, currentType, ok := splitTopLevelPropertyRaw(currentParams[index].Text)
+		if !ok {
+			return false
+		}
+		candidateName, candidateType, ok := splitTopLevelPropertyRaw(candidateParams[index].Text)
+		if !ok {
+			return false
+		}
+		currentType = normalizeInternalHelperParameterType(currentType)
+		candidateType = normalizeInternalHelperParameterType(candidateType)
+		if currentType != candidateType {
+			return false
+		}
+
+		if strings.TrimSpace(dependencyNames[index]) != "" {
+			continue
+		}
+
+		currentName = strings.TrimSpace(currentName)
+		candidateName = strings.TrimSpace(candidateName)
+		if currentName == candidateName {
+			continue
+		}
+		if candidateName != placeholderNames[index] {
+			return false
+		}
+		sawPlaceholderRename = true
+	}
+
+	return sawPlaceholderRename
+}
+
 func parityModeUnnamedDependencyPlaceholderHelperShouldPreferRecovered(expression, current, candidate string) bool {
 	if !parityModeEnabled() {
 		return false
 	}
-
 	currentParameters, currentReturn, ok := splitFunctionType(current)
 	if !ok {
 		return false
@@ -9119,18 +9415,25 @@ func sourceParameterTypeHintsWithContext(source, file, parameters string, state 
 	}
 	hints := map[string]string{}
 	for _, parameter := range parsed {
-		name, ok := sourceParameterName(parameter.Text)
-		if !ok || parameter.Type == "" {
+		if parameter.Type == "" {
 			continue
 		}
 		typeText := normalizeSourceTypeText(parameter.Type)
 		if expanded := expandSourceParameterHintTypeText(source, file, typeText, state); expanded != "" {
 			typeText = normalizeSourceTypeText(expanded)
 		}
-		if parameterDeclarationIsOptional(parameter.Text) && typeText != "" && !strings.Contains(typeText, "undefined") {
-			typeText = normalizeSourceTypeText(typeText + " | undefined")
+		if name, ok := sourceParameterName(parameter.Text); ok {
+			if parameterDeclarationIsOptional(parameter.Text) && typeText != "" && !strings.Contains(typeText, "undefined") {
+				typeText = normalizeSourceTypeText(typeText + " | undefined")
+			}
+			hints[name] = typeText
+			continue
 		}
-		hints[name] = typeText
+		if destructuredText := sourceParameterDestructuringText(parameter.Text); destructuredText != "" {
+			for name, hintedType := range sourceDestructuredParameterTypeHints(source, file, destructuredText, typeText, state) {
+				hints[name] = hintedType
+			}
+		}
 	}
 	return hints
 }
@@ -9142,8 +9445,7 @@ func sourceActionParameterTypeHintsWithContext(source, file, parameters string, 
 	}
 	hints := map[string]string{}
 	for _, parameter := range parsed {
-		name, ok := sourceParameterName(parameter.Text)
-		if !ok || parameter.Type == "" {
+		if parameter.Type == "" {
 			continue
 		}
 		rawType := normalizeSourceTypeText(parameter.Type)
@@ -9157,7 +9459,15 @@ func sourceActionParameterTypeHintsWithContext(source, file, parameters string, 
 		if parameterDeclarationIsOptional(parameter.Text) && typeText != "" && !strings.Contains(typeText, "undefined") {
 			typeText = normalizeSourceTypeText(typeText + " | undefined")
 		}
-		hints[name] = typeText
+		if name, ok := sourceParameterName(parameter.Text); ok {
+			hints[name] = typeText
+			continue
+		}
+		if destructuredText := sourceParameterDestructuringText(parameter.Text); destructuredText != "" {
+			for name, hintedType := range sourceDestructuredParameterTypeHints(source, file, destructuredText, typeText, state) {
+				hints[name] = hintedType
+			}
+		}
 	}
 	return hints
 }
@@ -9167,6 +9477,9 @@ func actionParameterTypeHintShouldUseExpandedType(rawType, expandedType string) 
 	expandedType = normalizeSourceTypeText(strings.TrimSpace(expandedType))
 	if rawType == "" {
 		return false
+	}
+	if genericSpecializesActionPayloadType(rawType, expandedType) {
+		return true
 	}
 	if expandedType != "" &&
 		expandedType != rawType &&
@@ -9193,6 +9506,9 @@ func expandSourceParameterHintTypeText(source, file, typeText string, state *bui
 		return expanded
 	}
 	if specialized := specializeImportedTypeTextWithDefaultArguments(source, file, typeText, state); specialized != "" {
+		return specialized
+	}
+	if specialized := specializeCompoundTypeTextWithDefaultArguments(source, file, typeText, state); specialized != "" {
 		return specialized
 	}
 	if indexedExpanded {
@@ -9227,8 +9543,8 @@ func expandIndexedAccessesInTypeText(source, file, typeText string, state *build
 }
 
 func indexedAccessPropertyType(source, file, baseType, propertyName string, state *buildState) string {
-	baseTypeText := resolveIndexedAccessBaseType(source, file, baseType, state)
-	if baseTypeText == "" {
+	baseTypeText, baseSource, ok := resolveIndexedAccessBaseType(source, file, baseType, state)
+	if !ok || baseTypeText == "" {
 		return ""
 	}
 	members, ok := parseObjectTypeMembersWithOptionalUndefined(baseTypeText, true)
@@ -9240,35 +9556,42 @@ func indexedAccessPropertyType(source, file, baseType, propertyName string, stat
 		return ""
 	}
 	if expanded := expandIndexedAccessesInTypeText(source, file, propertyType, state); expanded != "" {
-		return expanded
+		propertyType = expanded
+	}
+	if collapsed := collapseQualifiedEnumMemberUnionToOwnerAlias(baseSource, propertyType); collapsed != "" {
+		return collapsed
 	}
 	return propertyType
 }
 
-func resolveIndexedAccessBaseType(source, file, baseType string, state *buildState) string {
+func resolveIndexedAccessBaseType(source, file, baseType string, state *buildState) (string, string, bool) {
 	if expanded := expandLocalSourceTypeText(source, baseType); expanded != "" {
-		return expanded
+		return expanded, source, true
 	}
 	if file == "" || state == nil {
-		return ""
+		return "", "", false
 	}
 	identifier, ok := sourceIdentifierExpression(baseType)
 	if !ok {
-		return ""
+		return "", "", false
 	}
 	candidate, ok := parseNamedValueImports(source)[identifier]
 	if !ok || candidate.ImportedName == "" || candidate.ImportedName == "default" {
-		return ""
+		return "", "", false
 	}
 	resolvedFile, ok := resolveImportFile(file, candidate.Path, state)
 	if !ok {
-		return ""
+		return "", "", false
 	}
 	content, err := os.ReadFile(resolvedFile)
 	if err != nil {
-		return ""
+		return "", "", false
 	}
-	return expandLocalSourceTypeText(string(content), candidate.ImportedName)
+	expanded := expandLocalSourceTypeText(string(content), candidate.ImportedName)
+	if expanded == "" {
+		return "", "", false
+	}
+	return expanded, string(content), true
 }
 
 func specializeLocalTypeTextWithDefaultArguments(source, typeText string) string {
@@ -9300,6 +9623,40 @@ func specializeImportedTypeTextWithDefaultArguments(source, file, typeText strin
 		return ""
 	}
 	return instantiatedTypeTextWithDefaultArguments(string(content), candidate.ImportedName)
+}
+
+func specializeCompoundTypeTextWithDefaultArguments(source, file, typeText string, state *buildState) string {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" {
+		return ""
+	}
+	parts, err := splitTopLevelUnion(text)
+	if err != nil || len(parts) <= 1 {
+		return ""
+	}
+
+	specialized := make([]string, 0, len(parts))
+	changed := false
+	for _, part := range parts {
+		part = normalizeSourceTypeText(strings.TrimSpace(part))
+		if part == "" {
+			continue
+		}
+		next := part
+		if current := specializeLocalTypeTextWithDefaultArguments(source, part); current != "" {
+			next = normalizeSourceTypeText(current)
+		} else if current := specializeImportedTypeTextWithDefaultArguments(source, file, part, state); current != "" {
+			next = normalizeSourceTypeText(current)
+		}
+		if next != part {
+			changed = true
+		}
+		specialized = append(specialized, next)
+	}
+	if !changed || len(specialized) != len(parts) {
+		return ""
+	}
+	return normalizeSourceTypeText(strings.Join(specialized, " | "))
 }
 
 func instantiatedTypeTextWithDefaultArguments(source, name string) string {
@@ -9349,6 +9706,63 @@ func localTypeParameterListText(source, name string) string {
 		return source[start+1 : end]
 	}
 	return ""
+}
+
+func collapseQualifiedEnumMemberUnionToOwnerAlias(source, typeText string) string {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" {
+		return ""
+	}
+	parts, err := splitTopLevelUnion(text)
+	if err != nil || len(parts) <= 1 {
+		return ""
+	}
+
+	mainCount := 0
+	owner := ""
+	nullish := make([]string, 0, 2)
+	for _, part := range parts {
+		part = normalizeSourceTypeText(strings.TrimSpace(part))
+		switch part {
+		case "", "null", "undefined":
+			if part != "" {
+				nullish = append(nullish, part)
+			}
+			continue
+		}
+
+		index := strings.LastIndex(part, ".")
+		if index <= 0 || index == len(part)-1 {
+			return ""
+		}
+		currentOwner := strings.TrimSpace(part[:index])
+		currentMember := strings.TrimSpace(part[index+1:])
+		if currentOwner == "" || currentMember == "" {
+			return ""
+		}
+		if owner == "" {
+			owner = currentOwner
+		} else if owner != currentOwner {
+			return ""
+		}
+		mainCount++
+	}
+	if mainCount <= 1 || owner == "" || !sourceHasLocalEnumDeclaration(source, owner) {
+		return ""
+	}
+
+	resultParts := []string{owner}
+	resultParts = append(resultParts, nullish...)
+	return normalizeSourceTypeText(strings.Join(resultParts, " | "))
+}
+
+func sourceHasLocalEnumDeclaration(source, name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	pattern := regexp.MustCompile(`(?m)^\s*(?:export\s+)?(?:declare\s+)?enum\s+` + regexp.QuoteMeta(name) + `\b`)
+	return pattern.FindStringIndex(source) != nil
 }
 
 func localTypeParameterDefaults(source, name string) map[string]string {
@@ -9517,12 +9931,44 @@ func sourceDestructuredParameterTypeHints(source, file, parameterText, defaultTy
 		return nil
 	}
 
+	bindings := sourceDestructuredParameterBindings(text)
+	if len(bindings) == 0 {
+		return nil
+	}
+	hints := map[string]string{}
+	for name, sourceName := range bindings {
+		typeText, ok := members[sourceName]
+		if !ok {
+			continue
+		}
+		typeText = normalizeSourceTypeText(typeText)
+		if expanded := expandSourceParameterHintTypeText(expandedSource, expandedFile, typeText, state); expanded != "" {
+			typeText = normalizeSourceTypeText(expanded)
+		}
+		hints[name] = typeText
+	}
+	if len(hints) == 0 {
+		return nil
+	}
+	return hints
+}
+
+func sourceDestructuredParameterBindings(parameterText string) map[string]string {
+	text := strings.TrimSpace(parameterText)
+	if text == "" || text[0] != '{' {
+		return nil
+	}
+	end, err := findMatching(text, 0, '{', '}')
+	if err != nil || trimExpressionEnd(text, end+1) != len(text) {
+		return nil
+	}
+
 	parts, err := splitTopLevelList(text[1:end])
 	if err != nil {
 		return nil
 	}
 
-	hints := map[string]string{}
+	bindings := map[string]string{}
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -9543,23 +9989,15 @@ func sourceDestructuredParameterTypeHints(source, file, parameterText, defaultTy
 		}
 
 		name, ok := sourceParameterName(localName)
-		if !ok {
+		if !ok || sourceName == "" {
 			continue
 		}
-		typeText, ok := members[sourceName]
-		if !ok {
-			continue
-		}
-		typeText = normalizeSourceTypeText(typeText)
-		if expanded := expandSourceParameterHintTypeText(expandedSource, expandedFile, typeText, state); expanded != "" {
-			typeText = normalizeSourceTypeText(expanded)
-		}
-		hints[name] = typeText
+		bindings[name] = sourceName
 	}
-	if len(hints) == 0 {
+	if len(bindings) == 0 {
 		return nil
 	}
-	return hints
+	return bindings
 }
 
 func sourceObjectLiteralTypeTextWithHints(source, expression string, hints map[string]string) string {
@@ -9598,7 +10036,7 @@ func sourceObjectLiteralTypeTextWithHintsOptions(
 			if expanded := expandLocalSourceTypeText(source, spreadType); expanded != "" {
 				spreadType = normalizeSourceTypeText(expanded)
 			}
-			spreadMembers, ok := parseObjectTypeMembers(spreadType)
+			spreadMembers, _, ok := spreadObjectTypeMembersWithOptionalFlags(spreadType)
 			if !ok {
 				continue
 			}
@@ -9677,7 +10115,7 @@ func sourceObjectLiteralTypeTextWithContextOptions(
 			if expanded := expandImportedTypeAliasTextWithContext(source, file, spreadType, state); expanded != "" {
 				spreadType = normalizeSourceTypeText(expanded)
 			}
-			spreadMembers, spreadOptionals, ok := parseObjectTypeMembersWithOptionalFlags(spreadType, true)
+			spreadMembers, spreadOptionals, ok := spreadObjectTypeMembersWithOptionalFlags(spreadType)
 			if !ok {
 				continue
 			}
@@ -9726,6 +10164,28 @@ func sourceObjectLiteralTypeTextWithContextOptions(
 		parts = append(parts, fmt.Sprintf("%s: %s", name, properties[name]))
 	}
 	return "{ " + strings.Join(parts, "; ") + "; }"
+}
+
+func spreadObjectTypeMembersWithOptionalFlags(typeText string) (map[string]string, map[string]bool, bool) {
+	if members, optionals, ok := parseObjectTypeMembersWithOptionalFlags(typeText, true); ok {
+		return members, optionals, true
+	}
+	keyType, valueType, ok := parseRecordTypeArguments(typeText)
+	if !ok {
+		return nil, nil, false
+	}
+	keyType = normalizeSourceTypeText(strings.TrimSpace(keyType))
+	valueType = normalizeSourceTypeText(strings.TrimSpace(valueType))
+	if keyType == "" || valueType == "" {
+		return nil, nil, false
+	}
+	return map[string]string{
+			fmt.Sprintf("[x: %s]", keyType): valueType,
+		},
+		map[string]bool{
+			fmt.Sprintf("[x: %s]", keyType): false,
+		},
+		true
 }
 
 func sourceExpressionTypeTextWithHints(source, expression string, hints map[string]string) string {
@@ -11731,6 +12191,20 @@ func sourceExpressionTypeFromTypeProbeRange(source, file string, valueStart, val
 	probePositions = append(probePositions, selectorTypeProbePositions(source, valueStart, valueEnd)...)
 
 	fallback := ""
+	if source != "" {
+		expression := trimLeadingSourceTrivia(source[valueStart:valueEnd])
+		expression = trimLeadingSourceTrivia(unwrapWrappedExpression(expression))
+		if identifier, ok := sourceIdentifierExpression(expression); ok && identifier != "" {
+			position := skipTrivia(source, valueStart)
+			typeText := normalizeSourceTypeText(state.cachedTypeOfSymbolAtPositionString(projectID, file, position))
+			if typeText != "" && !isFunctionLikeTypeText(typeText) {
+				if !typeTextNeedsSourceRecovery(typeText) {
+					return typeText
+				}
+				fallback = typeText
+			}
+		}
+	}
 	for _, position := range probePositions {
 		if position <= 0 {
 			continue
@@ -13926,6 +14400,51 @@ func sourceParameterName(text string) (string, bool) {
 	return text, true
 }
 
+func sourceParameterDestructuringText(text string) string {
+	text = strings.TrimSpace(text)
+	text = strings.TrimPrefix(text, "...")
+	baseText, _ := stripTopLevelParameterDefault(text)
+	baseText = strings.TrimSpace(baseText)
+	if baseText == "" {
+		return ""
+	}
+
+	var open, close byte
+	switch baseText[0] {
+	case '{':
+		open = '{'
+		close = '}'
+	case '[':
+		open = '['
+		close = ']'
+	default:
+		return ""
+	}
+
+	end, err := findMatching(baseText, 0, open, close)
+	if err != nil || end < 0 {
+		return ""
+	}
+	remainder := strings.TrimSpace(baseText[end+1:])
+	if remainder != "" && !strings.HasPrefix(remainder, ":") {
+		return ""
+	}
+	return strings.TrimSpace(baseText[:end+1])
+}
+
+func sourceParameterIsUntypedDestructured(text string) bool {
+	bindingText := sourceParameterDestructuringText(text)
+	if bindingText == "" {
+		return false
+	}
+
+	text = strings.TrimSpace(text)
+	text = strings.TrimPrefix(text, "...")
+	baseText, _ := stripTopLevelParameterDefault(text)
+	baseText = strings.TrimSpace(baseText)
+	return strings.TrimSpace(strings.TrimPrefix(baseText[len(bindingText):], "?")) == ""
+}
+
 func promiseTypeText(typeText string) string {
 	typeText = strings.TrimSpace(typeText)
 	if typeText == "" || strings.HasPrefix(typeText, "Promise<") {
@@ -14069,6 +14588,7 @@ func normalizeSourceTypeTextWithOptions(text string, collapseOptionalUndefined b
 	}
 	text = normalizeTypeLiteralTextWithOptions(text, collapseOptionalUndefined)
 	text = strings.Join(strings.Fields(text), " ")
+	text = stripImportTypeQualifiers(text)
 	text = strings.ReplaceAll(text, "( ", "(")
 	text = strings.ReplaceAll(text, " )", ")")
 	text = strings.ReplaceAll(text, ",)", ")")
@@ -14769,6 +15289,63 @@ func refineActionFunctionType(functionType, payloadType string) string {
 	return refineActionFunctionTypePreservingSourceUnknowns(functionType, payloadType, nil)
 }
 
+func refineActionPayloadTypeFromFunction(functionType, payloadType string) string {
+	functionType = strings.TrimSpace(functionType)
+	payloadType = normalizeActionPayloadType(payloadType)
+	if functionType == "" || payloadType == "" {
+		return payloadType
+	}
+
+	parameters, _, ok := splitFunctionType(functionType)
+	if !ok {
+		return payloadType
+	}
+
+	parsedParameters, ok := parseFunctionParameters(parameters)
+	if !ok || len(parsedParameters) == 0 {
+		return payloadType
+	}
+	payloadMembers, ok := parseActionPayloadObjectMembers(payloadType)
+	if !ok || len(payloadMembers) == 0 {
+		return payloadType
+	}
+
+	changed := false
+	for _, parameter := range parsedParameters {
+		normalizedPart := normalizeParameterDeclarationText(parameter.Text)
+		if normalizedPart == "" {
+			continue
+		}
+		rawName, typeText, ok := splitTopLevelPropertyRaw(normalizedPart)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(strings.TrimSuffix(rawName, "?"))
+		member, ok := payloadMembers[name]
+		if !ok {
+			continue
+		}
+		if !strings.Contains(member.Type, "...") {
+			continue
+		}
+
+		candidateType := normalizeSourceTypeText(typeText)
+		if strings.HasSuffix(strings.TrimSpace(rawName), "?") && !typeTextContainsUnquotedStandaloneToken(candidateType, "undefined") {
+			candidateType = normalizeSourceTypeText(candidateType + " | undefined")
+		}
+		if candidateType == "" || strings.Contains(candidateType, "...") {
+			continue
+		}
+		member.Type = candidateType
+		payloadMembers[name] = member
+		changed = true
+	}
+	if !changed {
+		return payloadType
+	}
+	return renderActionPayloadObjectMembers(payloadMembers)
+}
+
 func refineActionFunctionTypePreservingSourceUnknowns(functionType, payloadType string, preserveUnknownParameters map[string]bool) string {
 	functionType = strings.TrimSpace(functionType)
 	payloadType = normalizeActionPayloadType(payloadType)
@@ -14787,6 +15364,52 @@ func refineActionFunctionTypePreservingSourceUnknowns(functionType, payloadType 
 		return functionType
 	}
 	return refinedParameters + " => " + refinedReturnType
+}
+
+func preserveUntypedDestructuredActionParameters(functionType, sourceParameters string) string {
+	functionType = strings.TrimSpace(functionType)
+	sourceParameters = strings.TrimSpace(sourceParameters)
+	if functionType == "" || sourceParameters == "" {
+		return functionType
+	}
+
+	currentParameters, returnType, ok := splitFunctionType(functionType)
+	if !ok {
+		return functionType
+	}
+
+	sourceParts, ok := splitFunctionParameterParts(sourceParameters)
+	if !ok || len(sourceParts) == 0 {
+		return functionType
+	}
+	currentParts, ok := splitFunctionParameterParts(currentParameters)
+	if !ok || len(currentParts) != len(sourceParts) {
+		return functionType
+	}
+
+	refined := make([]string, 0, len(currentParts))
+	changed := false
+	for index, currentPart := range currentParts {
+		normalizedCurrent := normalizeParameterDeclarationText(currentPart)
+		if normalizedCurrent == "" {
+			continue
+		}
+		if !sourceParameterIsUntypedDestructured(sourceParts[index]) {
+			refined = append(refined, normalizedCurrent)
+			continue
+		}
+		rawName, _, ok := splitTopLevelPropertyRaw(normalizedCurrent)
+		if !ok || sourceParameterDestructuringText(rawName) == "" {
+			refined = append(refined, normalizedCurrent)
+			continue
+		}
+		refined = append(refined, strings.TrimSpace(rawName)+": any")
+		changed = true
+	}
+	if !changed {
+		return functionType
+	}
+	return "(" + strings.Join(refined, ", ") + ") => " + returnType
 }
 
 func refineActionFunctionReturnType(functionType, payloadType string) string {
@@ -15488,9 +16111,14 @@ func (s *buildState) close() {
 	s.projectByFile = nil
 	s.typeTextByTypeID = nil
 	s.typeTextByPos = nil
+	s.typeTextBySymbolPos = nil
 	s.typeTextByLocation = nil
 	s.callbackByPos = nil
 	s.signatureByPos = nil
+	s.exportedTypeNamesByFile = nil
+	s.packageExportCandidatesByPath = nil
+	s.importedValueSourcesByFile = nil
+	s.transitiveTypeImportsByRef = nil
 	s.sourceOffsetByFile = nil
 	s.sourceNodesByFile = nil
 	s.parsedFileByFile = nil
@@ -15774,6 +16402,65 @@ func (s *buildState) cachedTypeAtPositionString(projectID, file string, position
 	}
 	text := s.cachedTypeString(projectID, typ.ID)
 	s.typeTextByPos[key] = text
+	return text
+}
+
+func (s *buildState) cachedTypeOfSymbolAtPositionString(projectID, file string, position int) string {
+	if s == nil || s.apiClient == nil || projectID == "" || file == "" || position <= 0 {
+		return ""
+	}
+	position = s.normalizedPositionForFile(file, position)
+	if s.typeTextBySymbolPos == nil {
+		s.typeTextBySymbolPos = map[string]string{}
+	}
+	key := s.positionKey(projectID, file, position)
+	if cached, ok := s.typeTextBySymbolPos[key]; ok {
+		return cached
+	}
+
+	symbol, err := s.apiClient.GetSymbolAtPosition(
+		tsgoapi.WithTimeout(context.Background(), s.timeout),
+		s.apiSnapshot,
+		projectID,
+		file,
+		position,
+	)
+	if err != nil || symbol == nil || symbol.ID == "" {
+		s.typeTextBySymbolPos[key] = ""
+		return ""
+	}
+
+	typeID := ""
+	declared, err := s.apiClient.GetDeclaredTypeOfSymbol(
+		tsgoapi.WithTimeout(context.Background(), s.timeout),
+		s.apiSnapshot,
+		projectID,
+		symbol.ID,
+	)
+	if err == nil && declared != nil && declared.ID != "" {
+		typeID = declared.ID
+	}
+	if typeID == "" {
+		typ, err := s.apiClient.GetTypeOfSymbol(
+			tsgoapi.WithTimeout(context.Background(), s.timeout),
+			s.apiSnapshot,
+			projectID,
+			symbol.ID,
+		)
+		if err == nil && typ != nil && typ.ID != "" {
+			typeID = typ.ID
+		}
+	}
+	if typeID == "" {
+		typeID = s.firstTypeOfSymbol(projectID, symbol.ID)
+	}
+	if typeID == "" {
+		s.typeTextBySymbolPos[key] = ""
+		return ""
+	}
+
+	text := s.cachedTypeString(projectID, typeID)
+	s.typeTextBySymbolPos[key] = text
 	return text
 }
 
@@ -16173,6 +16860,8 @@ func (s *buildState) loadParsedFile(file string) (parsedFileCache, error) {
 	}
 
 	file = filepath.Clean(file)
+	loadStart := time.Now()
+	defer maybeLogBuildTiming(filepath.Base(file), "", "loadParsedFile", loadStart)
 	if s.parsedFileByFile != nil {
 		if entry, ok := s.parsedFileByFile[file]; ok {
 			return entry, nil
@@ -16377,7 +17066,7 @@ func enrichConnectedSections(source, file string, property SourceProperty, liste
 					addedTypeTexts = append(addedTypeTexts, actionImportTypeTexts(copied)...)
 					continue
 				}
-				if action, ok := synthesizeConnectedActionFromSymbols(name, actionMembers, actionCreatorMembers); ok {
+				if action, actionImports, ok := synthesizeConnectedActionFromSymbols(name, actionMembers, actionCreatorMembers); ok {
 					if hasLocalLogic && !preferLocalParitySurface {
 						if parsedAction, found := findParsedAction(targetLogic.Actions, name.SourceName); found && shouldPreferParsedConnectedAction(action, parsedAction) {
 							action = parsedAction
@@ -16390,6 +17079,7 @@ func enrichConnectedSections(source, file string, property SourceProperty, liste
 						}
 					}
 					parsed.Actions = mergeParsedActions(parsed.Actions, action)
+					imports = mergeTypeImports(imports, actionImports)
 					addedTypeTexts = append(addedTypeTexts, actionImportTypeTexts(action)...)
 					continue
 				}
@@ -16463,6 +17153,11 @@ func enrichConnectedSections(source, file string, property SourceProperty, liste
 							continue
 						}
 					}
+					imports = mergeTypeImports(
+						imports,
+						collectExplicitImportTypeImports(memberExplicitImportTypeTexts(member)),
+						memberCollectedTypeImports(member),
+					)
 					parsed.Selectors = mergeParsedFields(parsed.Selectors, ParsedField{
 						Name: name.LocalName,
 						Type: strings.TrimSpace(member.TypeString),
@@ -17140,7 +17835,7 @@ func resolveConnectedSectionMembersBySymbol(
 		if !ok {
 			continue
 		}
-		members, ok := connectedTypeMembers(state.apiClient, state.apiSnapshot, projectID, state.timeout, sectionType.ID)
+		members, ok := connectedTypeMembers(state.apiClient, state.apiSnapshot, projectID, state.timeout, sectionType.ID, file)
 		if ok {
 			return members, true
 		}
@@ -17251,6 +17946,7 @@ func connectedTypeMembers(
 	projectID string,
 	timeout time.Duration,
 	typeID string,
+	contextFile string,
 ) ([]MemberReport, bool) {
 	properties, err := client.GetPropertiesOfType(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, typeID)
 	if err != nil || len(properties) == 0 {
@@ -17266,12 +17962,14 @@ func connectedTypeMembers(
 		propertyType, err := client.GetTypeOfSymbol(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, property.ID)
 		if err == nil && propertyType != nil {
 			member.TypeString = safeTypeString(context.Background(), client, timeout, snapshot, projectID, propertyType.ID)
+			member.TypeImports = mergeTypeImports(member.TypeImports, typeImportsForTypeSymbol(client, snapshot, projectID, timeout, propertyType.ID, contextFile))
 			if printed, err := client.PrintTypeNode(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, propertyType.ID); err == nil {
 				member.PrintedTypeNode = printed
 			}
 			signatures, err := client.GetSignaturesOfType(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, propertyType.ID)
 			if err == nil && len(signatures) > 0 {
 				member.SignatureCount = len(signatures)
+				member.TypeImports = mergeTypeImports(member.TypeImports, signatureParameterTypeImports(client, snapshot, projectID, timeout, signatures[0], contextFile))
 				returnType, err := client.GetReturnTypeOfSignature(
 					tsgoapi.WithTimeout(context.Background(), timeout),
 					snapshot,
@@ -17280,6 +17978,7 @@ func connectedTypeMembers(
 				)
 				if err == nil && returnType != nil {
 					member.ReturnTypeString = safeTypeString(context.Background(), client, timeout, snapshot, projectID, returnType.ID)
+					member.TypeImports = mergeTypeImports(member.TypeImports, typeImportsForTypeSymbol(client, snapshot, projectID, timeout, returnType.ID, contextFile))
 					if printed, err := client.PrintTypeNode(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, returnType.ID); err == nil {
 						member.PrintedReturnTypeNode = printed
 					}
@@ -17294,11 +17993,190 @@ func connectedTypeMembers(
 	return members, len(members) > 0
 }
 
-func synthesizeConnectedActionFromSymbols(name connectedName, actionMembers, actionCreatorMembers []MemberReport) (ParsedAction, bool) {
+func signatureParameterTypeImports(
+	client *tsgoapi.Client,
+	snapshot string,
+	projectID string,
+	timeout time.Duration,
+	signature *tsgoapi.SignatureResponse,
+	contextFile string,
+) []TypeImport {
+	if signature == nil || len(signature.Parameters) == 0 {
+		return nil
+	}
+	var imports []TypeImport
+	for _, symbolID := range signature.Parameters {
+		imports = mergeTypeImports(imports, typeImportsForSymbolType(client, snapshot, projectID, timeout, symbolID, contextFile))
+	}
+	return imports
+}
+
+func typeImportsForSymbolType(
+	client *tsgoapi.Client,
+	snapshot string,
+	projectID string,
+	timeout time.Duration,
+	symbolID string,
+	contextFile string,
+) []TypeImport {
+	if client == nil || projectID == "" || symbolID == "" {
+		return nil
+	}
+	if declaredType, err := client.GetDeclaredTypeOfSymbol(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, symbolID); err == nil && declaredType != nil {
+		if imports := typeImportsForTypeSymbol(client, snapshot, projectID, timeout, declaredType.ID, contextFile); len(imports) > 0 {
+			return imports
+		}
+	}
+	if symbolType, err := client.GetTypeOfSymbol(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, symbolID); err == nil && symbolType != nil {
+		return typeImportsForTypeSymbol(client, snapshot, projectID, timeout, symbolType.ID, contextFile)
+	}
+	return nil
+}
+
+func typeImportsForTypeSymbol(
+	client *tsgoapi.Client,
+	snapshot string,
+	projectID string,
+	timeout time.Duration,
+	typeID string,
+	contextFile string,
+) []TypeImport {
+	if client == nil || projectID == "" || typeID == "" {
+		return nil
+	}
+	symbol, err := client.GetSymbolOfType(tsgoapi.WithTimeout(context.Background(), timeout), snapshot, projectID, typeID)
+	if err != nil {
+		return nil
+	}
+	return typeImportsFromSymbol(symbol, contextFile)
+}
+
+func typeImportsFromSymbol(symbol *tsgoapi.SymbolResponse, contextFile string) []TypeImport {
+	if symbol == nil {
+		return nil
+	}
+	name := strings.TrimSpace(symbol.Name)
+	if !isSimpleIdentifier(name) {
+		return nil
+	}
+	importPath := bestImportableDeclarationPath(symbol, contextFile)
+	if importPath == "" {
+		return nil
+	}
+	return []TypeImport{{Path: importPath, Names: []string{name}}}
+}
+
+func bestImportableDeclarationPath(symbol *tsgoapi.SymbolResponse, contextFile string) string {
+	if symbol == nil {
+		return ""
+	}
+	seen := map[string]bool{}
+	paths := make([]string, 0, len(symbol.Declarations)+1)
+	appendPath := func(path string) {
+		path = filepath.Clean(strings.TrimSpace(path))
+		if path == "" || seen[path] {
+			return
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+
+	for _, declaration := range symbol.Declarations {
+		if path, ok := importableDeclarationPath(declaration, contextFile); ok {
+			appendPath(path)
+		}
+	}
+	if path, ok := importableDeclarationPath(symbol.ValueDeclaration, contextFile); ok {
+		appendPath(path)
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+
+	sort.Slice(paths, func(i, j int) bool {
+		return declarationImportPathLess(paths[i], paths[j])
+	})
+	return paths[0]
+}
+
+func importableDeclarationPath(location, contextFile string) (string, bool) {
+	path, ok := declarationFilePath(location)
+	if !ok {
+		return "", false
+	}
+	path = filepath.Clean(path)
+	if contextFile != "" && filepath.Clean(contextFile) == path {
+		return "", false
+	}
+	if !isImportableDeclarationFile(path) {
+		return "", false
+	}
+	return path, true
+}
+
+func declarationFilePath(location string) (string, bool) {
+	location = strings.TrimSpace(location)
+	if location == "" {
+		return "", false
+	}
+	parts := strings.SplitN(location, ".", 4)
+	if len(parts) != 4 {
+		return "", false
+	}
+	path := strings.TrimSpace(parts[3])
+	if path == "" {
+		return "", false
+	}
+	return path, true
+}
+
+func isImportableDeclarationFile(path string) bool {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return false
+	}
+	base := filepath.Base(path)
+	if strings.HasPrefix(base, "lib.") && strings.HasSuffix(base, ".d.ts") {
+		return false
+	}
+	slashPath := filepath.ToSlash(path)
+	if strings.Contains(slashPath, "/typescript/lib/") {
+		return false
+	}
+	return strings.HasSuffix(path, ".d.ts") ||
+		strings.HasSuffix(path, ".ts") ||
+		strings.HasSuffix(path, ".tsx") ||
+		strings.HasSuffix(path, ".js") ||
+		strings.HasSuffix(path, ".jsx")
+}
+
+func declarationImportPathLess(left, right string) bool {
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+
+	leftNodeModules := strings.Contains(filepath.ToSlash(left), "/node_modules/")
+	rightNodeModules := strings.Contains(filepath.ToSlash(right), "/node_modules/")
+	if leftNodeModules != rightNodeModules {
+		return leftNodeModules
+	}
+
+	leftIndex := strings.HasPrefix(filepath.Base(left), "index.")
+	rightIndex := strings.HasPrefix(filepath.Base(right), "index.")
+	if leftIndex != rightIndex {
+		return !leftIndex
+	}
+
+	if len(left) != len(right) {
+		return len(left) < len(right)
+	}
+	return left < right
+}
+
+func synthesizeConnectedActionFromSymbols(name connectedName, actionMembers, actionCreatorMembers []MemberReport) (ParsedAction, []TypeImport, bool) {
 	actionMember, hasActionMember := findMemberReport(actionMembers, name.SourceName)
 	creatorMember, hasCreatorMember := findMemberReport(actionCreatorMembers, name.SourceName)
 	if !hasActionMember && !hasCreatorMember {
-		return ParsedAction{}, false
+		return ParsedAction{}, nil, false
 	}
 
 	functionType := preferredMemberFunctionTypeText(actionMember)
@@ -17306,7 +18184,7 @@ func synthesizeConnectedActionFromSymbols(name connectedName, actionMembers, act
 		functionType = preferredMemberFunctionTypeText(creatorMember)
 	}
 	if functionType == "" {
-		return ParsedAction{}, false
+		return ParsedAction{}, nil, false
 	}
 
 	payloadType := connectedActionPayloadType(creatorMember)
@@ -17315,10 +18193,13 @@ func synthesizeConnectedActionFromSymbols(name connectedName, actionMembers, act
 	}
 
 	return ParsedAction{
-		Name:         name.LocalName,
-		FunctionType: functionType,
-		PayloadType:  payloadType,
-	}, true
+			Name:         name.LocalName,
+			FunctionType: functionType,
+			PayloadType:  payloadType,
+		}, mergeTypeImports(
+			collectExplicitImportTypeImports(memberExplicitImportTypeTexts(actionMember, creatorMember)),
+			memberCollectedTypeImports(actionMember, creatorMember),
+		), true
 }
 
 func connectedActionPayloadType(member MemberReport) string {
@@ -17728,7 +18609,11 @@ func parseReducerStateType(typeText string) (string, bool) {
 
 	stateType := normalizeInferredTypeText(strings.TrimSpace(parts[0]))
 	if len(parts) > 1 {
-		if widened := widenReducerStateTypeFromHandlers(stateType, strings.TrimSpace(parts[1])); widened != "" {
+		handlersText := strings.TrimSpace(parts[1])
+		if recovered := recoverReducerStateTypeFromHandlers(stateType, handlersText); recovered != "" {
+			stateType = recovered
+		}
+		if widened := widenReducerStateTypeFromHandlers(stateType, handlersText); widened != "" {
 			stateType = widened
 		}
 	}
@@ -17779,6 +18664,9 @@ func parseCollapsedReducerTupleStateType(typeText string) (string, bool) {
 
 	if stateType == "" || handlerType == "" {
 		return "", false
+	}
+	if recovered := recoverReducerStateTypeFromHandlers(stateType, handlerType); recovered != "" {
+		stateType = recovered
 	}
 	if widened := widenReducerStateTypeFromHandlers(stateType, handlerType); widened != "" {
 		stateType = widened
@@ -18187,6 +19075,7 @@ func parseObjectTypeMembersWithOptionalFlags(typeText string, includeOptionalUnd
 		optional := strings.HasSuffix(name, "?")
 		name = strings.TrimSuffix(name, "?")
 		name = strings.Trim(name, `"'`)
+		value = normalizeSourceTypeText(trimLeadingTypeMemberContinuation(value))
 		if name == "" || value == "" {
 			continue
 		}
@@ -18197,6 +19086,14 @@ func parseObjectTypeMembersWithOptionalFlags(typeText string, includeOptionalUnd
 		optionalProperties[name] = optional
 	}
 	return properties, optionalProperties, true
+}
+
+func trimLeadingTypeMemberContinuation(value string) string {
+	value = strings.TrimSpace(value)
+	for len(value) > 0 && (value[0] == '|' || value[0] == '&') {
+		value = strings.TrimSpace(value[1:])
+	}
+	return value
 }
 
 func splitFunctionType(typeText string) (string, string, bool) {
@@ -18277,6 +19174,9 @@ func splitTopLevelTypeMembers(source string) ([]string, error) {
 			}
 		case '\n':
 			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && angleDepth == 0 {
+				if typeMemberContinuesAcrossNewline(source, start, i) {
+					continue
+				}
 				member := strings.TrimSpace(source[start:i])
 				if member != "" {
 					members = append(members, member)
@@ -18291,6 +19191,39 @@ func splitTopLevelTypeMembers(source string) ([]string, error) {
 		members = append(members, last)
 	}
 	return members, nil
+}
+
+func typeMemberContinuesAcrossNewline(source string, start, newlineIndex int) bool {
+	current := strings.TrimSpace(source[start:newlineIndex])
+	if current == "" {
+		return true
+	}
+	if strings.HasSuffix(current, ":") ||
+		strings.HasSuffix(current, "|") ||
+		strings.HasSuffix(current, "&") ||
+		strings.HasSuffix(current, ",") ||
+		strings.HasSuffix(current, "=>") {
+		return true
+	}
+
+	next := newlineIndex + 1
+	for next < len(source) {
+		switch source[next] {
+		case '\r', ' ', '\t':
+			next++
+		default:
+			goto nextToken
+		}
+	}
+	return false
+
+nextToken:
+	switch source[next] {
+	case '|', '&', ',', ')', ']', '}':
+		return true
+	default:
+		return false
+	}
 }
 
 func splitTopLevelProperty(entry string) (string, string, bool) {
@@ -18702,8 +19635,44 @@ func widenReducerStateTypeFromHandlers(stateType, handlersText string) string {
 	return ""
 }
 
+func recoverReducerStateTypeFromHandlers(stateType, handlersText string) string {
+	stateType = normalizeInferredTypeText(strings.TrimSpace(stateType))
+	if stateType != "" && !isAnyLikeType(stateType) && !isLooselyTypedType(stateType) {
+		return ""
+	}
+
+	properties, ok := parseObjectTypeMembers(handlersText)
+	if !ok {
+		return ""
+	}
+
+	recovered := ""
+	for _, propertyType := range properties {
+		parameters, _, ok := splitFunctionType(propertyType)
+		if !ok {
+			continue
+		}
+		params, ok := parseFunctionParameters(parameters)
+		if !ok || len(params) == 0 {
+			continue
+		}
+		candidate := normalizeInferredTypeText(strings.TrimSpace(params[0].Type))
+		if candidate == "" || isAnyLikeType(candidate) || isLooselyTypedType(candidate) {
+			continue
+		}
+		if recovered == "" {
+			recovered = candidate
+			continue
+		}
+		recovered = mergeNormalizedTypeUnion(recovered, candidate)
+	}
+
+	return normalizeInferredTypeText(recovered)
+}
+
 func normalizeInferredTypeText(typeText string) string {
 	text := normalizeSourceTypeText(typeText)
+	text = stripImportTypeQualifiers(text)
 	text = sortLiteralUnionMembers(text)
 	text = collapseBooleanLiteralUnion(text)
 	switch text {
@@ -18718,6 +19687,41 @@ func normalizeInferredTypeText(typeText string) string {
 	default:
 		return text
 	}
+}
+
+func stripImportTypeQualifiers(typeText string) string {
+	text := strings.TrimSpace(typeText)
+	if text == "" {
+		return ""
+	}
+	return importTypeReferencePattern.ReplaceAllString(text, "${3}")
+}
+
+func memberExplicitImportTypeTexts(members ...MemberReport) []string {
+	texts := make([]string, 0, len(members)*4)
+	appendText := func(text string) {
+		text = strings.TrimSpace(text)
+		if text != "" {
+			texts = append(texts, text)
+		}
+	}
+	for _, member := range members {
+		appendText(preferredPrintedOrRawTypeText(member.PrintedTypeNode, member.TypeString))
+		appendText(preferredPrintedOrRawTypeText(member.PrintedReturnTypeNode, member.ReturnTypeString))
+		appendText(preferredPrintedOrRawTypeText(member.ProjectorDirectPrintedTypeNode, member.ProjectorDirectTypeString))
+		appendText(preferredPrintedOrRawTypeText(member.ProjectorDirectPrintedReturnTypeNode, member.ProjectorDirectReturnTypeString))
+	}
+	return texts
+}
+
+func memberCollectedTypeImports(members ...MemberReport) []TypeImport {
+	imports := make([][]TypeImport, 0, len(members))
+	for _, member := range members {
+		if len(member.TypeImports) > 0 {
+			imports = append(imports, member.TypeImports)
+		}
+	}
+	return mergeTypeImports(imports...)
 }
 
 func normalizeActionPayloadType(typeText string) string {
@@ -19976,6 +20980,16 @@ type importCandidate struct {
 	Name string
 }
 
+type importedSourceFile struct {
+	File   string
+	Source string
+}
+
+type cachedTypeImportsResult struct {
+	Imports []TypeImport
+	OK      bool
+}
+
 func mergeTypeImports(groups ...[]TypeImport) []TypeImport {
 	grouped := map[string]map[string]bool{}
 	for _, imports := range groups {
@@ -20018,12 +21032,26 @@ func collectTypeImports(source, file string, logic ParsedLogic, state *buildStat
 }
 
 func collectTypeImportsForTypeTexts(source, file string, typeTexts []string, state *buildState, coveredIdentifiers map[string]bool) []TypeImport {
+	return collectTypeImportsForTypeTextsRecursive(source, file, typeTexts, state, coveredIdentifiers, map[string]bool{})
+}
+
+func collectTypeImportsForTypeTextsRecursive(source, file string, typeTexts []string, state *buildState, coveredIdentifiers map[string]bool, visitedFiles map[string]bool) []TypeImport {
+	started := time.Now()
 	if len(typeTexts) == 0 {
 		return nil
 	}
 	if coveredIdentifiers == nil {
 		coveredIdentifiers = map[string]bool{}
 	}
+	if file != "" {
+		file = filepath.Clean(file)
+		if visitedFiles[file] {
+			return nil
+		}
+		visitedFiles[file] = true
+		defer delete(visitedFiles, file)
+	}
+	defer maybeLogBuildTiming(filepath.Base(file), "", fmt.Sprintf("collectTypeImports[%d]", len(typeTexts)), started)
 
 	importsByAlias := map[string]importCandidate{}
 	for alias, candidate := range parseNamedImports(source) {
@@ -20041,12 +21069,32 @@ func collectTypeImportsForTypeTexts(source, file string, typeTexts []string, sta
 	importPaths := parseAllImportPaths(source)
 	exportCache := map[string]map[string]bool{}
 	packageExportCache := map[string]map[string]importCandidate{}
+	if state != nil {
+		if state.exportedTypeNamesByFile == nil {
+			state.exportedTypeNamesByFile = map[string]map[string]bool{}
+		}
+		if state.packageExportCandidatesByPath == nil {
+			state.packageExportCandidatesByPath = map[string]map[string]importCandidate{}
+		}
+		exportCache = state.exportedTypeNamesByFile
+		packageExportCache = state.packageExportCandidatesByPath
+	}
 	usedReferences := collectUsedTypeReferences(typeTexts)
+	valueImportSources := collectImportedValueSourceFiles(source, file, state)
+	transitiveFallbackEligible := map[string]bool{}
 	for identifier := range collectExplicitImportableBareIdentifiers(typeTexts, importsByAlias) {
 		usedReferences.BareIdentifiers[identifier] = true
 	}
 
 	grouped := map[string]map[string]bool{}
+	for _, item := range collectExplicitImportTypeImports(typeTexts) {
+		if grouped[item.Path] == nil {
+			grouped[item.Path] = map[string]bool{}
+		}
+		for _, name := range item.Names {
+			grouped[item.Path][name] = true
+		}
+	}
 	for identifier := range usedReferences.QualifiedOwners {
 		if coveredIdentifiers[identifier] {
 			continue
@@ -20069,9 +21117,31 @@ func collectTypeImportsForTypeTexts(source, file string, typeTexts []string, sta
 		}
 		candidate, ok := importsByAlias[identifier]
 		if !ok && len(importPaths) > 0 {
+			resolveStart := time.Now()
 			candidate, ok = resolveImportedExportCandidate(file, importPaths, identifier, state, exportCache, packageExportCache)
+			maybeLogBuildTiming(filepath.Base(file), identifier, "resolveImportedExportCandidate", resolveStart)
 		}
 		if !ok || candidate.Path == "" || candidate.Name == "" {
+			eligible, seen := transitiveFallbackEligible[identifier]
+			if !seen {
+				eligible = typeTextsContainTransitiveFallbackAnchor(typeTexts, identifier)
+				transitiveFallbackEligible[identifier] = eligible
+			}
+			if eligible {
+				fallbackStart := time.Now()
+				for _, item := range collectTransitiveTypeImportsFromValueSources(valueImportSources, file, identifier, state, coveredIdentifiers, visitedFiles) {
+					if parityModeShouldOmitCollectedImportPath(item.Path) {
+						continue
+					}
+					if grouped[item.Path] == nil {
+						grouped[item.Path] = map[string]bool{}
+					}
+					for _, name := range item.Names {
+						grouped[item.Path][name] = true
+					}
+				}
+				maybeLogBuildTiming(filepath.Base(file), identifier, "collectTransitiveTypeImportsFromValueSources", fallbackStart)
+			}
 			continue
 		}
 		if parityModeShouldOmitCollectedImportPath(candidate.Path) {
@@ -20101,6 +21171,191 @@ func collectTypeImportsForTypeTexts(source, file string, typeTexts []string, sta
 	return imports
 }
 
+func typeTextsContainTransitiveFallbackAnchor(typeTexts []string, identifier string) bool {
+	if identifier == "" {
+		return false
+	}
+	for _, typeText := range typeTexts {
+		references := collectUsedTypeReferences([]string{typeText})
+		if !references.BareIdentifiers[identifier] {
+			continue
+		}
+		for other := range references.BareIdentifiers {
+			if other == identifier {
+				continue
+			}
+			if !shouldImportIdentifier(other) {
+				continue
+			}
+			return true
+		}
+		for other := range references.QualifiedOwners {
+			if other == identifier {
+				continue
+			}
+			if !shouldImportIdentifier(other) {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func collectImportedValueSourceFiles(source, file string, state *buildState) []importedSourceFile {
+	if source == "" || file == "" {
+		return nil
+	}
+	file = filepath.Clean(file)
+	if state != nil && state.importedValueSourcesByFile != nil {
+		if cached, ok := state.importedValueSourcesByFile[file]; ok {
+			return cloneImportedSourceFiles(cached)
+		}
+	}
+
+	seen := map[string]bool{}
+	sources := make([]importedSourceFile, 0)
+	appendSource := func(importPath string) {
+		if strings.TrimSpace(importPath) == "" {
+			return
+		}
+		resolvedFile, ok := resolveImportFile(file, importPath, state)
+		if !ok || resolvedFile == "" {
+			return
+		}
+		resolvedFile = filepath.Clean(resolvedFile)
+		if seen[resolvedFile] {
+			return
+		}
+		importedSource, ok := readSourceFile(resolvedFile, state)
+		if !ok || importedSource == "" {
+			return
+		}
+		seen[resolvedFile] = true
+		sources = append(sources, importedSourceFile{
+			File:   resolvedFile,
+			Source: importedSource,
+		})
+	}
+
+	for _, candidate := range parseNamedValueImports(source) {
+		appendSource(candidate.Path)
+	}
+	for _, candidate := range parseDefaultValueImports(source) {
+		appendSource(candidate.Path)
+	}
+	for _, importPath := range parseNamespaceValueImports(source) {
+		appendSource(importPath)
+	}
+	if state != nil {
+		if state.importedValueSourcesByFile == nil {
+			state.importedValueSourcesByFile = map[string][]importedSourceFile{}
+		}
+		state.importedValueSourcesByFile[file] = cloneImportedSourceFiles(sources)
+	}
+	return sources
+}
+
+func collectTransitiveTypeImportsFromValueSources(sources []importedSourceFile, file, identifier string, state *buildState, coveredIdentifiers map[string]bool, visitedFiles map[string]bool) []TypeImport {
+	if len(sources) == 0 || file == "" || identifier == "" {
+		return nil
+	}
+	file = filepath.Clean(file)
+	cacheKey := ""
+	if state != nil {
+		if state.transitiveTypeImportsByRef == nil {
+			state.transitiveTypeImportsByRef = map[string]cachedTypeImportsResult{}
+		}
+		cacheKey = file + "\x00" + identifier
+		if cached, ok := state.transitiveTypeImportsByRef[cacheKey]; ok {
+			if !cached.OK {
+				return nil
+			}
+			return cloneTypeImports(cached.Imports)
+		}
+	}
+
+	matches := make([]TypeImport, 0, 1)
+	seen := map[string]bool{}
+	for _, sourceFile := range sources {
+		imports := collectTypeImportsForTypeTextsRecursive(
+			sourceFile.Source,
+			sourceFile.File,
+			[]string{identifier},
+			state,
+			coveredIdentifiers,
+			visitedFiles,
+		)
+		if len(imports) == 0 {
+			continue
+		}
+		imports = rebaseTypeImports(filterImportsByTypeTexts(imports, []string{identifier}), sourceFile.File, file)
+		for _, item := range imports {
+			var names []string
+			for _, name := range item.Names {
+				if importReferenceName(name) != identifier {
+					continue
+				}
+				key := item.Path + "::" + name
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				names = append(names, name)
+			}
+			if len(names) > 0 {
+				matches = append(matches, TypeImport{Path: item.Path, Names: names})
+			}
+		}
+	}
+
+	matches = mergeTypeImports(matches)
+	count := 0
+	for _, item := range matches {
+		for _, name := range item.Names {
+			if importReferenceName(name) == identifier {
+				count++
+			}
+		}
+	}
+	if count != 1 {
+		if cacheKey != "" {
+			state.transitiveTypeImportsByRef[cacheKey] = cachedTypeImportsResult{OK: false}
+		}
+		return nil
+	}
+	if cacheKey != "" {
+		state.transitiveTypeImportsByRef[cacheKey] = cachedTypeImportsResult{
+			Imports: cloneTypeImports(matches),
+			OK:      true,
+		}
+	}
+	return matches
+}
+
+func cloneImportedSourceFiles(items []importedSourceFile) []importedSourceFile {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]importedSourceFile, len(items))
+	copy(cloned, items)
+	return cloned
+}
+
+func cloneTypeImports(imports []TypeImport) []TypeImport {
+	if len(imports) == 0 {
+		return nil
+	}
+	cloned := make([]TypeImport, len(imports))
+	for index, item := range imports {
+		cloned[index] = TypeImport{
+			Path:  item.Path,
+			Names: append([]string(nil), item.Names...),
+		}
+	}
+	return cloned
+}
+
 func parityModeShouldOmitCollectedImportPath(importPath string) bool {
 	if !parityModeEnabled() {
 		return false
@@ -20126,6 +21381,23 @@ func collectConnectedImportsFromSource(logic ParsedLogic, typeTexts []string, st
 		state,
 		existingImportReferenceNames(logic.Imports),
 	)
+}
+
+func readSourceFile(file string, state *buildState) (string, bool) {
+	if file == "" {
+		return "", false
+	}
+	file = filepath.Clean(file)
+	if state != nil && state.parsedFileByFile != nil {
+		if entry, ok := state.parsedFileByFile[file]; ok && entry.Source != "" {
+			return entry.Source, true
+		}
+	}
+	sourceBytes, err := os.ReadFile(file)
+	if err != nil {
+		return "", false
+	}
+	return string(sourceBytes), true
 }
 
 func parseAllImportPaths(source string) []string {
@@ -21034,6 +22306,43 @@ func collectUsedTypeReferences(typeTexts []string) usedTypeReferences {
 		collectUsedTypeReferencesInto(typeText, references)
 	}
 	return references
+}
+
+func collectExplicitImportTypeImports(typeTexts []string) []TypeImport {
+	grouped := map[string]map[string]bool{}
+	for _, typeText := range typeTexts {
+		for _, match := range importTypeReferencePattern.FindAllStringSubmatch(typeText, -1) {
+			if len(match) != 4 {
+				continue
+			}
+			importPath := strings.TrimSpace(firstNonEmpty(match[1], match[2]))
+			name := strings.TrimSpace(match[3])
+			if importPath == "" || name == "" {
+				continue
+			}
+			if grouped[importPath] == nil {
+				grouped[importPath] = map[string]bool{}
+			}
+			grouped[importPath][name] = true
+		}
+	}
+
+	paths := make([]string, 0, len(grouped))
+	for path := range grouped {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+
+	imports := make([]TypeImport, 0, len(paths))
+	for _, path := range paths {
+		names := make([]string, 0, len(grouped[path]))
+		for name := range grouped[path] {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		imports = append(imports, TypeImport{Path: path, Names: names})
+	}
+	return imports
 }
 
 func collectExplicitImportableBareIdentifiers(typeTexts []string, candidates map[string]importCandidate) map[string]bool {

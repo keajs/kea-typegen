@@ -278,6 +278,105 @@ func TestNormalizedTypeImportsPreservesBarePackageSpecifierForPackageTypesEntry(
 	}
 }
 
+func TestNormalizedTypeImportsCollapsesAbsoluteExternalNodeModulesDeclarationPath(t *testing.T) {
+	tempDir := t.TempDir()
+	projectDir := filepath.Join(tempDir, "project")
+	sourceDir := filepath.Join(projectDir, "src")
+	sourceFile := filepath.Join(sourceDir, "logic.ts")
+	typeFile := filepath.Join(sourceDir, "logicType.ts")
+	packageJSONPath := filepath.Join(projectDir, "package.json")
+	externalTypesFile := filepath.Join(
+		tempDir,
+		"posthog",
+		"node_modules",
+		".pnpm",
+		"kea-router@3.4.1_kea@4.0.0-pre.5_react@18.3.1_",
+		"node_modules",
+		"kea-router",
+		"lib",
+		"types.d.ts",
+	)
+
+	for _, dir := range []string{
+		sourceDir,
+		filepath.Dir(externalTypesFile),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("os.MkdirAll %s: %v", dir, err)
+		}
+	}
+	for path, contents := range map[string]string{
+		packageJSONPath:   `{}`,
+		sourceFile:        ``,
+		externalTypesFile: `export interface LocationChangedPayload { pathname: string }`,
+	} {
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatalf("os.WriteFile %s: %v", path, err)
+		}
+	}
+
+	imports := normalizedTypeImports([]ParsedLogic{
+		{
+			File: sourceFile,
+			Imports: []TypeImport{
+				{Path: externalTypesFile, Names: []string{"LocationChangedPayload"}},
+			},
+		},
+	}, fileEmitOptions{
+		TypeFile:        typeFile,
+		PackageJSONPath: packageJSONPath,
+	})
+
+	if !hasImport(imports, "kea-router/lib/types", "LocationChangedPayload") {
+		t.Fatalf("expected absolute node_modules declaration path to collapse to package import, got %+v", imports)
+	}
+}
+
+func TestRenderTypegenFileMatchesWriteRoundEmission(t *testing.T) {
+	root := repoRoot(t)
+	tempDir := t.TempDir()
+	copyDir(t, filepath.Join(root, "samples"), tempDir)
+
+	options := AppOptions{
+		BinaryPath:      tsgoapi.PreferredBinary(root),
+		TsConfigPath:    filepath.Join(tempDir, "tsconfig.json"),
+		SourceFilePath:  filepath.Join(tempDir, "logic.ts"),
+		PackageJSONPath: filepath.Join(root, "package.json"),
+		RootPath:        tempDir,
+		TypesPath:       tempDir,
+		WorkingDir:      root,
+		Quiet:           true,
+		Log:             func(string) {},
+		Timeout:         15 * time.Second,
+	}
+
+	rendered, err := RenderTypegenFile(context.Background(), options, "")
+	if err != nil {
+		t.Fatalf("RenderTypegenFile returned error: %v", err)
+	}
+
+	_, err = runTypegenRounds(context.Background(), AppOptions{
+		BinaryPath:      options.BinaryPath,
+		TsConfigPath:    options.TsConfigPath,
+		PackageJSONPath: options.PackageJSONPath,
+		RootPath:        options.RootPath,
+		TypesPath:       options.TypesPath,
+		Write:           true,
+		Delete:          true,
+		Quiet:           true,
+		Log:             func(string) {},
+		Timeout:         options.Timeout,
+	})
+	if err != nil {
+		t.Fatalf("runTypegenRounds returned error: %v", err)
+	}
+
+	written := mustReadFile(t, filepath.Join(tempDir, "logicType.ts"))
+	if !sameTypegenBody(written, rendered) {
+		t.Fatalf("expected RenderTypegenFile output to match write-round typegen body:\nrendered:\n%s\n\nwritten:\n%s", rendered, written)
+	}
+}
+
 func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 	root := repoRoot(t)
 	tempDir := t.TempDir()
@@ -446,6 +545,40 @@ func TestRunTypegenRoundsPreservesReducedWriteRoundTypes(t *testing.T) {
 		if typegenAssertionContains(typedFormTypegen, unexpected) {
 			t.Fatalf("expected clean write output to defer typedForm builder heuristics and omit %q:\n%s", unexpected, typedFormTypegen)
 		}
+	}
+}
+
+func TestRunTypegenRoundsFromCleanBaselineKeepsAutoImportPlaceholderHelperNames(t *testing.T) {
+	root := repoRoot(t)
+	tempDir := t.TempDir()
+	copyDir(t, filepath.Join(root, "samples"), tempDir)
+
+	if err := os.Remove(filepath.Join(tempDir, "autoImportLogicType.ts")); err != nil {
+		t.Fatalf("Remove returned error: %v", err)
+	}
+
+	_, err := runTypegenRounds(context.Background(), AppOptions{
+		BinaryPath:      tsgoapi.PreferredBinary(root),
+		TsConfigPath:    filepath.Join(tempDir, "tsconfig.json"),
+		PackageJSONPath: filepath.Join(root, "package.json"),
+		RootPath:        tempDir,
+		TypesPath:       tempDir,
+		Write:           true,
+		Delete:          true,
+		Quiet:           true,
+		Log:             func(string) {},
+		Timeout:         15 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("runTypegenRounds returned error: %v", err)
+	}
+
+	autoImportTypegen := mustReadFile(t, filepath.Join(tempDir, "autoImportLogicType.ts"))
+	if !typegenAssertionContains(autoImportTypegen, "sbla: (arg: S6) => Partial<Record<string, S7>>") {
+		t.Fatalf("expected clean-baseline output to keep placeholder helper name:\n%s", autoImportTypegen)
+	}
+	if typegenAssertionContains(autoImportTypegen, "sbla: (a: S6) => Partial<Record<string, S7>>") {
+		t.Fatalf("expected clean-baseline output to avoid source parameter helper name:\n%s", autoImportTypegen)
 	}
 }
 

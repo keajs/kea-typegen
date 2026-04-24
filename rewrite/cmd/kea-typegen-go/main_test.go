@@ -21,3 +21,9 @@ func TestMustAbsFromResolvesRelativePathsAgainstBase(t *testing.T) {
 		t.Fatalf("mustAbsFrom() = %q, want %q", got, want)
 	}
 }
+
+func TestIsAuxCommandRecognizesRender(t *testing.T) {
+	if !isAuxCommand("render") {
+		t.Fatalf("expected render to be recognized as an aux command")
+	}
+}

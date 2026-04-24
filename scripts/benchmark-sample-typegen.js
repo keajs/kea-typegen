@@ -322,10 +322,55 @@ function normalizeImportModulePath(sourceFile, moduleSpecifier) {
     if (!moduleSpecifier) {
         return ''
     }
+    let normalized = moduleSpecifier
     if (moduleSpecifier.startsWith('.')) {
-        return path.resolve(path.dirname(sourceFile.fileName), moduleSpecifier).replace(/\\/g, '/')
+        normalized = path.resolve(path.dirname(sourceFile.fileName), moduleSpecifier).replace(/\\/g, '/')
     }
-    return moduleSpecifier
+    return collapseNodeModulesModulePath(normalized)
+}
+
+function collapseNodeModulesModulePath(moduleSpecifier) {
+    let normalized = String(moduleSpecifier || '').replace(/\\/g, '/')
+    if (!normalized) {
+        return ''
+    }
+
+    const marker = '/node_modules/'
+    const lastMarker = normalized.lastIndexOf(marker)
+    if (lastMarker !== -1) {
+        normalized = normalized.slice(lastMarker + marker.length)
+    }
+
+    if (normalized.startsWith('.pnpm/')) {
+        const match = normalized.match(/\.pnpm\/[^/]+@[^/]+\/node_modules\/(.*)/)
+        if (match && match[1]) {
+            normalized = match[1]
+        }
+    }
+    if (normalized.startsWith('@types/')) {
+        normalized = normalized.slice('@types/'.length)
+    }
+
+    normalized = normalized
+        .replace(/\.d\.ts$/, '')
+        .replace(/\.tsx?$/, '')
+        .replace(/\.jsx?$/, '')
+
+    if (normalized.split('/').length === 2 && normalized.endsWith('/index')) {
+        normalized = normalized.slice(0, -'/index'.length)
+    }
+    return normalized
+}
+
+function comparableModuleIdentity(moduleSpecifier) {
+    const normalized = collapseNodeModulesModulePath(moduleSpecifier)
+    if (!normalized) {
+        return ''
+    }
+    if (normalized.includes('/node_modules/') || (!normalized.startsWith('/') && !normalized.startsWith('.'))) {
+        return normalized
+    }
+    return path.posix.basename(normalized)
 }
 
 function importedNameMatchesImportType(sourceFile, localName, importPath) {
@@ -333,13 +378,15 @@ function importedNameMatchesImportType(sourceFile, localName, importPath) {
         return false
     }
 
+    const comparableImportPath = comparableModuleIdentity(importPath)
+
     for (const statement of sourceFile.statements) {
         if (!ts.isImportDeclaration(statement) || !statement.importClause || !statement.moduleSpecifier) {
             continue
         }
 
         const normalizedModule = normalizeImportModulePath(sourceFile, statement.moduleSpecifier.text)
-        if (normalizedModule !== importPath) {
+        if (normalizedModule !== importPath && comparableModuleIdentity(normalizedModule) !== comparableImportPath) {
             continue
         }
 
@@ -532,7 +579,8 @@ function normalizeTypeElement(member, sourceFile) {
 }
 
 function normalizeImportDeclaration(statement) {
-    const parts = [statement.moduleSpecifier.text]
+    const sourceFile = statement.getSourceFile()
+    const parts = [normalizeImportModulePath(sourceFile, statement.moduleSpecifier.text)]
     const clause = statement.importClause
     if (!clause) {
         return parts.join('|')
@@ -607,10 +655,16 @@ function normalizeGeneratedFile(text, fileName) {
     return JSON.stringify(normalized)
 }
 
-function compareOutputs(tsDir, goDir) {
+function compareOutputs(tsDir, goDir, options = {}) {
     const tsFiles = new Map(listGeneratedTypeFiles(tsDir).map((file) => [file, path.join(tsDir, file)]))
     const goFiles = new Map(listGeneratedTypeFiles(goDir).map((file) => [file, path.join(goDir, file)]))
-    const allFiles = [...new Set([...tsFiles.keys(), ...goFiles.keys()])].sort()
+    const selectedFiles =
+        Array.isArray(options.files) && options.files.length > 0
+            ? new Set(options.files.map((file) => String(file).replace(/\\/g, '/')))
+            : null
+    const allFiles = [...new Set([...tsFiles.keys(), ...goFiles.keys()])]
+        .filter((file) => !selectedFiles || selectedFiles.has(file))
+        .sort()
 
     const summary = {
         totalFiles: allFiles.length,
@@ -643,7 +697,7 @@ function compareOutputs(tsDir, goDir) {
             summary.exactMatches += 1
         }
 
-        if (normalizeGeneratedFile(tsText, tsPath) === normalizeGeneratedFile(goText, goPath)) {
+        if (normalizeGeneratedFile(tsText, file) === normalizeGeneratedFile(goText, file)) {
             summary.semanticMatches += 1
         } else {
             summary.semanticDiffs.push(file)
