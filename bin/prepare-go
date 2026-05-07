@@ -7,7 +7,7 @@ TMP_ROOT=${TMPDIR:-/tmp}
 
 TSGO_BIN="$REPO_ROOT/.tsgo/node_modules/.bin/tsgo"
 TSGO_DIR="$REPO_ROOT/.tsgo"
-TSGO_NPM_SPEC=${TSGO_NPM_SPEC:-@typescript/native-preview@7.0.0-dev.20260323.1}
+TSGO_NPM_SPEC=${TSGO_NPM_SPEC:-@typescript/native-preview@7.0.0-dev.20260506.1}
 GO_BIN_DIR="$REPO_ROOT/rewrite/bin"
 GO_BIN="$GO_BIN_DIR/kea-typegen-go"
 ROOT_GO_BIN="$REPO_ROOT/bin/kea-typegen-go"

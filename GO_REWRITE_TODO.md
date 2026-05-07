@@ -2,32 +2,229 @@
 
 ## Goal
 
-- Keep the repo-local sample benchmark at `./bin/benchmark -c write -n 1 -w 0 --skip-prepare` with `20/20` semantic matches.
-- Improve real-world parity against the existing TypeScript generator.
-- Always rerun the FrameOS full-compare corpus after meaningful parity changes, and keep aiming for `100%` semantic accuracy there instead of treating sample-benchmark wins as sufficient.
-- Treat semantic TypeScript AST parity as the current scorekeeping metric, but do not confuse that metric with actual type-correctness.
+- Build `kea-typegen-go` into a fast Go implementation of the existing TypeScript `kea-typegen`, keeping the generated type surface as close as possible to the original TypeScript implementation in `src/`.
+- Use TypeScript-Go compiler/checker data as the semantic source of truth:
+  - first through the repo-local `@typescript/native-preview` / `tsgo --api --async` surface
+  - then through TypeScript-Go internals, a fork, or vendored code when the public/hidden API is too small
+- Do not use the TypeScript language server as the typing oracle, and do not infer semantic types from language-server guesses.
+- Keep semantic TypeScript AST parity as the current scorekeeping metric, but do not confuse that metric with actual type-correctness.
+- Treat these as the benchmark ladder:
+  - sample corpus: fast smoke gate, expected `20/20` semantic matches
+  - FrameOS: required real-world parity gate, expected `38/38` semantic matches
+  - PostHog: required scale/performance gate, with both full-corpus runs and faster sliced runs
 
-## Strategy Reset
+## Non-Negotiable Architecture
 
-- Yes: the current rewrite still contains too much semantic type recovery driven by source-shape / AST-shape / printed-type heuristics inside `rewrite/internal/keainspect/model.go`.
-- That is now explicit technical debt, not the roadmap.
-- Non-negotiable rule:
-  - we must get semantic types from TypeScript checker/internal API data, not from an endless pile of Go-side guesses about source shape
-- AST/source parsing is still allowed for one thing only:
-  - locating the exact node / symbol / signature / property handle to ask TypeScript the real question
-- AST/source parsing is not allowed to become the source of truth for semantic types.
+- The Go rewrite currently contains too much semantic type recovery driven by source-shape / AST-shape / printed-type heuristics inside `rewrite/internal/keainspect/model.go`.
+- That is migration debt, not the roadmap.
+- The rule is:
+  - semantic types must come from TypeScript checker/internal API data, not from Go-side reconstruction of source shape
+- AST/source traversal is allowed for one thing only:
+  - locating the exact node, symbol, signature, property, or declaration handle to ask TypeScript the real question
+- AST/source traversal is not allowed to become the source of truth for semantic types.
 - Never add another long-lived rule whose job is “guess the type from the shape of the code”.
-- If a needed type is not exposed by the current hidden `tsgo` API, the default next move is:
-  - extend the probe path
-  - extend the wrapper
-  - or fork / vendor `tsgo` and add the missing endpoint
+- If a needed type is not exposed by the current `tsgo` API, the default next move is:
+  - extend `rewrite/internal/tsgoapi`
+  - extend `probe-api`
+  - call exported `@typescript/native-preview` internals directly from a small bridge
+  - fork / vendor TypeScript-Go and add the missing endpoint
 - Do not keep playing compare-driven cat-and-mouse with one corpus at a time.
-- A heuristic that fixes FrameOS by guessing from source shape is not success if the same rule can drift on the next codebase.
-- The target architecture is now:
+- A heuristic that fixes FrameOS by guessing from source shape is not success if the same rule can drift on PostHog or the next codebase.
+- The target architecture is:
   - Go finds the right TypeScript nodes and asks checker-backed APIs for truth
-  - `tsgo` returns normalized semantic data
-  - Go formats and merges that data
+  - TypeScript-Go returns normalized semantic data
+  - Go formats and merges that data into the existing `kea-typegen` output shape
   - Go does not re-implement TypeScript’s type reasoning in `model.go`
+
+## Benchmark Policy
+
+- Record every benchmark with:
+  - kea-typegen commit
+  - `@typescript/native-preview` / `tsgo` version
+  - benchmark target repository commit
+  - JS entrypoint mode (`dist` or `source`)
+  - runtime, semantic matches, exact matches, and diff files
+- Do not treat the sample corpus as sufficient after a meaningful parity or API change.
+- FrameOS must be rerun after meaningful parity changes and must return to `38/38`.
+- PostHog must be kept as the scale benchmark:
+  - use full compare runs for release-grade confidence
+  - use sliced `render` / `compare-generated-typegen.js --file ...` flows for inner-loop debugging
+  - if the full run times out, record the timeout and preserve the worktree as a performance bug, not as a skipped benchmark
+- Source-mode JS baseline failures are benchmark infrastructure failures:
+  - either fix the TypeScript CLI source compile errors
+  - or make `--js-mode dist` the documented baseline mode until source mode is green again
+
+## Immediate Next Steps
+
+1. Keep FrameOS at `38/38` after every meaningful parity/API change.
+2. Make the PostHog benchmark repeatable:
+   - keep the full-corpus timeout-bounded gate and preserve timeout worktrees
+   - keep the valid fast sliced gate that renders freshly generated JS and Go outputs before comparing selected generated files
+   - `eventUsageLogicType.ts` is now the first green PostHog slice gate; use it for inner-loop action/listener parity checks
+   - `sceneLogic.tsx` / `sceneLogicType.ts` still needs the same fresh selected-render treatment before it can replace the older preserved-output checks
+   - always report whether the local PostHog checkout is current or blocked by local changes
+3. Inventory the original TypeScript generator in `src/` against the Go extraction path:
+   - actions
+   - reducers
+   - selectors and internal helper signatures
+   - listeners and shared listeners
+   - loaders, forms, router mappings, events
+   - connect surfaces and generated imports
+4. For each missing semantic fact, add a TypeScript-Go-backed endpoint or bridge before adding any new Go-side heuristic.
+5. Gradually retire `model.go` source-shape recovery after the TypeScript-Go extraction path can provide equivalent checker-backed facts.
+
+## May 5, 2026 Baseline Refresh
+
+- Main repo state:
+  - branch: `go`
+  - remote: `origin/go`
+  - fetched on May 5, 2026 and even with upstream (`0` ahead / `0` behind)
+  - commit: `cedb51697f10f1b28be8ae56a03f0b471e93345a`
+- TypeScript-Go runtime:
+  - `.tsgo/package.json` pins `@typescript/native-preview` to `7.0.0-dev.20260505.1`
+  - `npm view @typescript/native-preview version` returns `7.0.0-dev.20260505.1`, so the repo-local runtime is current as of this refresh
+  - `./.tsgo/node_modules/.bin/tsgo --version` returns `Version 7.0.0-dev.20260505.1`
+  - `./.tsgo/node_modules/.bin/tsgo --api --help` still exposes `--api`, `--async`, `--cwd`, and callback options
+- API wrapper sanity check:
+  - command: `flox activate -c 'cd rewrite && go test ./internal/tsgoapi ./cmd/kea-typegen-go -count=1'`
+  - result: pass
+- Sample benchmark:
+  - command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - TypeScript mean: `10579.1 ms`
+  - Go mean: `6081.2 ms`
+  - Go speedup: `1.74x` faster on mean runtime
+  - semantic matches: `18/20`
+  - semantic accuracy: `90.0%`
+  - exact matches: `0/20`
+  - semantic diffs:
+    - `complexLogicType.ts`
+    - `logicType.ts`
+- FrameOS benchmark:
+  - target repo: `/home/ubuntu/Projects/frameos`
+  - target repo commit: `bfca0fe58fbf8eed6892e77a35ca620ea9970a2c`
+  - target repo state after fetch: even with `origin/main`
+  - source-mode command failed before the Go run because the TypeScript CLI source no longer compiles under current settings
+  - successful command: `timeout 1200s flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --js-mode dist --json --keep-worktrees'`
+  - worktree root: `.cache/kea-typegen/tmp/frameos-corpus-TH5d3J`
+  - baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-TH5d3J/frameos-baseline.json`
+  - HTML report: `.cache/kea-typegen/tmp/frameos-corpus-TH5d3J/frameos-compare.html`
+  - semantic matches: `33/38`
+  - semantic accuracy: `86.84%`
+  - exact matches: `0/38`
+  - semantic diffs:
+    - `src/scenes/frame/frameLogicType.ts`
+    - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+    - `src/scenes/frame/panels/SceneState/sceneStateLogicType.ts`
+    - `src/scenes/frame/panels/Scenes/scenesLogicType.ts`
+    - `src/scenes/frame/panels/Templates/templateRowLogicType.ts`
+- PostHog benchmark:
+  - target repo: `/home/ubuntu/Projects/posthog`
+  - target repo commit used: `2f2eef3390ec980927023f5b0c03adbd59f13298`
+  - target repo state after fetch: `16` commits behind `origin/master`
+  - local PostHog checkout was not fast-forwarded because it already has an unrelated modified file:
+    - `products/error_tracking/frontend/scenes/ErrorTrackingConfigurationScene/rate_limit/rateLimitConfigLogic.ts`
+  - command: `timeout 1800s flox activate -c 'node ./scripts/compare-real-world-typegen.js --target posthog --js-mode dist --json --keep-worktrees'`
+  - result: timed out after 30 minutes with no final JSON summary
+  - observed progress before timeout:
+    - TypeScript baseline generation completed
+    - Go generation was still running
+  - preserved worktree root:
+    - `.cache/kea-typegen/tmp/posthog-corpus-NWYHVC`
+  - current reading:
+    - PostHog must stay in the benchmark set, but full-corpus runs need either a longer CI-style timeout or a faster sliced gate for day-to-day work
+    - the next PostHog step is to use the preserved worktree to build a repeatable slice compare rather than rerunning another blind full compare immediately
+
+## May 6, 2026 Follow-Up
+
+### What Changed
+
+- Updated the default repo-local TypeScript-Go bootstrap in `bin/prepare-go`:
+  - old default: `@typescript/native-preview@7.0.0-dev.20260323.1`
+  - new default: `@typescript/native-preview@7.0.0-dev.20260506.1`
+- Updated the local ignored `.tsgo` install to `@typescript/native-preview@7.0.0-dev.20260506.1`.
+- Removed the object-action payload nullish stripping path:
+  - object action payloads now preserve checker/source `null` and `undefined` members instead of forcing `string | null` to `string` or `HTMLElement | undefined` to `HTMLElement`
+  - this moved `complexLogicType.ts` back into semantic parity on the sample benchmark
+- Preserved optional `undefined` in shared-listener payload surfaces:
+  - `sharedListeners.someRandomFunction` now emits `id?: number | undefined` like the current TypeScript generator
+  - this moved `logicType.ts` back into semantic parity on the sample benchmark
+- Fixed import-qualified printed type preference:
+  - raw `Partial<Record<string, S7>>` now wins over printed `Partial<Record<string, import("./autoImportTypes").S7>>` when qualification is the only difference
+- Changed action parameter fallback from all-or-nothing to per-parameter merging:
+  - explicit source annotations such as `FunnelCorrelation['result_type']` and `props?: Record<string, any>` are preserved
+  - checker/member parameters are still available for untyped source slots
+- Restored the FrameOS real-world corpus to `38/38` semantic parity:
+  - direct source imports now win over checker-discovered re-export paths when both refer to the same used type
+  - direct checker projector returns now beat contextual `any` for selector/helper surfaces such as `SceneApp | null`
+  - internal selector helpers are no longer suppressed for checker-backed `Object.fromEntries(...): Record<string, boolean>` cases
+  - package-qualified `import("kea-forms").DeepPartialMap` helper parameters are preserved without adding redundant top-level bare-package imports
+
+### Verification
+
+- TypeScript-Go runtime:
+  - `npm view @typescript/native-preview version` => `7.0.0-dev.20260506.1`
+  - `./.tsgo/node_modules/.bin/tsgo --version` => `Version 7.0.0-dev.20260506.1`
+  - `./.tsgo/node_modules/.bin/tsgo --api --help` still exposes `--api --async`
+- Focused regressions:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "Test(BuildParsedLogicsSynthesizesLoadersAndDefaults|BuildParsedLogicsObjectActionsPreserveNullablePayloadProperties|ListenerPayloadHelpersPreferPrintedFunctionType|SharedListenerPayloadHelperPreservesOptionalUndefined)" -count=1'`
+  - result: pass
+- Follow-up focused regressions:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -run "Test(PreferredPrintedOrRawTypeTextPrefersRawOverImportQualifiedPrinted|BuildParsedLogicsRecoversImportedIndexedAccessEnumAliasPayloadsForAliasedMultiParameterShorthandActions|BuildParsedLogicsKeepsSourceActionPayloadsWhenGenericLogicTypeImportsStaleActionCreators|RunTypegenRoundsPreservesReducedWriteRoundTypes|BuildParsedLogicsSynthesizesLoadersAndDefaults|SharedListenerPayloadHelperPreservesOptionalUndefined)" -count=1'`
+  - result: pass
+- Full `keainspect` package:
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - result: pass
+  - latest runtime: `74.023s`
+- API wrapper / command package:
+  - `flox activate -c 'cd rewrite && go test ./internal/tsgoapi ./cmd/kea-typegen-go -count=1'`
+  - result: pass
+- Sample benchmark:
+  - command: `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - latest TypeScript mean: `9340.6 ms`
+  - latest Go mean: `5827.6 ms`
+  - latest Go speedup: `1.60x`
+  - semantic matches: `20/20`
+  - semantic accuracy: `100.0%`
+  - exact matches: `0/20`
+  - semantic diffs: `0`
+- FrameOS benchmark:
+  - FrameOS was stale and clean, then fast-forwarded from `bfca0fe58fbf8eed6892e77a35ca620ea9970a2c` to `d0086d7447b997266ee54423862843b1d2b02641`
+  - command: `timeout 1200s flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --js-mode dist --json --keep-worktrees'`
+  - worktree root: `.cache/kea-typegen/tmp/frameos-corpus-eDoEYd`
+  - baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-eDoEYd/frameos-baseline.json`
+  - HTML report: `.cache/kea-typegen/tmp/frameos-corpus-eDoEYd/frameos-compare.html`
+  - semantic matches: `35/38`
+  - semantic accuracy: `92.11%`
+  - exact matches: `0/38`
+  - semantic diffs:
+    - `src/scenes/frame/frameLogicType.ts`
+    - `src/scenes/frame/panels/EditApp/editAppLogicType.ts`
+    - `src/scenes/frame/panels/SceneState/sceneStateLogicType.ts`
+  - final rerun command: `timeout 1200s flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --js-mode dist --json --keep-worktrees'`
+  - final worktree root: `.cache/kea-typegen/tmp/frameos-corpus-aSA7LJ`
+  - final baseline manifest: `.cache/kea-typegen/tmp/frameos-corpus-aSA7LJ/frameos-baseline.json`
+  - final HTML report: `.cache/kea-typegen/tmp/frameos-corpus-aSA7LJ/frameos-compare.html`
+  - final semantic matches: `38/38`
+  - final semantic accuracy: `100.0%`
+  - final exact matches: `0/38`
+  - final semantic diffs: `0`
+- PostHog status:
+  - fetched on May 6, 2026
+  - local checkout is now `105` commits behind `origin/master`
+  - local checkout was not fast-forwarded because it still has an unrelated modified file:
+    - `products/error_tracking/frontend/scenes/ErrorTrackingConfigurationScene/rate_limit/rateLimitConfigLogic.ts`
+  - preserved full-compare worktree remains `.cache/kea-typegen/tmp/posthog-corpus-NWYHVC`
+  - attempted `eventUsageLogic.ts` render and single-file write slices both produced reduced Go outputs against the full JS baseline, so their `0/1` semantic result is harness-invalid
+  - attempted `sceneLogic.tsx` render slice also produced a reduced Go output against the full JS baseline, so its `0/1` semantic result is harness-invalid
+
+### Current Reading
+
+- The sample benchmark is restored on the current TypeScript-Go runtime.
+- FrameOS is restored from the May 5 refreshed `33/38`, through the intermediate May 6 `35/38`, to `38/38` semantic matches on target commit `d0086d7447b997266ee54423862843b1d2b02641`.
+- FrameOS should now stay in the required rerun set for any meaningful parity/API change.
+- The PostHog task is now benchmark infrastructure:
+  - either make full-corpus runs finish on this host
+  - or build a sliced flow that compares freshly generated JS and Go outputs with the same reduced/full generation mode
 
 ## March 25, 2026 Run
 
@@ -2786,6 +2983,84 @@
   - either promote this restored one-file verification flow to a documented repeatable command for broader preserved PostHog slices
   - or move to the next preserved fresh-render semantic diff bucket instead of reopening the now-closed router/import/helper/compare lane
 
+## May 7, 2026 PostHog Selected-Render Gate
+
+### What Changed
+
+- Added a repeatable selected-file real-world benchmark path:
+  - `scripts/compare-real-world-typegen.js --file ...` now accepts source logic files or generated `*Type.ts` files, and `--file` is repeatable
+  - `--files-from <file>` reads selected paths from a JSON array or newline-delimited file
+  - selected runs render fresh JS and Go outputs before comparing, instead of comparing a reduced Go output against a full JS baseline
+- Added `scripts/render-js-typegen.js` for the original TypeScript implementation:
+  - it calls the repo's real TypeScript typegen internals (`visitProgram` / `printToFiles`)
+  - it defaults to two rounds so generated dependency `*LogicType.ts` surfaces exist before the selected output is compared
+  - it uses `dist` or `src` according to `KEA_TYPEGEN_JS_MODE`, matching the benchmark's JS entrypoint choice
+- Tightened semantic compare only where the TypeScript AST surface is equivalent:
+  - `Array<T>` now canonicalizes with `T[]`
+  - `ReadonlyArray<T>` now canonicalizes with `readonly T[]`
+  - parenthesized array element types now keep required array parentheses during canonicalization
+- Fixed the first real PostHog selected-slice parity gap:
+  - action payload return surfaces now specialize defaulted generic references such as `Node` and `QueryBasedInsightModel`
+  - this matches the original TypeScript generator's `DashboardType<QueryBasedInsightModel<Node<Record<string, any>>>>` payload/listener surface for `eventUsageLogicType.ts`
+  - source parameter text is still preserved separately; this default expansion is only for the action payload/return surface
+
+### Verification
+
+- TypeScript-Go runtime:
+  - `./.tsgo/node_modules/.bin/tsgo --version` => `Version 7.0.0-dev.20260506.1`
+- Main repo state during the runs:
+  - branch: `go`
+  - commit: `cedb51697f10f1b28be8ae56a03f0b471e93345a`
+- PostHog source state:
+  - the local `/home/ubuntu/Projects/posthog` checkout remains blocked by an unrelated modified file:
+    - `products/error_tracking/frontend/scenes/ErrorTrackingConfigurationScene/rate_limit/rateLimitConfigLogic.ts`
+  - that checkout is now `249` commits behind `origin/master` after fetch
+  - to avoid touching the dirty checkout, the benchmark used a clean detached worktree at:
+    - `.cache/kea-typegen/repos/posthog-origin-master`
+  - target commit: `34f501e33d9eb1e675d436436b8aed456d4a2916`
+- Timed PostHog selected slice:
+  - command:
+    - `TIMEFORMAT='real %3R'; time timeout 900s flox activate -c 'node ./scripts/compare-real-world-typegen.js --target posthog --repo .cache/kea-typegen/repos/posthog-origin-master --js-mode dist --file frontend/src/lib/utils/eventUsageLogicType.ts --json --keep-worktrees'`
+  - wall time: `114.715s`
+  - worktree root: `.cache/kea-typegen/tmp/posthog-corpus-W6x6Dy`
+  - baseline manifest: `.cache/kea-typegen/tmp/posthog-corpus-W6x6Dy/posthog-baseline.json`
+  - HTML report: `.cache/kea-typegen/tmp/posthog-corpus-W6x6Dy/posthog-compare.html`
+  - comparable files: `1`
+  - semantic matches: `1/1`
+  - exact matches: `0/1`
+  - semantic diffs: `0`
+- FrameOS regression gate:
+  - command:
+    - `timeout 1200s flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --js-mode dist --json --keep-worktrees'`
+  - target commit: `d0086d7447b997266ee54423862843b1d2b02641`
+  - worktree root: `.cache/kea-typegen/tmp/frameos-corpus-JfsN0m`
+  - semantic matches: `38/38`
+  - exact matches: `0/38`
+  - semantic diffs: `0`
+- Sample benchmark:
+  - command:
+    - `flox activate -c './bin/benchmark -c write -n 1 -w 0 --skip-prepare'`
+  - TypeScript mean: `9607.5 ms`
+  - Go mean: `4861.2 ms`
+  - Go speedup: `1.98x`
+  - semantic matches: `20/20`
+  - exact matches: `0/20`
+  - semantic diffs: `0`
+- Tests:
+  - `node --check scripts/benchmark-sample-typegen.js scripts/compare-generated-typegen.js scripts/compare-real-world-typegen.js scripts/render-js-typegen.js`
+  - `node --experimental-vm-modules node_modules/.bin/jest --runTestsByPath scripts/benchmark-sample-typegen.test.js --runInBand --config '{"testEnvironment":"node","roots":["<rootDir>/scripts"],"testPathIgnorePatterns":["/node_modules/","<rootDir>/.cache"],"modulePathIgnorePatterns":["<rootDir>/.cache"]}'`
+  - `flox activate -c 'cd rewrite && go test ./internal/keainspect -count=1'`
+  - `flox activate -c 'cd rewrite && go test ./internal/tsgoapi ./cmd/kea-typegen-go -count=1'`
+  - all passed
+
+### Current Reading
+
+- `eventUsageLogicType.ts` is now a valid PostHog inner-loop gate because both sides are freshly rendered in selected mode before comparison.
+- The remaining PostHog work is no longer "make any slice valid"; it is:
+  - expand the selected gate to more representative files (`sceneLogic.tsx` next)
+  - run a timeout-bounded full PostHog compare from the clean `origin/master` worktree when performance work is the focus
+  - retire the default-generic payload source recovery once TypeScript-Go exposes the needed checker-backed type instantiation directly
+
 ## Guardrails
 
 - Do not optimize for the current normalized compare score alone.
@@ -2809,6 +3084,10 @@
   - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target frameos --json'`
 - PostHog real-world compare:
   - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target posthog --json'`
+- PostHog selected-file compare against a clean updated worktree:
+  - `flox activate -c 'node ./scripts/compare-real-world-typegen.js --target posthog --repo .cache/kea-typegen/repos/posthog-origin-master --js-mode dist --file frontend/src/lib/utils/eventUsageLogicType.ts --json --keep-worktrees'`
+- Compare selected generated files from preserved worktrees:
+  - `node ./scripts/compare-generated-typegen.js --ts-dir <posthog-js-root> --go-dir <posthog-go-root> --file frontend/src/lib/utils/eventUsageLogicType.ts --json`
 - Probe hidden `tsgo` methods:
   - `flox activate -c 'cd rewrite && go run ./cmd/kea-typegen-go probe-api --json'`
 - Render one file through the inspect/build/emit path without the write-round pipeline:

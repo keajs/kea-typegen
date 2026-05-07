@@ -11,7 +11,8 @@ function printHelp() {
 Options:
       --ts-dir <dir>       Directory containing the TypeScript-generated files
       --go-dir <dir>       Directory containing the Go-generated files
-      --file <path>        Compare one generated file relative to both roots
+      --file <path>        Compare a generated file relative to both roots; repeatable
+      --files-from <file>  Read generated file paths from a JSON array or newline-delimited file
       --top <count>        Number of notable diffs to print (default: 20)
       --json               Print the full summary as JSON
       --html-out <file>    Write a self-contained HTML compare report
@@ -23,7 +24,8 @@ function parseArgs(argv) {
     const options = {
         tsDir: '',
         goDir: '',
-        file: '',
+        files: [],
+        filesFrom: '',
         top: 20,
         json: false,
         htmlOut: '',
@@ -36,7 +38,9 @@ function parseArgs(argv) {
         } else if (arg === '--go-dir' && argv[i + 1]) {
             options.goDir = path.resolve(argv[++i])
         } else if (arg === '--file' && argv[i + 1]) {
-            options.file = String(argv[++i]).replace(/\\/g, '/')
+            options.files.push(String(argv[++i]).replace(/\\/g, '/'))
+        } else if (arg === '--files-from' && argv[i + 1]) {
+            options.filesFrom = path.resolve(argv[++i])
         } else if (arg === '--top' && argv[i + 1]) {
             options.top = Number(argv[++i])
         } else if (arg === '--json') {
@@ -60,8 +64,31 @@ function parseArgs(argv) {
     if (!Number.isInteger(options.top) || options.top < 0) {
         throw new Error(`Invalid --top value: ${options.top}`)
     }
+    if (options.filesFrom) {
+        options.files.push(...readSelectedFiles(options.filesFrom))
+    }
+    options.files = [...new Set(options.files.map((file) => file.replace(/\\/g, '/')))].sort()
 
     return options
+}
+
+function readSelectedFiles(filePath) {
+    const text = fs.readFileSync(filePath, 'utf8').trim()
+    if (!text) {
+        return []
+    }
+    if (text.startsWith('[')) {
+        const parsed = JSON.parse(text)
+        if (!Array.isArray(parsed)) {
+            throw new Error(`Expected ${filePath} to contain a JSON array`)
+        }
+        return parsed.map((file) => String(file).replace(/\\/g, '/'))
+    }
+    return text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'))
+        .map((file) => file.replace(/\\/g, '/'))
 }
 
 function formatPercent(value) {
@@ -77,12 +104,13 @@ function exactComparableText(text) {
     return normalized
 }
 
-function buildComparisonReport(tsDir, goDir, selectedFile = '') {
-    const summary = compareOutputs(tsDir, goDir, selectedFile ? { files: [selectedFile] } : {})
+function buildComparisonReport(tsDir, goDir, selectedFiles = []) {
+    const fileSet = selectedFiles.length > 0 ? new Set(selectedFiles) : null
+    const summary = compareOutputs(tsDir, goDir, fileSet ? { files: selectedFiles } : {})
     const tsFiles = new Map(listGeneratedTypeFiles(tsDir).map((file) => [file, path.join(tsDir, file)]))
     const goFiles = new Map(listGeneratedTypeFiles(goDir).map((file) => [file, path.join(goDir, file)]))
     const allFiles = [...new Set([...tsFiles.keys(), ...goFiles.keys()])]
-        .filter((file) => !selectedFile || file === selectedFile)
+        .filter((file) => !fileSet || fileSet.has(file))
         .sort()
 
     const files = allFiles.map((file) => {
@@ -143,7 +171,8 @@ function buildComparisonReport(tsDir, goDir, selectedFile = '') {
         generatedAt: new Date().toISOString(),
         tsDir,
         goDir,
-        file: selectedFile || null,
+        file: selectedFiles.length === 1 ? selectedFiles[0] : null,
+        files: selectedFiles.length > 0 ? selectedFiles : null,
         summary: { ...summary, statusCounts },
         files,
     }
@@ -960,11 +989,11 @@ function generateHtml(report) {
 
 function main() {
     const options = parseArgs(process.argv.slice(2))
-    const compareOptions = options.file ? { files: [options.file] } : {}
+    const compareOptions = options.files.length > 0 ? { files: options.files } : {}
     const summary = compareOutputs(options.tsDir, options.goDir, compareOptions)
 
     if (options.htmlOut) {
-        const report = buildComparisonReport(options.tsDir, options.goDir, options.file)
+        const report = buildComparisonReport(options.tsDir, options.goDir, options.files)
         fs.mkdirSync(path.dirname(options.htmlOut), { recursive: true })
         fs.writeFileSync(options.htmlOut, generateHtml(report))
     }
@@ -979,8 +1008,10 @@ function main() {
 
     console.log(`TS dir: ${options.tsDir}`)
     console.log(`Go dir: ${options.goDir}`)
-    if (options.file) {
-        console.log(`File: ${options.file}`)
+    if (options.files.length === 1) {
+        console.log(`File: ${options.files[0]}`)
+    } else if (options.files.length > 1) {
+        console.log(`Files: ${options.files.length}`)
     }
     console.log(`Total files: ${summary.totalFiles}`)
     console.log(`Comparable files: ${summary.comparableFiles}`)

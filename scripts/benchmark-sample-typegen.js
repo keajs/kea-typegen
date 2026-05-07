@@ -414,6 +414,9 @@ function importedNameMatchesImportType(sourceFile, localName, importPath) {
 }
 
 function needsParensForArray(elementType) {
+    if (ts.isParenthesizedTypeNode(elementType)) {
+        return needsParensForArray(elementType.type)
+    }
     return (
         ts.isUnionTypeNode(elementType) ||
         ts.isIntersectionTypeNode(elementType) ||
@@ -421,6 +424,11 @@ function needsParensForArray(elementType) {
         ts.isConstructorTypeNode(elementType) ||
         ts.isConditionalTypeNode(elementType)
     )
+}
+
+function canonicalArrayType(elementType, sourceFile) {
+    const element = canonicalType(elementType, sourceFile)
+    return `${needsParensForArray(elementType) ? `(${element})` : element}[]`
 }
 
 function canonicalParameter(parameter, sourceFile) {
@@ -463,8 +471,7 @@ function canonicalType(node, sourceFile) {
             .join(' & ')
     }
     if (ts.isArrayTypeNode(node)) {
-        const element = canonicalType(node.elementType, sourceFile)
-        return `${needsParensForArray(node.elementType) ? `(${element})` : element}[]`
+        return canonicalArrayType(node.elementType, sourceFile)
     }
     if (ts.isTupleTypeNode(node)) {
         return `[${node.elements.map((item) => canonicalTupleElement(item, sourceFile)).join(', ')}]`
@@ -479,7 +486,16 @@ function canonicalType(node, sourceFile) {
         return printNode(sourceFile, node.literal)
     }
     if (ts.isTypeReferenceNode(node)) {
-        return `${canonicalEntityName(node.typeName)}${canonicalTypeArguments(node.typeArguments, sourceFile)}`
+        const typeName = canonicalEntityName(node.typeName)
+        if (node.typeArguments && node.typeArguments.length === 1) {
+            if (typeName === 'Array') {
+                return canonicalArrayType(node.typeArguments[0], sourceFile)
+            }
+            if (typeName === 'ReadonlyArray') {
+                return `readonly ${canonicalArrayType(node.typeArguments[0], sourceFile)}`
+            }
+        }
+        return `${typeName}${canonicalTypeArguments(node.typeArguments, sourceFile)}`
     }
     if (ts.isExpressionWithTypeArguments(node)) {
         return `${printNode(sourceFile, node.expression)}${canonicalTypeArguments(node.typeArguments, sourceFile)}`

@@ -428,6 +428,8 @@ func buildParsedLogic(report *Report, source string, sourceLogic SourceLogic, lo
 
 	importsStart := time.Now()
 	parsed.Imports = mergeTypeImports(parsed.Imports, collectTypeImports(source, report.File, parsed, state))
+	parsed.Imports = preferSourceTypeImportsForUsedReferences(source, collectUsedTypeTexts(parsed), parsed.Imports)
+	parsed.Imports = dropRedundantBarePackageExplicitImportTypeImports(parsed.Imports, collectUsedTypeTexts(parsed))
 	maybeLogBuildTiming(filepath.Base(report.File), logicReport.Name, "imports", importsStart)
 	return parsed, nil
 }
@@ -691,7 +693,7 @@ func parseSingleActionWithSource(
 			}
 			if member != nil {
 				if memberParameters, _, ok := splitFunctionType(functionType); ok && !sourceActionParametersArePreferred(parameters) {
-					parameters = memberParameters
+					parameters = mergeActionParametersPreservingExplicitSource(parameters, memberParameters)
 				}
 			}
 			functionType = parameters + " => " + payloadType
@@ -700,8 +702,8 @@ func parseSingleActionWithSource(
 	}
 
 	payloadType = normalizeActionPayloadType(payloadType)
-	if inputKind == "object" {
-		payloadType = stripNullableActionPayloadProperties(payloadType)
+	if expanded := specializeDefaultedGenericReferencesInTypeText(source, file, payloadType, state); expanded != "" {
+		payloadType = expanded
 	}
 	if !sourceParametersAvailable {
 		functionType = refineActionFunctionType(functionType, payloadType)
@@ -1090,6 +1092,48 @@ func sourceActionParametersArePreferred(parameters string) bool {
 		}
 	}
 	return true
+}
+
+func mergeActionParametersPreservingExplicitSource(sourceParameters, memberParameters string) string {
+	sourceParts, sourceOK := splitFunctionParameterParts(sourceParameters)
+	memberParts, memberOK := splitFunctionParameterParts(memberParameters)
+	if !sourceOK || !memberOK || len(sourceParts) != len(memberParts) {
+		return memberParameters
+	}
+
+	merged := make([]string, 0, len(sourceParts))
+	changed := false
+	for index, sourcePart := range sourceParts {
+		sourcePart = normalizeParameterDeclarationText(sourcePart)
+		memberPart := normalizeParameterDeclarationText(memberParts[index])
+		if sourcePart == "" {
+			merged = append(merged, memberPart)
+			if memberPart != "" {
+				changed = true
+			}
+			continue
+		}
+		if parameterHasExplicitType(sourcePart) {
+			merged = append(merged, sourcePart)
+			if sourcePart != memberPart {
+				changed = true
+			}
+			continue
+		}
+		merged = append(merged, memberPart)
+		if sourcePart != memberPart {
+			changed = true
+		}
+	}
+	if !changed {
+		return sourceParameters
+	}
+	return "(" + strings.Join(merged, ", ") + ")"
+}
+
+func parameterHasExplicitType(part string) bool {
+	_, typeText, ok := splitTopLevelPropertyRaw(strings.TrimSpace(part))
+	return ok && strings.TrimSpace(typeText) != ""
 }
 
 func parameterTypeNeedsSourceRecovery(typeText string) bool {
@@ -1973,6 +2017,10 @@ func preferredMemberFunctionTypeText(member MemberReport) string {
 	return normalizeSourceTypeText(strings.TrimSpace(preferredMemberTypeText(member)))
 }
 
+func preferredMemberFunctionTypeTextPreservingOptionalUndefined(member MemberReport) string {
+	return normalizeSourceTypeTextWithOptions(strings.TrimSpace(preferredMemberTypeText(member)), false)
+}
+
 func preferredMemberReturnTypeText(member MemberReport) string {
 	text := preferredPrintedOrRawTypeText(member.PrintedReturnTypeNode, member.ReturnTypeString)
 	if text == "" {
@@ -2043,6 +2091,9 @@ func preferDirectProjectorReturnType(memberReturn, directReturn, contextualRetur
 	case parityModeReportedStructuredTypeShouldStayLoose(directReturn, contextualReturn):
 		return true
 	case memberReturn != "" && memberReturn == directReturn:
+		if isAnyLikeType(contextualReturn) || isLooselyTypedType(contextualReturn) {
+			return true
+		}
 		if booleanLikeSelectorType(contextualReturn) && !booleanLikeSelectorType(directReturn) {
 			return true
 		}
@@ -2066,10 +2117,15 @@ func preferredPrintedOrRawTypeText(printed, raw string) string {
 }
 
 func printedTypeAddsOnlyQualification(printed, raw string) bool {
-	printed = normalizeSourceTypeTextWithOptions(strings.TrimSpace(printed), false)
-	raw = normalizeSourceTypeTextWithOptions(strings.TrimSpace(raw), false)
-	if printed == "" || raw == "" || printed == raw {
+	originalPrinted := strings.TrimSpace(printed)
+	originalRaw := strings.TrimSpace(raw)
+	printed = normalizeSourceTypeTextWithOptions(originalPrinted, false)
+	raw = normalizeSourceTypeTextWithOptions(originalRaw, false)
+	if printed == "" || raw == "" {
 		return false
+	}
+	if originalPrinted != originalRaw && printed == raw {
+		return true
 	}
 	return qualificationStrippedTypeText(printed) == raw
 }
@@ -4939,15 +4995,17 @@ func parseInternalSelectorTypesWithSource(
 		if explicitAnyFunctionType := parityModeExplicitAnyInputHelperFunctionType(selectorExpression, functionType); explicitAnyFunctionType != "" {
 			functionType = explicitAnyFunctionType
 		}
+		if hasMember {
+			if qualifiedFunctionType := internalHelperFunctionTypeWithSelectorInputPackageImportQualifiers(member, functionType); qualifiedFunctionType != "" {
+				functionType = qualifiedFunctionType
+			}
+		}
 		parameters, _, ok := splitFunctionType(functionType)
 		if !ok {
 			continue
 		}
 		params, ok := parseFunctionParameters(parameters)
 		if !ok || len(params) == 0 {
-			continue
-		}
-		if parityModeObjectFromEntriesBooleanMapHelperShouldBeOmitted(selectorExpression, functionType) {
 			continue
 		}
 		if field, ok := findParsedField(logic.Selectors, name); ok && selectorPublicTypeSuppressesInternalHelper(field.Type) {
@@ -7101,36 +7159,6 @@ func selectorProjectorReturnLooksBoolean(expression string) bool {
 	return sourceExpressionLooksBoolean(body)
 }
 
-func parityModeObjectFromEntriesBooleanMapHelperShouldBeOmitted(expression, functionType string) bool {
-	if !parityModeEnabled() {
-		return false
-	}
-	body := selectorProjectorReturnBody(expression)
-	if body == "" || !strings.Contains(body, "Object.fromEntries(") {
-		return false
-	}
-
-	parameters, returnType, ok := splitFunctionType(functionType)
-	if !ok {
-		return false
-	}
-	returnType = normalizeInferredTypeText(strings.TrimSpace(returnType))
-	if returnType != "Record<string, boolean>" {
-		return false
-	}
-
-	params, ok := parseFunctionParameters(parameters)
-	if !ok || len(params) < 3 {
-		return false
-	}
-	for _, param := range params {
-		if strings.Contains(normalizeInferredTypeText(strings.TrimSpace(param.Type)), "DeepPartialMap<") {
-			return true
-		}
-	}
-	return false
-}
-
 func sourceExpressionLooksBoolean(expression string) bool {
 	text := strings.TrimSpace(unwrapWrappedExpression(expression))
 	if text == "" {
@@ -8499,6 +8527,131 @@ func parityModeExplicitAnyInputHelperFunctionType(expression, current string) st
 	return "(" + strings.Join(rebuilt, ", ") + ") => " + normalizeSelectorOptionalUndefinedTypeText(strings.TrimSpace(returnType))
 }
 
+func internalHelperFunctionTypeWithSelectorInputPackageImportQualifiers(member MemberReport, current string) string {
+	tupleText := strings.TrimSpace(member.SelectorInputPrintedReturnTypeNode)
+	if tupleText == "" || !strings.Contains(tupleText, "import(") {
+		return ""
+	}
+	elementTypes := selectorInputTupleElementTypesPreservingPackageImports(tupleText)
+	if len(elementTypes) == 0 {
+		return ""
+	}
+
+	parameters, returnType, ok := splitFunctionType(current)
+	if !ok {
+		return ""
+	}
+	params, ok := parseFunctionParameters(parameters)
+	if !ok || len(params) != len(elementTypes) {
+		return ""
+	}
+
+	rebuilt := make([]string, 0, len(params))
+	changed := false
+	for index, param := range params {
+		rawName, _, ok := splitTopLevelPropertyRaw(param.Text)
+		if !ok {
+			return ""
+		}
+		name := strings.TrimSpace(rawName)
+		if name == "" {
+			name = opaqueInternalHelperParameterName(index)
+		}
+
+		paramType := normalizeSourceTypeTextWithOptions(strings.TrimSpace(param.Type), false)
+		candidate := normalizePackageImportQualifiedTypeText(elementTypes[index])
+		if candidate != "" &&
+			strings.Contains(candidate, "import(") &&
+			normalizeSourceTypeTextWithOptions(candidate, false) == paramType {
+			paramType = candidate
+			changed = true
+		}
+		if paramType == "" {
+			return ""
+		}
+		rebuilt = append(rebuilt, fmt.Sprintf("%s: %s", name, paramType))
+	}
+	if !changed {
+		return ""
+	}
+	return "(" + strings.Join(rebuilt, ", ") + ") => " + normalizeSelectorOptionalUndefinedTypeText(strings.TrimSpace(returnType))
+}
+
+func selectorInputTupleElementTypesPreservingPackageImports(text string) []string {
+	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	if text == "" {
+		return nil
+	}
+	arrayStart, arrayEnd, ok, err := FindInspectableArrayLiteral(text, 0, len(text))
+	if err != nil || !ok || arrayEnd <= arrayStart {
+		return nil
+	}
+	parts, err := splitTopLevelList(text[arrayStart+1 : arrayEnd])
+	if err != nil || len(parts) == 0 {
+		return nil
+	}
+	elementTypes := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil
+		}
+		if _, returnType, ok := splitFunctionType(part); ok {
+			elementTypes = append(elementTypes, normalizePackageImportQualifiedTypeText(returnType))
+			continue
+		}
+		elementTypes = append(elementTypes, normalizePackageImportQualifiedTypeText(part))
+	}
+	return elementTypes
+}
+
+func normalizePackageImportQualifiedTypeText(typeText string) string {
+	text := strings.TrimSpace(typeText)
+	if text == "" {
+		return ""
+	}
+	text = strings.Join(strings.Fields(text), " ")
+	text = stripRelativeImportTypeQualifiers(text)
+	text = strings.ReplaceAll(text, "( ", "(")
+	text = strings.ReplaceAll(text, " )", ")")
+	text = strings.ReplaceAll(text, ",)", ")")
+	return text
+}
+
+func stripRelativeImportTypeQualifiers(typeText string) string {
+	matches := importTypeReferencePattern.FindAllStringSubmatchIndex(typeText, -1)
+	if len(matches) == 0 {
+		return typeText
+	}
+
+	var builder strings.Builder
+	last := 0
+	changed := false
+	for _, match := range matches {
+		moduleStart, moduleEnd := match[2], match[3]
+		if moduleStart == -1 || moduleEnd == -1 {
+			moduleStart, moduleEnd = match[4], match[5]
+		}
+		nameStart, nameEnd := match[6], match[7]
+		if moduleStart == -1 || moduleEnd == -1 || nameStart == -1 || nameEnd == -1 {
+			continue
+		}
+		modulePath := strings.TrimSpace(typeText[moduleStart:moduleEnd])
+		if !strings.HasPrefix(modulePath, ".") && !strings.HasPrefix(modulePath, "/") {
+			continue
+		}
+		builder.WriteString(typeText[last:match[0]])
+		builder.WriteString(typeText[nameStart:nameEnd])
+		last = match[1]
+		changed = true
+	}
+	if !changed {
+		return typeText
+	}
+	builder.WriteString(typeText[last:])
+	return builder.String()
+}
+
 func parityModeStructuredOpaqueRecoveredHelperFunctionType(logic ParsedLogic, source, file, expression, current string, state *buildState) string {
 	if !parityModeEnabled() || selectorSourceHasExplicitAnyInputState(expression) || strings.TrimSpace(expression) == "" {
 		return ""
@@ -9515,6 +9668,107 @@ func expandSourceParameterHintTypeText(source, file, typeText string, state *bui
 		return typeText
 	}
 	return ""
+}
+
+func specializeDefaultedGenericReferencesInTypeText(source, file, typeText string, state *buildState) string {
+	text := normalizeSourceTypeText(strings.TrimSpace(typeText))
+	if text == "" {
+		return ""
+	}
+
+	cache := map[string]string{}
+	var builder strings.Builder
+	changed := false
+	for index := 0; index < len(text); {
+		switch text[index] {
+		case '\'':
+			end, err := skipQuoted(text, index, '\'')
+			if err != nil {
+				return ""
+			}
+			builder.WriteString(text[index : end+1])
+			index = end + 1
+			continue
+		case '"':
+			end, err := skipQuoted(text, index, '"')
+			if err != nil {
+				return ""
+			}
+			builder.WriteString(text[index : end+1])
+			index = end + 1
+			continue
+		case '`':
+			end, err := skipTemplate(text, index)
+			if err != nil {
+				return ""
+			}
+			builder.WriteString(text[index : end+1])
+			index = end + 1
+			continue
+		}
+
+		if !isIdentifierStart(text[index]) {
+			builder.WriteByte(text[index])
+			index++
+			continue
+		}
+
+		start := index
+		index++
+		for index < len(text) && isIdentifierPart(text[index]) {
+			index++
+		}
+		identifier := text[start:index]
+		previous := previousNonWhitespaceByte(text, start)
+		next := nextNonWhitespaceByte(text, index)
+		if previous == '.' || next == '.' || next == '<' || next == ':' || (next == '?' && nextNonWhitespaceByte(text, index+1) == ':') || !shouldImportIdentifier(identifier) {
+			builder.WriteString(identifier)
+			continue
+		}
+		specialized := defaultedGenericInstantiationForIdentifier(source, file, identifier, state, cache)
+		if specialized == "" || specialized == identifier {
+			builder.WriteString(identifier)
+			continue
+		}
+		builder.WriteString(specialized)
+		changed = true
+	}
+	if !changed {
+		return ""
+	}
+	return normalizeSourceTypeText(builder.String())
+}
+
+func defaultedGenericInstantiationForIdentifier(source, file, identifier string, state *buildState, cache map[string]string) string {
+	if cached, ok := cache[identifier]; ok {
+		return cached
+	}
+	cache[identifier] = ""
+	if specialized := instantiatedTypeTextWithDefaultArguments(source, identifier); specialized != "" {
+		cache[identifier] = specialized
+		return specialized
+	}
+	if file == "" {
+		return ""
+	}
+	candidate, ok := parseNamedValueImports(source)[identifier]
+	if !ok || candidate.ImportedName == "" || candidate.ImportedName == "default" {
+		return ""
+	}
+	resolvedFile, ok := resolveImportFile(file, candidate.Path, state)
+	if !ok {
+		return ""
+	}
+	content, err := os.ReadFile(resolvedFile)
+	if err != nil {
+		return ""
+	}
+	specialized := instantiatedTypeTextWithDefaultArguments(string(content), candidate.ImportedName)
+	if specialized == "" {
+		return ""
+	}
+	cache[identifier] = specialized
+	return specialized
 }
 
 func expandIndexedAccessesInTypeText(source, file, typeText string, state *buildState) string {
@@ -15002,7 +15256,7 @@ func parseSharedListenersWithSource(
 		if member != nil {
 			if payload := sharedListenerPayloadTypeFromMember(*member); payload != "" && !isAnyLikeType(payload) {
 				payloadType = payload
-				actionType = normalizeSourceTypeText(fmt.Sprintf("{ type: string; payload: %s }", payload))
+				actionType = normalizeSourceTypeTextWithOptions(fmt.Sprintf("{ type: string; payload: %s }", payload), false)
 			} else if !allowGenericFallback {
 				return
 			}
@@ -15088,11 +15342,11 @@ func collectReferencedSharedListenerNames(source string, listenersProperties []S
 }
 
 func sharedListenerPayloadTypeFromMember(member MemberReport) string {
-	parameters, _, ok := splitFunctionType(preferredMemberFunctionTypeText(member))
+	parameters, _, ok := splitFunctionType(preferredMemberFunctionTypeTextPreservingOptionalUndefined(member))
 	if !ok {
 		return ""
 	}
-	return normalizeInferredTypeText(firstParameterType(parameters))
+	return normalizeSourceTypeTextWithOptions(firstParameterType(parameters), false)
 }
 
 func parseInternalReducerActions(source, file, inputKind string, reducersProperties, listenersProperties []SourceProperty, state *buildState) []ParsedAction {
@@ -19732,41 +19986,6 @@ func normalizeActionPayloadType(typeText string) string {
 	return text
 }
 
-func stripNullableActionPayloadProperties(typeText string) string {
-	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
-	if !strings.HasPrefix(text, "{") || !strings.HasSuffix(text, "}") {
-		return text
-	}
-
-	body := strings.TrimSpace(text[1 : len(text)-1])
-	if body == "" {
-		return text
-	}
-
-	entries, err := splitTopLevelTypeMembers(body)
-	if err != nil {
-		return text
-	}
-
-	parts := make([]string, 0, len(entries))
-	changed := false
-	for _, entry := range entries {
-		rawName, value, ok := splitTopLevelPropertyRaw(entry)
-		if !ok {
-			return text
-		}
-		normalized := normalizeInternalHelperParameterType(value)
-		if normalized != strings.TrimSpace(value) {
-			changed = true
-		}
-		parts = append(parts, fmt.Sprintf("%s: %s", rawName, normalized))
-	}
-	if !changed {
-		return text
-	}
-	return "{ " + strings.Join(parts, "; ") + "; }"
-}
-
 func normalizeInternalHelperParameterType(typeText string) string {
 	text := normalizeInferredTypeText(strings.TrimSpace(typeText))
 	if text == "" {
@@ -21003,6 +21222,10 @@ func mergeTypeImports(groups ...[]TypeImport) []TypeImport {
 		}
 	}
 
+	return typeImportsFromGroupedNames(grouped)
+}
+
+func typeImportsFromGroupedNames(grouped map[string]map[string]bool) []TypeImport {
 	paths := make([]string, 0, len(grouped))
 	for path := range grouped {
 		paths = append(paths, path)
@@ -21029,6 +21252,139 @@ func collectTypeImports(source, file string, logic ParsedLogic, state *buildStat
 		state,
 		existingImportReferenceNames(logic.Imports),
 	)
+}
+
+func preferSourceTypeImportsForUsedReferences(source string, typeTexts []string, imports []TypeImport) []TypeImport {
+	if source == "" || len(imports) == 0 || len(typeTexts) == 0 {
+		return imports
+	}
+
+	directImports := map[string]importCandidate{}
+	for alias, candidate := range parseNamedImports(source) {
+		directImports[alias] = candidate
+	}
+	for alias, candidate := range parseDefaultImports(source) {
+		directImports[alias] = candidate
+	}
+	for alias, candidate := range parseNamespaceImports(source) {
+		directImports[alias] = candidate
+	}
+	if len(directImports) == 0 {
+		return imports
+	}
+
+	used := usedImportReferenceNames(typeTexts)
+	if len(used) == 0 {
+		return imports
+	}
+
+	preferredByReference := map[string]importCandidate{}
+	for reference, candidate := range directImports {
+		if !used[reference] || candidate.Path == "" || candidate.Name == "" || parityModeShouldOmitCollectedImportPath(candidate.Path) {
+			continue
+		}
+		preferredByReference[reference] = candidate
+	}
+	if len(preferredByReference) == 0 {
+		return imports
+	}
+
+	grouped := map[string]map[string]bool{}
+	add := func(path, name string) {
+		if path == "" || name == "" {
+			return
+		}
+		if grouped[path] == nil {
+			grouped[path] = map[string]bool{}
+		}
+		grouped[path][name] = true
+	}
+
+	for _, item := range imports {
+		for _, name := range item.Names {
+			reference := importReferenceName(name)
+			if preferred, ok := preferredByReference[reference]; ok &&
+				(preferred.Path != item.Path || preferred.Name != name) {
+				continue
+			}
+			add(item.Path, name)
+		}
+	}
+	for _, preferred := range preferredByReference {
+		add(preferred.Path, preferred.Name)
+	}
+
+	return mergeTypeImports(typeImportsFromGroupedNames(grouped))
+}
+
+func dropRedundantBarePackageExplicitImportTypeImports(imports []TypeImport, typeTexts []string) []TypeImport {
+	if len(imports) == 0 || len(typeTexts) == 0 {
+		return imports
+	}
+
+	explicitBareImports := collectExplicitBarePackageImportTypeReferences(typeTexts)
+	if len(explicitBareImports) == 0 {
+		return imports
+	}
+
+	pathsByReference := map[string]map[string]bool{}
+	for _, item := range imports {
+		for _, name := range item.Names {
+			reference := importReferenceName(name)
+			if reference == "" {
+				continue
+			}
+			if pathsByReference[reference] == nil {
+				pathsByReference[reference] = map[string]bool{}
+			}
+			pathsByReference[reference][item.Path] = true
+		}
+	}
+
+	grouped := map[string]map[string]bool{}
+	for _, item := range imports {
+		for _, name := range item.Names {
+			reference := importReferenceName(name)
+			if explicitBareImports[item.Path][reference] && importReferenceHasAnotherPath(pathsByReference[reference], item.Path) {
+				continue
+			}
+			if grouped[item.Path] == nil {
+				grouped[item.Path] = map[string]bool{}
+			}
+			grouped[item.Path][name] = true
+		}
+	}
+	return typeImportsFromGroupedNames(grouped)
+}
+
+func collectExplicitBarePackageImportTypeReferences(typeTexts []string) map[string]map[string]bool {
+	grouped := map[string]map[string]bool{}
+	for _, typeText := range typeTexts {
+		for _, match := range importTypeReferencePattern.FindAllStringSubmatch(typeText, -1) {
+			if len(match) != 4 {
+				continue
+			}
+			importPath := strings.TrimSpace(firstNonEmpty(match[1], match[2]))
+			name := strings.TrimSpace(match[3])
+			if importPath == "" || name == "" || strings.HasPrefix(importPath, ".") || strings.HasPrefix(importPath, "/") {
+				continue
+			}
+			if grouped[importPath] == nil {
+				grouped[importPath] = map[string]bool{}
+			}
+			grouped[importPath][name] = true
+		}
+	}
+	return grouped
+}
+
+func importReferenceHasAnotherPath(paths map[string]bool, currentPath string) bool {
+	for path := range paths {
+		if path != currentPath {
+			return true
+		}
+	}
+	return false
 }
 
 func collectTypeImportsForTypeTexts(source, file string, typeTexts []string, state *buildState, coveredIdentifiers map[string]bool) []TypeImport {

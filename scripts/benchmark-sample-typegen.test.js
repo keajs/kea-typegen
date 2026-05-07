@@ -132,4 +132,40 @@ describe('compareOutputs', () => {
         expect(summary.semanticMatches).toBe(1)
         expect(summary.semanticDiffs).toEqual([])
     })
+
+    test('treats array shorthand and Array type references as semantically equal', () => {
+        const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-compare-'))
+        const tsDir = path.join(tempRoot, 'ts')
+        const goDir = path.join(tempRoot, 'go')
+
+        writeFile(
+            tsDir,
+            'arrayLogicType.ts',
+            [
+                'export interface ArrayLogicType {',
+                '    action: (items: { id: string; value?: number }[]) => { payload: { items: { id: string; value?: number }[] } }',
+                '    readonlyValues: readonly (string | number)[]',
+                '}',
+                '',
+            ].join('\n'),
+        )
+        writeFile(
+            goDir,
+            'arrayLogicType.ts',
+            [
+                'export interface ArrayLogicType {',
+                '    action: (items: Array<{ value?: number; id: string }>) => { payload: { items: Array<{ value?: number; id: string }> } }',
+                '    readonlyValues: ReadonlyArray<string | number>',
+                '}',
+                '',
+            ].join('\n'),
+        )
+
+        const summary = compareOutputs(tsDir, goDir)
+
+        expect(summary.totalFiles).toBe(1)
+        expect(summary.exactMatches).toBe(0)
+        expect(summary.semanticMatches).toBe(1)
+        expect(summary.semanticDiffs).toEqual([])
+    })
 })

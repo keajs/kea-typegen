@@ -88,6 +88,57 @@ func TestCollectTypeImportsForTypeTextsRecoversMissingPackageImportsFromSource(t
 	}
 }
 
+func TestPreferSourceTypeImportsForUsedReferencesPrefersDirectImportOverReexport(t *testing.T) {
+	source := strings.Join([]string{
+		"import type { DeployPlanResponse } from './frameDeployUtils'",
+		"",
+		"export type { DeployPlanResponse } from './frameDeployUtils'",
+		"export interface FrameLogicProps {",
+		"    frameId: number",
+		"}",
+	}, "\n")
+
+	imports := preferSourceTypeImportsForUsedReferences(
+		source,
+		[]string{"FrameLogicProps", "DeployPlanResponse | null"},
+		[]TypeImport{{
+			Path:  "./frameLogic",
+			Names: []string{"DeployPlanResponse", "FrameLogicProps"},
+		}},
+	)
+
+	if !hasImport(imports, "./frameDeployUtils", "DeployPlanResponse") {
+		t.Fatalf("expected direct DeployPlanResponse import from source, got %+v", imports)
+	}
+	if hasImport(imports, "./frameLogic", "DeployPlanResponse") {
+		t.Fatalf("expected re-exported DeployPlanResponse import to be removed, got %+v", imports)
+	}
+	if !hasImport(imports, "./frameLogic", "FrameLogicProps") {
+		t.Fatalf("expected local FrameLogicProps import to remain, got %+v", imports)
+	}
+}
+
+func TestDropRedundantBarePackageExplicitImportTypeImports(t *testing.T) {
+	imports := dropRedundantBarePackageExplicitImportTypeImports(
+		[]TypeImport{
+			{Path: "kea-forms", Names: []string{"DeepPartialMap", "ValidationErrorType"}},
+			{Path: "kea-forms/lib/index", Names: []string{"DeepPartialMap", "ValidationErrorType"}},
+		},
+		[]string{
+			`(frameFormErrors: import("kea-forms").DeepPartialMap<FrameType, import("kea-forms").ValidationErrorType>) => Record<string, boolean>`,
+			`DeepPartialMap<FrameType, ValidationErrorType>`,
+		},
+	)
+
+	if hasImport(imports, "kea-forms", "DeepPartialMap") || hasImport(imports, "kea-forms", "ValidationErrorType") {
+		t.Fatalf("expected redundant bare package import to be removed, got %+v", imports)
+	}
+	if !hasImport(imports, "kea-forms/lib/index", "DeepPartialMap") ||
+		!hasImport(imports, "kea-forms/lib/index", "ValidationErrorType") {
+		t.Fatalf("expected concrete package subpath import to remain, got %+v", imports)
+	}
+}
+
 func TestCollectTypeImportsForTypeTextsRecoversPackageSiblingExportsFromValueImports(t *testing.T) {
 	root := repoRoot(t)
 	source := strings.Join([]string{
@@ -3444,7 +3495,7 @@ func TestBuildParsedLogicsSynthesizesLoadersAndDefaults(t *testing.T) {
 		"loadSessionsFailure: 'load sessions failure (scenes.homepage.index.*)'",
 		"updateName: ((action: { type: 'update name (scenes.homepage.index.*)'; payload: { name: string; } }, previousState: any) => void | Promise<void>)[]",
 		"afterMount: () => void",
-		"someRandomFunction: (payload: { name: string; id?: number; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number; }; }, previousState: any) => void | Promise<void>",
+		"someRandomFunction: (payload: { name: string; id?: number | undefined; }, breakpoint: BreakPointFunction, action: { type: string; payload: { name: string; id?: number | undefined; }; }, previousState: any) => void | Promise<void>",
 		"sessionsLoading: boolean",
 		"payload?: string",
 	} {
@@ -6469,7 +6520,7 @@ func TestParseInternalSelectorTypesWithStateKeepsRecoveredConnectedHelperParamet
 	}
 }
 
-func TestBuildParsedLogicsWithStateSkipsUnprintableSelectorInputTupleHelpers(t *testing.T) {
+func TestBuildParsedLogicsWithStateKeepsFieldsWithErrorsSelectorHelper(t *testing.T) {
 	t.Setenv("KEA_TYPEGEN_PARITY_MODE", "1")
 
 	root := repoRoot(t)
@@ -6500,8 +6551,13 @@ func TestBuildParsedLogicsWithStateSkipsUnprintableSelectorInputTupleHelpers(t *
 		t.Fatalf("expected 1 parsed logic, got %d", len(logics))
 	}
 	logic := logics[0]
-	if _, ok := findParsedFunction(logic.InternalSelectorTypes, "fieldsWithErrors"); ok {
-		t.Fatalf("expected fieldsWithErrors helper to be omitted, got %+v", logic.InternalSelectorTypes)
+	helper, ok := findParsedFunction(logic.InternalSelectorTypes, "fieldsWithErrors")
+	if !ok {
+		t.Fatalf("expected fieldsWithErrors helper to remain, got %+v", logic.InternalSelectorTypes)
+	}
+	if !strings.Contains(helper.FunctionType, "DeepPartialMap<FrameType") ||
+		!strings.Contains(helper.FunctionType, "ValidationErrorType") {
+		t.Fatalf("expected fieldsWithErrors helper to use form error dependency type, got %+v", helper)
 	}
 	if _, ok := findParsedFunction(logic.InternalSelectorTypes, "scene"); !ok {
 		t.Fatalf("expected scene helper to remain, got %+v", logic.InternalSelectorTypes)
@@ -19368,7 +19424,27 @@ func TestBuildParsedLogicsParityRecoversImportedUnionShorthandActionPayloadMembe
 	}
 }
 
-func TestBuildParsedLogicsObjectActionsStripNullablePayloadProperties(t *testing.T) {
+func TestSpecializeDefaultedGenericReferencesInActionPayload(t *testing.T) {
+	tempDir := t.TempDir()
+	typesFile := filepath.Join(tempDir, "types.ts")
+	if err := os.WriteFile(typesFile, []byte(strings.Join([]string{
+		"export interface Node<R extends Record<string, any> = Record<string, any>> {}",
+		"export interface QueryBasedInsightModel<R extends Node<Record<string, any>> = Node<Record<string, any>>> {}",
+	}, "\n")), 0o644); err != nil {
+		t.Fatalf("os.WriteFile typesFile: %v", err)
+	}
+	logicFile := filepath.Join(tempDir, "logic.ts")
+	source := "import { Node, QueryBasedInsightModel } from './types'\n"
+	payload := "{ insight: Partial<QueryBasedInsightModel> | null; query: Node | null; }"
+
+	got := specializeDefaultedGenericReferencesInTypeText(source, logicFile, payload, nil)
+	expected := "{ insight: Partial<QueryBasedInsightModel<Node<Record<string, any>>>> | null; query: Node<Record<string, any>> | null; }"
+	if got != expected {
+		t.Fatalf("expected defaulted generic references to expand to %q, got %q", expected, got)
+	}
+}
+
+func TestBuildParsedLogicsObjectActionsPreserveNullablePayloadProperties(t *testing.T) {
 	source := strings.Join([]string{
 		"import { kea } from 'kea'",
 		"",
@@ -19433,10 +19509,10 @@ func TestBuildParsedLogicsObjectActionsStripNullablePayloadProperties(t *testing
 		name        string
 		payloadType string
 	}{
-		{name: "selectAction", payloadType: "{ id: string; }"},
-		{name: "newAction", payloadType: "{ element: HTMLElement; }"},
-		{name: "inspectForElementWithIndex", payloadType: "{ index: number; }"},
-		{name: "inspectElementSelected", payloadType: "{ element: HTMLElement; index: number; }"},
+		{name: "selectAction", payloadType: "{ id: string | null; }"},
+		{name: "newAction", payloadType: "{ element: HTMLElement | undefined; }"},
+		{name: "inspectForElementWithIndex", payloadType: "{ index: number | null; }"},
+		{name: "inspectElementSelected", payloadType: "{ element: HTMLElement; index: number | null; }"},
 	} {
 		action, ok := findParsedAction(logic.Actions, expected.name)
 		if !ok {
@@ -20160,6 +20236,42 @@ func TestListenerPayloadHelpersPreferPrintedFunctionType(t *testing.T) {
 	}
 	if payload := sharedListenerPayloadTypeFromMember(member); payload != expected {
 		t.Fatalf("expected shared listener payload %q, got %q", expected, payload)
+	}
+}
+
+func TestSharedListenerPayloadHelperPreservesOptionalUndefined(t *testing.T) {
+	member := MemberReport{
+		TypeString: "({ name }: { name: string; id?: number | undefined; }) => void",
+	}
+
+	expected := "{ name: string; id?: number | undefined; }"
+	if payload := sharedListenerPayloadTypeFromMember(member); payload != expected {
+		t.Fatalf("expected shared listener payload %q, got %q", expected, payload)
+	}
+}
+
+func TestPreferDirectProjectorReturnTypeBeatsContextualAny(t *testing.T) {
+	if !preferDirectProjectorReturnType(
+		`import("../../../../types").SceneApp | null`,
+		"SceneApp | null",
+		"any",
+	) {
+		t.Fatalf("expected direct projector return to beat contextual any")
+	}
+}
+
+func TestInternalHelperFunctionTypeWithSelectorInputPackageImportQualifiers(t *testing.T) {
+	member := MemberReport{
+		SelectorInputPrintedReturnTypeNode: `[
+            (state: any, props?: any) => import("kea-forms").DeepPartialMap<import("./types").FrameType, import("kea-forms").ValidationErrorType>,
+            (state: any, props?: any) => number
+        ]`,
+	}
+	current := "(frameFormErrors: DeepPartialMap<FrameType, ValidationErrorType>, sceneIndex: number) => Record<string, boolean>"
+	expected := `(frameFormErrors: import("kea-forms").DeepPartialMap<FrameType, import("kea-forms").ValidationErrorType>, sceneIndex: number) => Record<string, boolean>`
+
+	if got := internalHelperFunctionTypeWithSelectorInputPackageImportQualifiers(member, current); got != expected {
+		t.Fatalf("expected qualified helper type %q, got %q", expected, got)
 	}
 }
 

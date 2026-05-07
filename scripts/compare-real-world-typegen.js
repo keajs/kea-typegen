@@ -50,6 +50,8 @@ Options:
       --target <name>      Named compare target
       --repo <path>        Override target repository path
       --js-mode <mode>     JS CLI mode: auto, dist, or source
+      --file <path>        Compare a generated Type file or source logic file; repeatable
+      --files-from <file>  Read selected paths from a JSON array or newline-delimited file
       --keep-worktrees     Keep temporary worktrees after the run
       --json               Print the final summary as JSON
   -h, --help               Show this help
@@ -61,6 +63,8 @@ function parseArgs(argv) {
         target: '',
         repo: '',
         jsMode: 'source',
+        files: [],
+        filesFrom: '',
         keepWorktrees: false,
         json: false,
     }
@@ -73,6 +77,10 @@ function parseArgs(argv) {
             options.repo = argv[++i]
         } else if (arg === '--js-mode' && argv[i + 1]) {
             options.jsMode = argv[++i]
+        } else if (arg === '--file' && argv[i + 1]) {
+            options.files.push(String(argv[++i]).replace(/\\/g, '/'))
+        } else if (arg === '--files-from' && argv[i + 1]) {
+            options.filesFrom = path.resolve(argv[++i])
         } else if (arg === '--keep-worktrees') {
             options.keepWorktrees = true
         } else if (arg === '--json') {
@@ -94,8 +102,31 @@ function parseArgs(argv) {
     if (!['auto', 'dist', 'source'].includes(options.jsMode)) {
         throw new Error(`Unknown --js-mode: ${options.jsMode}`)
     }
+    if (options.filesFrom) {
+        options.files.push(...readSelectedFiles(options.filesFrom))
+    }
+    options.files = [...new Set(options.files.map((file) => file.replace(/\\/g, '/')))].sort()
 
     return options
+}
+
+function readSelectedFiles(filePath) {
+    const text = fs.readFileSync(filePath, 'utf8').trim()
+    if (!text) {
+        return []
+    }
+    if (text.startsWith('[')) {
+        const parsed = JSON.parse(text)
+        if (!Array.isArray(parsed)) {
+            throw new Error(`Expected ${filePath} to contain a JSON array`)
+        }
+        return parsed.map((file) => String(file).replace(/\\/g, '/'))
+    }
+    return text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'))
+        .map((file) => file.replace(/\\/g, '/'))
 }
 
 function run(command, args, options = {}) {
@@ -253,6 +284,244 @@ function removeGeneratedArtifacts(root) {
     visit(root)
 }
 
+const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
+
+function isSourceFilePath(filePath) {
+    return SOURCE_EXTENSIONS.some((extension) => filePath.endsWith(extension)) && !filePath.endsWith('Type.ts')
+}
+
+function typePathForSourcePath(sourcePath) {
+    for (const extension of SOURCE_EXTENSIONS) {
+        if (sourcePath.endsWith(extension)) {
+            return `${sourcePath.slice(0, -extension.length)}Type.ts`
+        }
+    }
+    throw new Error(`Could not derive generated Type file path for ${sourcePath}`)
+}
+
+function sourceCandidatesForTypePath(typePath) {
+    if (!typePath.endsWith('Type.ts')) {
+        return []
+    }
+    const base = typePath.slice(0, -'Type.ts'.length)
+    return SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`)
+}
+
+function pathExists(root, relativePath) {
+    return fs.existsSync(path.join(root, relativePath))
+}
+
+function resolveSelectedFile(targetRepoPath, targetConfig, selectedPath) {
+    const normalizedPath = selectedPath.replace(/\\/g, '/').replace(/^\.\/+/, '')
+    const compareRoot = path.join(targetRepoPath, targetConfig.compareRoot)
+    const sourceCandidates = isSourceFilePath(normalizedPath)
+        ? [normalizedPath]
+        : sourceCandidatesForTypePath(normalizedPath)
+    if (sourceCandidates.length === 0) {
+        throw new Error(`Selected path must be a source logic file or generated Type file: ${selectedPath}`)
+    }
+
+    for (const sourceCandidate of sourceCandidates) {
+        if (pathExists(compareRoot, sourceCandidate)) {
+            const sourceAbs = path.join(compareRoot, sourceCandidate)
+            const sourceCompareRel = path.relative(compareRoot, sourceAbs).replace(/\\/g, '/')
+            const typeCompareRel = normalizedPath.endsWith('Type.ts')
+                ? normalizedPath
+                : typePathForSourcePath(sourceCompareRel)
+            return {
+                input: selectedPath,
+                sourceCompareRel,
+                sourceRepoRel: path.relative(targetRepoPath, sourceAbs).replace(/\\/g, '/'),
+                typeCompareRel,
+            }
+        }
+        if (pathExists(targetRepoPath, sourceCandidate)) {
+            const sourceAbs = path.join(targetRepoPath, sourceCandidate)
+            const sourceCompareRel = path.relative(compareRoot, sourceAbs).replace(/\\/g, '/')
+            if (sourceCompareRel.startsWith('../')) {
+                throw new Error(
+                    `Selected source file is outside compare root ${targetConfig.compareRoot}: ${selectedPath}`,
+                )
+            }
+            const typeCompareRel = normalizedPath.endsWith('Type.ts')
+                ? path.relative(compareRoot, path.join(targetRepoPath, normalizedPath)).replace(/\\/g, '/')
+                : typePathForSourcePath(sourceCompareRel)
+            return {
+                input: selectedPath,
+                sourceCompareRel,
+                sourceRepoRel: path.relative(targetRepoPath, sourceAbs).replace(/\\/g, '/'),
+                typeCompareRel,
+            }
+        }
+    }
+
+    throw new Error(`Could not resolve selected source for ${selectedPath}`)
+}
+
+function resolveSelectedFiles(targetRepoPath, targetConfig, selectedPaths) {
+    const selected = selectedPaths.map((file) => resolveSelectedFile(targetRepoPath, targetConfig, file))
+    const byTypeFile = new Map()
+    for (const item of selected) {
+        byTypeFile.set(item.typeCompareRel, item)
+    }
+    return [...byTypeFile.values()].sort((left, right) => left.typeCompareRel.localeCompare(right.typeCompareRel))
+}
+
+function configArgPath(args) {
+    for (let index = 0; index < args.length - 1; index++) {
+        if (args[index] === '--config' || args[index] === '-c') {
+            return args[index + 1]
+        }
+    }
+    return 'tsconfig.json'
+}
+
+function argPath(args, names, fallback) {
+    for (let index = 0; index < args.length - 1; index++) {
+        if (names.includes(args[index])) {
+            return args[index + 1]
+        }
+    }
+    return fallback
+}
+
+function hasArg(args, names) {
+    return args.some((arg) => names.includes(arg))
+}
+
+function findUp(startPath, fileName) {
+    let current = path.resolve(startPath)
+    while (true) {
+        const candidate = path.join(current, fileName)
+        if (fs.existsSync(candidate)) {
+            return candidate
+        }
+        const parent = path.dirname(current)
+        if (parent === current) {
+            return ''
+        }
+        current = parent
+    }
+}
+
+function resolvedRenderPaths(worktreeRoot, targetConfig) {
+    const cwd = path.join(worktreeRoot, targetConfig.goCwd)
+    const config = path.resolve(cwd, configArgPath(targetConfig.goArgs))
+    const root = path.resolve(cwd, argPath(targetConfig.goArgs, ['--root', '-r'], path.dirname(config)))
+    const types = path.resolve(cwd, argPath(targetConfig.goArgs, ['--types', '-t'], root))
+    return {
+        cwd,
+        config,
+        root,
+        types,
+        packageJson: findUp(root, 'package.json') || findUp(path.dirname(config), 'package.json'),
+    }
+}
+
+function writeSlicedConfig(worktreeRoot, targetConfig, selectedFiles) {
+    if (selectedFiles.length === 0) {
+        return ''
+    }
+
+    const baseConfigPath = path.resolve(path.join(worktreeRoot, targetConfig.goCwd, configArgPath(targetConfig.goArgs)))
+    const configDir = path.dirname(baseConfigPath)
+    const sliceConfigPath = path.join(configDir, 'tsconfig.kea-typegen-slice.json')
+    const files = selectedFiles.map((file) =>
+        path.relative(configDir, path.join(worktreeRoot, file.sourceRepoRel)).replace(/\\/g, '/'),
+    )
+    fs.writeFileSync(
+        sliceConfigPath,
+        JSON.stringify(
+            {
+                extends: `./${path.basename(baseConfigPath)}`,
+                files,
+                include: [],
+            },
+            null,
+            2,
+        ),
+    )
+    return sliceConfigPath
+}
+
+function withConfigArg(args, configPath) {
+    if (!configPath) {
+        return [...args]
+    }
+    const nextArgs = [...args]
+    for (let index = 0; index < nextArgs.length - 1; index++) {
+        if (nextArgs[index] === '--config' || nextArgs[index] === '-c') {
+            nextArgs[index + 1] = configPath
+            return nextArgs
+        }
+    }
+    return [...nextArgs, '--config', configPath]
+}
+
+function runSelectedJSRender(repoRoot, targetConfig, worktreeRoot, selectedFile, jsMode, jsPluginManifestPath) {
+    const paths = resolvedRenderPaths(worktreeRoot, targetConfig)
+    const renderArgs = [
+        path.join(repoRoot, 'scripts', 'render-js-typegen.js'),
+        '--config',
+        paths.config,
+        '--root',
+        paths.root,
+        '--types',
+        paths.types,
+        '--file',
+        path.join(worktreeRoot, selectedFile.sourceRepoRel),
+    ]
+    if (paths.packageJson) {
+        renderArgs.push('--package-json', paths.packageJson)
+    }
+    if (hasArg(targetConfig.jsArgs, ['--add-ts-nocheck'])) {
+        renderArgs.push('--add-ts-nocheck')
+    }
+    if (hasArg(targetConfig.jsArgs, ['--import-global-types'])) {
+        renderArgs.push('--import-global-types')
+    }
+    run('node', renderArgs, {
+        cwd: path.join(worktreeRoot, targetConfig.jsCwd),
+        env: {
+            KEA_TYPEGEN_JS_MODE: jsMode,
+            KEA_TYPEGEN_DEBUG_PLUGIN_MANIFEST: jsPluginManifestPath,
+            ...targetConfig.jsEnv,
+        },
+    })
+}
+
+function runSelectedGoRender(repoRoot, targetConfig, worktreeRoot, selectedFile) {
+    const paths = resolvedRenderPaths(worktreeRoot, targetConfig)
+    const goCli = path.join(repoRoot, 'rewrite', 'bin', 'kea-typegen-go')
+    const result = run(
+        goCli,
+        [
+            'render',
+            '--config',
+            paths.config,
+            '--root',
+            paths.root,
+            '--types',
+            paths.types,
+            '--file',
+            path.join(worktreeRoot, selectedFile.sourceRepoRel),
+            '--format',
+            'typegen',
+        ],
+        {
+            cwd: repoRoot,
+            env: { KEA_TYPEGEN_CWD: paths.cwd, ...(targetConfig.goEnv || {}) },
+        },
+    )
+    const output = result.stdout
+    if (output.trim() === '') {
+        return
+    }
+    const typeFile = path.join(worktreeRoot, targetConfig.compareRoot, selectedFile.typeCompareRel)
+    fs.mkdirSync(path.dirname(typeFile), { recursive: true })
+    fs.writeFileSync(typeFile, output)
+}
+
 function addWorktree(repoPath, worktreePath) {
     run('git', ['-C', repoPath, 'worktree', 'add', '--detach', worktreePath, 'HEAD'])
 }
@@ -261,7 +530,7 @@ function removeWorktree(repoPath, worktreePath) {
     run('git', ['-C', repoPath, 'worktree', 'remove', '--force', worktreePath], { expectedStatuses: [0, 128] })
 }
 
-function runTypegenPair(repoRoot, targetConfig, targetRepoPath, worktreeRoot, jsMode) {
+function runTypegenPair(repoRoot, targetConfig, targetRepoPath, worktreeRoot, jsMode, selectedFiles = []) {
     const jsWorktree = path.join(worktreeRoot, `${targetConfig.label}-js`)
     const goWorktree = path.join(worktreeRoot, `${targetConfig.label}-go`)
     const jsPluginManifestPath = path.join(worktreeRoot, `${targetConfig.label}-js-plugins.json`)
@@ -280,21 +549,33 @@ function runTypegenPair(repoRoot, targetConfig, targetRepoPath, worktreeRoot, js
         removeGeneratedArtifacts(jsWorktree)
         removeGeneratedArtifacts(goWorktree)
 
-        const jsCli = path.join(repoRoot, 'bin', 'kea-typegen-js')
-        const goCli = path.join(repoRoot, 'rewrite', 'bin', 'kea-typegen-go')
+        let jsSliceConfig = ''
+        let goSliceConfig = ''
+        if (selectedFiles.length > 0) {
+            for (const selectedFile of selectedFiles) {
+                runSelectedJSRender(repoRoot, targetConfig, jsWorktree, selectedFile, jsMode, jsPluginManifestPath)
+                runSelectedGoRender(repoRoot, targetConfig, goWorktree, selectedFile)
+            }
+        } else {
+            jsSliceConfig = writeSlicedConfig(jsWorktree, targetConfig, selectedFiles)
+            goSliceConfig = writeSlicedConfig(goWorktree, targetConfig, selectedFiles)
 
-        run(jsCli, targetConfig.jsArgs, {
-            cwd: path.join(jsWorktree, targetConfig.jsCwd),
-            env: {
-                KEA_TYPEGEN_JS_MODE: jsMode,
-                KEA_TYPEGEN_DEBUG_PLUGIN_MANIFEST: jsPluginManifestPath,
-                ...targetConfig.jsEnv,
-            },
-        })
-        run(goCli, targetConfig.goArgs, {
-            cwd: repoRoot,
-            env: { KEA_TYPEGEN_CWD: path.join(goWorktree, targetConfig.goCwd), ...(targetConfig.goEnv || {}) },
-        })
+            const jsCli = path.join(repoRoot, 'bin', 'kea-typegen-js')
+            const goCli = path.join(repoRoot, 'rewrite', 'bin', 'kea-typegen-go')
+
+            run(jsCli, withConfigArg(targetConfig.jsArgs, jsSliceConfig), {
+                cwd: path.join(jsWorktree, targetConfig.jsCwd),
+                env: {
+                    KEA_TYPEGEN_JS_MODE: jsMode,
+                    KEA_TYPEGEN_DEBUG_PLUGIN_MANIFEST: jsPluginManifestPath,
+                    ...targetConfig.jsEnv,
+                },
+            })
+            run(goCli, withConfigArg(targetConfig.goArgs, goSliceConfig), {
+                cwd: repoRoot,
+                env: { KEA_TYPEGEN_CWD: path.join(goWorktree, targetConfig.goCwd), ...(targetConfig.goEnv || {}) },
+            })
+        }
 
         if (!fs.existsSync(jsPluginManifestPath)) {
             throw new Error(`JS plugin manifest was not written: ${jsPluginManifestPath}`)
@@ -305,6 +586,8 @@ function runTypegenPair(repoRoot, targetConfig, targetRepoPath, worktreeRoot, js
             goWorktree,
             jsPluginManifestPath,
             jsPluginManifest: readJSON(jsPluginManifestPath),
+            jsSliceConfig,
+            goSliceConfig,
             cleanup,
         }
     } catch (error) {
@@ -322,6 +605,7 @@ function main() {
     const repoRoot = path.resolve(__dirname, '..')
     const targetConfig = TARGETS[options.target]
     const targetRepoPath = path.resolve(repoRoot, options.repo || targetConfig.repoPath)
+    const selectedFiles = resolveSelectedFiles(targetRepoPath, targetConfig, options.files)
 
     ensurePrepared(repoRoot, options.jsMode)
     const jsEntrypoint = resolveJSEntrypoint(repoRoot, options.jsMode)
@@ -331,28 +615,28 @@ function main() {
     const cleanup = []
 
     try {
-        const pair = runTypegenPair(repoRoot, targetConfig, targetRepoPath, worktreeRoot, options.jsMode)
+        const pair = runTypegenPair(repoRoot, targetConfig, targetRepoPath, worktreeRoot, options.jsMode, selectedFiles)
         cleanup.push(...pair.cleanup)
 
         const jsCompareDir = path.join(pair.jsWorktree, targetConfig.compareRoot)
         const goCompareDir = path.join(pair.goWorktree, targetConfig.compareRoot)
         const htmlOut = path.join(worktreeRoot, `${targetConfig.label}-compare.html`)
         const baselineManifest = path.join(worktreeRoot, `${targetConfig.label}-baseline.json`)
+        const compareArgs = [
+            path.join(repoRoot, 'scripts', 'compare-generated-typegen.js'),
+            '--ts-dir',
+            jsCompareDir,
+            '--go-dir',
+            goCompareDir,
+            '--json',
+            '--html-out',
+            htmlOut,
+        ]
+        for (const file of selectedFiles) {
+            compareArgs.push('--file', file.typeCompareRel)
+        }
 
-        const compare = run(
-            'node',
-            [
-                path.join(repoRoot, 'scripts', 'compare-generated-typegen.js'),
-                '--ts-dir',
-                jsCompareDir,
-                '--go-dir',
-                goCompareDir,
-                '--json',
-                '--html-out',
-                htmlOut,
-            ],
-            { cwd: repoRoot },
-        )
+        const compare = run('node', compareArgs, { cwd: repoRoot })
 
         const summary = JSON.parse(compare.stdout)
         const baseline = {
@@ -364,6 +648,9 @@ function main() {
             jsEntrypoint,
             jsPluginManifestPath: pair.jsPluginManifestPath,
             jsPluginManifest: pair.jsPluginManifest,
+            selectedFiles,
+            jsSliceConfig: pair.jsSliceConfig || null,
+            goSliceConfig: pair.goSliceConfig || null,
             goBinary,
         }
         fs.writeFileSync(baselineManifest, JSON.stringify(baseline, null, 2))
@@ -382,11 +669,20 @@ function main() {
         } else {
             console.log(`Target: ${targetConfig.label}`)
             console.log(`Repo: ${targetRepoPath}`)
-            console.log(`JS mode: ${baseline.jsEntrypoint.selectedMode} (requested: ${baseline.jsEntrypoint.requestedMode})`)
+            console.log(
+                `JS mode: ${baseline.jsEntrypoint.selectedMode} (requested: ${baseline.jsEntrypoint.requestedMode})`,
+            )
             console.log(`JS entrypoint: ${baseline.jsEntrypoint.cli.path}`)
+            if (selectedFiles.length > 0) {
+                console.log(`Selected files: ${selectedFiles.map((file) => file.typeCompareRel).join(', ')}`)
+            }
             console.log(`Comparable files: ${summary.comparableFiles}`)
-            console.log(`Semantic matches: ${summary.semanticMatches}/${summary.totalFiles} (${summary.semanticAccuracy.toFixed(2)}%)`)
-            console.log(`Exact matches: ${summary.exactMatches}/${summary.totalFiles} (${summary.exactAccuracy.toFixed(2)}%)`)
+            console.log(
+                `Semantic matches: ${summary.semanticMatches}/${summary.totalFiles} (${summary.semanticAccuracy.toFixed(2)}%)`,
+            )
+            console.log(
+                `Exact matches: ${summary.exactMatches}/${summary.totalFiles} (${summary.exactAccuracy.toFixed(2)}%)`,
+            )
             console.log(`TS_ONLY: ${summary.tsOnly.length}`)
             console.log(`GO_ONLY: ${summary.goOnly.length}`)
             console.log(`Semantic diffs: ${summary.semanticDiffs.length}`)
