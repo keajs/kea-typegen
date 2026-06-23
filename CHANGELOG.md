@@ -1,3 +1,7 @@
+## 3.7.0 - 2026-06-23
+
+Improve performance of typegen. Make type lookups lazier, try to read less files, better --file mode.
+
 ## 3.6.8 - 2026-03-24
 
 Fix a memory leak.

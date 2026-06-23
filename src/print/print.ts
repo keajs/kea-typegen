@@ -40,8 +40,16 @@ import { printInternalExtraInput } from './printInternalExtraInput'
 import { convertToBuilders } from '../write/convertToBuilders'
 import { cacheWrittenFile } from '../cache'
 
+const prettierConfigCache = new Map<string, Promise<prettier.Options | null>>()
+
 export async function runThroughPrettier(sourceText: string, filePath: string): Promise<string> {
-    const options = await prettier.resolveConfig(filePath)
+    let configPromise = prettierConfigCache.get(filePath)
+    if (!configPromise) {
+        configPromise = prettier.resolveConfig(filePath, { useCache: true })
+        prettierConfigCache.set(filePath, configPromise)
+    }
+
+    const options = await configPromise
     if (options) {
         try {
             return await prettier.format(sourceText, { ...options, filepath: filePath })
@@ -107,11 +115,12 @@ export async function printToFiles(
         const logicStrings = []
         const requiredKeys = new Set(['Logic'])
         for (const parsedLogic of parsedLogics) {
-            const logicTypeStirng = await runThroughPrettier(
-                nodeToString(parsedLogic.interfaceDeclaration),
-                typeFileName,
+            const logicTypeString = nodeToString(parsedLogic.interfaceDeclaration)
+            logicStrings.push(
+                appOptions.prettier === false
+                    ? logicTypeString
+                    : await runThroughPrettier(logicTypeString, typeFileName),
             )
-            logicStrings.push(logicTypeStirng)
             for (const string of parsedLogic.importFromKeaInLogicType.values()) {
                 requiredKeys.add(string)
             }

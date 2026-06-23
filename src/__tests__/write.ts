@@ -153,3 +153,59 @@ test('writeTypeImports replaces existing kea generic without leaving a trailing 
         fs.rmSync(tempDir, { recursive: true, force: true })
     }
 })
+
+test('visitProgram limits project-aware single-file generation to the requested source file', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-single-file-'))
+
+    try {
+        const logicDir = path.join(tempDir, 'src')
+        const firstLogicPath = path.join(logicDir, 'firstLogic.ts')
+        const secondLogicPath = path.join(logicDir, 'secondLogic.ts')
+        const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+
+        fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+        fs.mkdirSync(logicDir, { recursive: true })
+
+        fs.writeFileSync(keaDtsPath, 'export function kea<T = any>(input: any): T\n')
+        fs.writeFileSync(
+            firstLogicPath,
+            [
+                "import { kea } from 'kea'",
+                '',
+                'export const firstLogic = kea({',
+                '    actions: () => ({ first: true }),',
+                '})',
+                '',
+            ].join('\n'),
+        )
+        fs.writeFileSync(
+            secondLogicPath,
+            [
+                "import { kea } from 'kea'",
+                '',
+                'export const secondLogic = kea({',
+                '    actions: () => ({ second: true }),',
+                '})',
+                '',
+            ].join('\n'),
+        )
+
+        const program = ts.createProgram([firstLogicPath, secondLogicPath], {
+            module: ts.ModuleKind.CommonJS,
+            moduleResolution: ts.ModuleResolutionKind.NodeJs,
+            target: ts.ScriptTarget.ES2020,
+            skipLibCheck: true,
+        })
+
+        const parsedLogics = visitProgram(program, {
+            rootPath: logicDir,
+            typesPath: logicDir,
+            sourceFilePath: secondLogicPath,
+            log: () => {},
+        })
+
+        expect(parsedLogics.map((logic) => logic.logicName)).toEqual(['secondLogic'])
+    } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+})

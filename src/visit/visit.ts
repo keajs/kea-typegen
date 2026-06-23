@@ -25,7 +25,7 @@ import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
 import { cloneNode } from 'ts-clone-node'
-import {NodeBuilderFlags} from "typescript";
+import { NodeBuilderFlags } from 'typescript'
 
 const visitFunctions = {
     actions: visitActions,
@@ -44,20 +44,52 @@ const visitFunctions = {
     windowValues: visitWindowValues,
 }
 
+// Cheap text prefilters so we only do expensive AST + type-checker work on files
+// that can actually contain the thing we're looking for. On large projects most
+// source files contain no Kea logic at all, and walking every node (and resolving
+// a symbol for every identifier via the checker) for them dominates runtime.
+//
+// `kea` is never aliased on import in practice, so a `kea(` / `kea<` text match is a
+// safe-enough gate for the Kea-call pass. If a project does alias `kea`, set
+// KEA_TYPEGEN_NO_PREFILTER=1 to fall back to scanning every file.
+const KEA_CALL_REGEX = /\bkea\s*[<(]/
+const prefilterDisabled = process.env.KEA_TYPEGEN_NO_PREFILTER === '1'
+
+function fileMightContainKeaCall(sourceFile: ts.SourceFile): boolean {
+    return prefilterDisabled || KEA_CALL_REGEX.test(sourceFile.text)
+}
+
+function fileMightContainResetContext(sourceFile: ts.SourceFile): boolean {
+    return prefilterDisabled || sourceFile.text.includes('resetContext')
+}
+
 export function visitProgram(program: ts.Program, appOptions?: AppOptions): ParsedLogic[] {
     const checker = program.getTypeChecker()
     const parsedLogics: ParsedLogic[] = []
     const pluginModules: PluginModule[] = []
     const typeBuilderModules: TypeBuilderModule[] = []
+    const sourceFilePath = appOptions?.sourceFilePath ? path.resolve(appOptions.sourceFilePath) : undefined
 
     for (const sourceFile of program.getSourceFiles()) {
-        if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
+        if (
+            !sourceFile.isDeclarationFile &&
+            !sourceFile.fileName.endsWith('Type.ts') &&
+            fileMightContainResetContext(sourceFile)
+        ) {
             ts.forEachChild(sourceFile, visitResetContext(checker, pluginModules))
         }
     }
 
     for (const sourceFile of program.getSourceFiles()) {
-        if (!sourceFile.isDeclarationFile && !sourceFile.fileName.endsWith('Type.ts')) {
+        if (sourceFilePath && path.resolve(sourceFile.fileName) !== sourceFilePath) {
+            continue
+        }
+
+        if (
+            !sourceFile.isDeclarationFile &&
+            !sourceFile.fileName.endsWith('Type.ts') &&
+            fileMightContainKeaCall(sourceFile)
+        ) {
             if (appOptions?.verbose) {
                 appOptions.log(`👀 Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
             }
@@ -245,7 +277,6 @@ export function visitKeaCalls(
         const calls: {
             name: string
             type: ts.Type
-            typeNode: ts.TypeNode | null
             expression: ts.Expression
             typeBuilders: PluginModule[]
         }[] = []
@@ -261,8 +292,7 @@ export function visitKeaCalls(
                 }
                 const name = symbol.getName()
                 const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration)
-                const typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
-                calls.push({ name, type, typeNode, expression: inputProperty.initializer, typeBuilders: [] })
+                calls.push({ name, type, expression: inputProperty.initializer, typeBuilders: [] })
             }
         } else if (ts.isArrayLiteralExpression(input)) {
             for (const callExpression of input.elements) {
@@ -273,7 +303,6 @@ export function visitKeaCalls(
                 const builderName = callExpression.expression.getText()
                 const argument = callExpression.arguments[0]
                 const type = checker.getTypeAtLocation(argument)
-                const typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
 
                 const identifier = callExpression.expression
                 const symbol = checker.getSymbolAtLocation(identifier)
@@ -348,14 +377,13 @@ export function visitKeaCalls(
                 calls.push({
                     name: builderName,
                     type,
-                    typeNode,
                     expression: callExpression.arguments[0],
                     typeBuilders: typeBuilders,
                 })
             }
         }
 
-        for (let { name, type, typeNode, expression, typeBuilders } of calls) {
+        for (let { name, type, expression, typeBuilders } of calls) {
             if (name === 'path' || name === 'logicPath') {
                 parsedLogic.hasPathInLogic = true
             }
@@ -363,18 +391,31 @@ export function visitKeaCalls(
                 parsedLogic.hasKeyInLogic = true
             }
 
-            if (typeNode && ts.isFunctionTypeNode(typeNode)) {
-                type = type.getCallSignatures()[0].getReturnType()
-                typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
+            // Equivalent to the previous `ts.isFunctionTypeNode(typeNode)` check, but without
+            // eagerly building a typeNode: a pure function type has call signatures and no
+            // members, so we unwrap it to its return type before visiting/printing.
+            const callSignatures = type.getCallSignatures()
+            if (callSignatures.length > 0 && type.getProperties().length === 0) {
+                type = callSignatures[0].getReturnType()
             }
 
             visitFunctions[name]?.(parsedLogic, type, expression)
+
+            let typeNode: ts.TypeNode | null | undefined = undefined
+            const getTypeNode = (): ts.TypeNode | null => {
+                if (typeNode === undefined) {
+                    typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
+                }
+                return typeNode
+            }
 
             const visitKeaPropertyArguments: VisitKeaPropertyArguments = {
                 name,
                 appOptions,
                 type,
-                typeNode,
+                get typeNode() {
+                    return getTypeNode()
+                },
                 parsedLogic,
                 node: expression,
                 checker,

@@ -18,7 +18,11 @@ yargs
         await runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: true })
     })
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json (otherwise auto-detected)', type: 'string' })
-    .option('file', { alias: 'f', describe: "Single file to evaluate (can't be used with --config)", type: 'string' })
+    .option('file', {
+        alias: 'f',
+        describe: 'Single file to evaluate. Uses --config/.kearc compiler options when available.',
+        type: 'string',
+    })
     .option('root', {
         alias: 'r',
         describe: 'Root for logic paths. E.g: ./frontend/src',
@@ -50,6 +54,11 @@ yargs
     .option('use-cache', {
         describe: 'Cache generated logic files into .typegen, use them if generating a logic type for the first time',
         type: 'boolean',
+    })
+    .option('prettier', {
+        describe: 'Format generated logic type declarations with Prettier (use --no-prettier to skip)',
+        type: 'boolean',
+        default: true,
     })
     .option('verbose', { describe: 'Slightly more verbose output log', type: 'boolean' })
     .demandCommand()

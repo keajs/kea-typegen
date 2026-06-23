@@ -25,14 +25,18 @@ export async function runTypeGen(appOptions: AppOptions) {
 
     if (appOptions.sourceFilePath) {
         log(`❇️ Loading file: ${appOptions.sourceFilePath}`)
+        const compilerOptions = appOptions.tsConfigPath
+            ? loadTsConfig(appOptions.tsConfigPath, log).options
+            : {
+                  target: ts.ScriptTarget.ES5,
+                  module: ts.ModuleKind.CommonJS,
+                  noEmit: true,
+                  noErrorTruncation: true,
+              }
+
         resetProgram = () => {
-            program = replaceProgram(() =>
-                ts.createProgram([appOptions.sourceFilePath], {
-                    target: ts.ScriptTarget.ES5,
-                    module: ts.ModuleKind.CommonJS,
-                    noEmit: true,
-                    noErrorTruncation: true,
-                }),
+            program = replaceProgram(
+                () => ts.createProgram([appOptions.sourceFilePath], compilerOptions),
                 (nextProgram) => {
                     program = nextProgram
                 },
@@ -40,11 +44,7 @@ export async function runTypeGen(appOptions: AppOptions) {
         }
         resetProgram()
     } else if (appOptions.tsConfigPath) {
-        log(`🥚 TypeScript Config: ${appOptions.tsConfigPath}`)
-
-        const configFile = ts.readJsonConfigFile(appOptions.tsConfigPath, ts.sys.readFile)
-        const rootFolder = path.dirname(appOptions.tsConfigPath)
-        const compilerOptions = ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
+        const compilerOptions = loadTsConfig(appOptions.tsConfigPath, log)
 
         if (appOptions.watch) {
             // We don't emit JavaScript files in typegen watch mode, so the semantic-only
@@ -173,7 +173,12 @@ export async function runTypeGen(appOptions: AppOptions) {
         return response
     }
 
-    if (program && !appOptions.watch && !appOptions.sourceFilePath) {
+    if (program && !appOptions.watch && appOptions.sourceFilePath) {
+        await goThroughAllTheFiles(program, appOptions)
+        if (appOptions.write) {
+            log(`👋 Finished writing files! Exiting.`)
+        }
+    } else if (program && !appOptions.watch) {
         if (appOptions.write) {
             if (restoreCachedTypes(program, appOptions, log)) {
                 resetProgram()
@@ -200,6 +205,13 @@ export async function runTypeGen(appOptions: AppOptions) {
             goThroughAllTheFiles(program, appOptions)
         }
     }
+}
+
+function loadTsConfig(tsConfigPath: string, log: AppOptions['log']): ts.ParsedCommandLine {
+    log(`🥚 TypeScript Config: ${tsConfigPath}`)
+    const configFile = ts.readJsonConfigFile(tsConfigPath, ts.sys.readFile)
+    const rootFolder = path.dirname(tsConfigPath)
+    return ts.parseJsonSourceFileConfigFileContent(configFile, ts.sys, rootFolder)
 }
 
 export function replaceProgram(createProgram: () => Program, setProgram: (program?: Program) => void): Program {

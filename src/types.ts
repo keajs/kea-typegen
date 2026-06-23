@@ -82,6 +82,8 @@ export interface AppOptions {
     showTsErrors?: boolean
     /** Cache generated logic files into .typegen, use them if generating a logic type for the first time */
     useCache?: boolean
+    /** Skip Prettier formatting while generating logic type files */
+    prettier?: boolean
 
     log: (message: string) => void
 }
