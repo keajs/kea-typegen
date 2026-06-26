@@ -6,6 +6,7 @@ import { AppOptions } from './types'
 import { Program } from 'typescript'
 import { version } from '../package.json'
 import { restoreCachedTypes } from './cache'
+import { createWatchChangeTracker, planWatchTypegenPass, WatchFileChange, WatchTypegenPlan } from './watch'
 
 // The undocumented defaultMaximumTruncationLength setting determines at what point printed types are truncated in versions less than 5.
 // In kea-typegen output, we NEVER want the types truncated, as that results in a syntax error –
@@ -50,12 +51,13 @@ export async function runTypeGen(appOptions: AppOptions) {
             // We don't emit JavaScript files in typegen watch mode, so the semantic-only
             // builder is enough and avoids extra emit-related work on every rebuild.
             const createProgram = ts.createSemanticDiagnosticsBuilderProgram
+            const watchChangeTracker = createWatchChangeTracker(ts.sys)
 
             const host = ts.createWatchCompilerHost(
                 appOptions.tsConfigPath,
                 compilerOptions.options,
                 {
-                    ...ts.sys,
+                    ...watchChangeTracker.system,
                     writeFile(_path: string, _data: string, _writeByteOrderMark?: boolean) {
                         // skip emit
                         // https://github.com/microsoft/TypeScript/issues/32385
@@ -92,6 +94,7 @@ export async function runTypeGen(appOptions: AppOptions) {
 
             const origPostProgramCreate = host.afterProgramCreate
             let scheduledProgram: Program | undefined
+            let scheduledChanges: WatchFileChange[] = []
             let runningTypegen = false
 
             const runScheduledTypegen = async () => {
@@ -104,10 +107,16 @@ export async function runTypeGen(appOptions: AppOptions) {
                 try {
                     while (scheduledProgram) {
                         const nextProgram = scheduledProgram
+                        const nextChanges = scheduledChanges
                         scheduledProgram = undefined
+                        scheduledChanges = []
 
                         try {
-                            await goThroughAllTheFiles(nextProgram, appOptions)
+                            await goThroughWatchTypegenPlan(
+                                nextProgram,
+                                appOptions,
+                                planWatchTypegenPass(nextProgram, nextChanges),
+                            )
                         } catch (error) {
                             console.error('⛔ Error running kea-typegen in watch mode')
                             console.error(error)
@@ -124,8 +133,10 @@ export async function runTypeGen(appOptions: AppOptions) {
 
             host.afterProgramCreate = (prog) => {
                 program = prog.getProgram()
+                const changes = watchChangeTracker.consume()
                 origPostProgramCreate?.(prog)
                 scheduledProgram = program
+                scheduledChanges.push(...changes)
                 void runScheduledTypegen()
             }
 
@@ -168,6 +179,46 @@ export async function runTypeGen(appOptions: AppOptions) {
         // exit with 1
         if (!appOptions.write && !appOptions.watch && (response.filesToWrite > 0 || response.filesToModify > 0)) {
             process.exit(1)
+        }
+
+        return response
+    }
+
+    async function goThroughWatchTypegenPlan(
+        program,
+        appOptions,
+        plan: WatchTypegenPlan,
+    ): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
+        if (plan.kind === 'skip') {
+            if (appOptions.verbose) {
+                appOptions.log(`⏭️ Skipping typegen watch pass: ${plan.reason}`)
+            }
+            return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
+        }
+
+        if (plan.kind === 'full') {
+            if (appOptions.verbose) {
+                appOptions.log(`🔎 Running full typegen watch pass: ${plan.reason}`)
+            }
+            return await goThroughAllTheFiles(program, appOptions)
+        }
+
+        if (appOptions.verbose) {
+            appOptions.log(`🎯 Running incremental typegen watch pass: ${plan.reason}`)
+        }
+
+        const response = { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
+
+        for (const sourceFilePath of plan.sourceFilePaths) {
+            const fileResponse = await goThroughAllTheFiles(program, {
+                ...appOptions,
+                delete: false,
+                sourceFilePath,
+            })
+
+            response.filesToWrite += fileResponse.filesToWrite
+            response.writtenFiles += fileResponse.writtenFiles
+            response.filesToModify += fileResponse.filesToModify
         }
 
         return response

@@ -1,12 +1,15 @@
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 
 require('ts-node/register/transpile-only')
 
 const repoRoot = path.resolve(__dirname, '..', '..')
-const projectDir = fs.mkdtempSync(path.join(repoRoot, 'tmp-watch-smoke-'))
+const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-watch-smoke-'))
 const tsconfigPath = path.join(projectDir, 'tsconfig.json')
+const keaDtsPath = path.join(projectDir, 'node_modules', 'kea', 'index.d.ts')
 const fileCount = 200
+const logicPaths = []
 
 const noop = () => {}
 console.info = noop
@@ -18,6 +21,10 @@ let completed = 0
 let settleTimer
 let timeoutTimer
 let finished = false
+let editTriggered = false
+let incrementalAfterEdit = false
+const parsedLogicCountsAfterEdit = []
+const sourceFilePathsAfterEdit = []
 
 function cleanup() {
     try {
@@ -41,16 +48,31 @@ function finish(code) {
             completed,
             active,
             maxActive,
+            incrementalAfterEdit,
+            parsedLogicCountsAfterEdit,
+            sourceFilePathsAfterEdit,
         }) + '\n',
     )
     process.exit(code)
 }
 
 function scheduleFinishIfSettled() {
-    if (started > 1 && active === 0) {
-        clearTimeout(settleTimer)
-        settleTimer = setTimeout(() => finish(0), 300)
+    if (active !== 0) {
+        return
     }
+
+    clearTimeout(settleTimer)
+    settleTimer = setTimeout(() => {
+        if (!editTriggered && started > 1) {
+            editTriggered = true
+            fs.appendFileSync(logicPaths[0], '\n// trigger incremental watch pass\n')
+            return
+        }
+
+        if (editTriggered && incrementalAfterEdit) {
+            finish(0)
+        }
+    }, 300)
 }
 
 process.on('uncaughtException', (error) => {
@@ -82,9 +104,13 @@ fs.writeFileSync(
     ),
 )
 
+fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+fs.writeFileSync(keaDtsPath, 'export function kea<T = any>(input: any): T\n')
+
 for (let i = 0; i < fileCount; i++) {
     const dir = path.join(projectDir, 'src', `group${String(i % 10).padStart(2, '0')}`)
     const filePath = path.join(dir, `logic${i}.ts`)
+    logicPaths.push(filePath)
 
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(
@@ -109,10 +135,19 @@ const printModule = require(path.join(repoRoot, 'src/print/print'))
 const originalPrintToFiles = printModule.printToFiles
 
 printModule.printToFiles = async function (...args) {
+    const appOptions = args[1]
+    const parsedLogics = args[2]
+
     active += 1
     started += 1
     maxActive = Math.max(maxActive, active)
     clearTimeout(settleTimer)
+
+    if (editTriggered) {
+        parsedLogicCountsAfterEdit.push(parsedLogics.length)
+        sourceFilePathsAfterEdit.push(appOptions.sourceFilePath || null)
+        incrementalAfterEdit = incrementalAfterEdit || (parsedLogics.length === 1 && !!appOptions.sourceFilePath)
+    }
 
     await new Promise((resolve) => setTimeout(resolve, 25))
 

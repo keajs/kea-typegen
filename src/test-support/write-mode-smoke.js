@@ -1,13 +1,15 @@
 const fs = require('fs')
 const Module = require('module')
+const os = require('os')
 const path = require('path')
 
 require('ts-node/register/transpile-only')
 
 const repoRoot = path.resolve(__dirname, '..', '..')
-const projectDir = fs.mkdtempSync(path.join(repoRoot, 'tmp-write-smoke-'))
+const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-write-smoke-'))
 const tsconfigPath = path.join(projectDir, 'tsconfig.json')
 const logicFilePath = path.join(projectDir, 'src', 'logic.ts')
+const keaDtsPath = path.join(projectDir, 'node_modules', 'kea', 'index.d.ts')
 
 const noop = () => {}
 
@@ -83,6 +85,7 @@ process.on('unhandledRejection', (error) => {
 })
 
 fs.mkdirSync(path.dirname(logicFilePath), { recursive: true })
+fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
 fs.writeFileSync(
     tsconfigPath,
     JSON.stringify(
@@ -101,6 +104,8 @@ fs.writeFileSync(
         2,
     ),
 )
+
+fs.writeFileSync(keaDtsPath, 'export function kea<T = any>(input: any): T\n')
 
 fs.writeFileSync(
     logicFilePath,

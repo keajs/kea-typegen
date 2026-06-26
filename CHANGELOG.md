@@ -1,3 +1,7 @@
+## 3.7.1 - 2026-06-26
+
+Make watch mode incremental. When a watched rebuild can be proven local, regenerate only the changed or affected Kea logic files and keep the existing full-pass fallback for ambiguous changes.
+
 ## 3.7.0 - 2026-06-23
 
 Improve performance of typegen. Make type lookups lazier, try to read less files, better --file mode.
