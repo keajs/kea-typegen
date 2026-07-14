@@ -29,22 +29,44 @@ export function printInlineLogicType(parsedLogic: ParsedLogic): string {
     const addSection = (suffix: string, members: readonly ts.TypeElement[]) => {
         if (members.length > 0) {
             const name = `${parsedLogic.logicName}${suffix}`
-            statements.push(createExportedInterface(name, members))
+            const declaration = createExportedInterface(name, members)
+            ts.addSyntheticLeadingComment(declaration, SyntaxKind.SingleLineCommentTrivia, INLINE_TYPE_MARKER, true)
+            statements.push(declaration)
             typeArguments.push(factory.createTypeReferenceNode(factory.createIdentifier(name), undefined))
         } else {
             typeArguments.push(factory.createTypeLiteralNode([]))
         }
     }
 
-    addSection('Values', printValues(parsedLogic).members)
+    // mark connected values/actions with the logic they come from, e.g. `user: UserType | null // userLogic`
+    const withSourceLogicComment = <T extends ts.TypeElement>(member: T, sourceLogic: string | undefined): T =>
+        sourceLogic ? ts.addSyntheticTrailingComment(member, SyntaxKind.SingleLineCommentTrivia, ` ${sourceLogic}`, false) : member
+
+    const valueSources = new Map<string, string | undefined>()
+    for (const value of [...parsedLogic.reducers, ...parsedLogic.selectors]) {
+        valueSources.set(value.name, value.sourceLogic)
+    }
+
+    addSection(
+        'Values',
+        printValues(parsedLogic).members.map((member) =>
+            withSourceLogicComment(
+                member,
+                member.name && ts.isIdentifier(member.name) ? valueSources.get(member.name.text) : undefined,
+            ),
+        ),
+    )
     addSection(
         'Actions',
-        parsedLogic.actions.map(({ name, parameters, returnTypeNode }) =>
-            factory.createPropertySignature(
-                undefined,
-                factory.createIdentifier(name),
-                undefined,
-                factory.createFunctionTypeNode(undefined, parameters, returnTypeNode),
+        parsedLogic.actions.map(({ name, parameters, returnTypeNode, sourceLogic }) =>
+            withSourceLogicComment(
+                factory.createPropertySignature(
+                    undefined,
+                    factory.createIdentifier(name),
+                    undefined,
+                    factory.createFunctionTypeNode(undefined, parameters, returnTypeNode),
+                ),
+                sourceLogic,
             ),
         ),
     )
@@ -57,15 +79,17 @@ export function printInlineLogicType(parsedLogic: ParsedLogic): string {
         }
     }
 
-    statements.push(
-        factory.createTypeAliasDeclaration(
-            [factory.createModifier(SyntaxKind.ExportKeyword)],
-            factory.createIdentifier(parsedLogic.logicTypeName),
-            undefined,
-            factory.createTypeReferenceNode(factory.createIdentifier('MakeLogicType'), typeArguments),
-        ),
+    const typeAlias = factory.createTypeAliasDeclaration(
+        [factory.createModifier(SyntaxKind.ExportKeyword)],
+        factory.createIdentifier(parsedLogic.logicTypeName),
+        undefined,
+        factory.createTypeReferenceNode(factory.createIdentifier('MakeLogicType'), typeArguments),
     )
-    ts.addSyntheticLeadingComment(statements[0], SyntaxKind.SingleLineCommentTrivia, INLINE_TYPE_MARKER, true)
+    if (statements.length === 0) {
+        // no interfaces at all - the alias itself carries the marker
+        ts.addSyntheticLeadingComment(typeAlias, SyntaxKind.SingleLineCommentTrivia, INLINE_TYPE_MARKER, true)
+    }
+    statements.push(typeAlias)
     return statements.map(nodeToString).join('\n\n')
 }
 
@@ -116,12 +140,14 @@ export async function writeInlineLogicTypes(
             const blockStatements = getInlineBlockStatements(existingDeclaration, parsedLogic.logicName)
             const start = getBlockStart(blockStatements[0], sourceFile)
             const end = existingDeclaration.getEnd()
-            if (rawCode.slice(start, end) !== block) {
+            if (!sameGeneratedCode(rawCode.slice(start, end), block)) {
                 edits.push({ start, end, text: block })
             }
         } else {
             const statement = getTopLevelStatement(parsedLogic.node)
-            const insertPos = statement.getStart(sourceFile)
+            // insert above the statement's leading comments, so they stay attached to the logic
+            const leadingComments = ts.getLeadingCommentRanges(rawCode, statement.pos) ?? []
+            const insertPos = leadingComments.length > 0 ? leadingComments[0].pos : statement.getStart(sourceFile)
             edits.push({ start: insertPos, end: insertPos, text: `${block}\n\n` })
         }
 
@@ -246,6 +272,21 @@ export async function writeInlineLogicTypes(
     fs.writeFileSync(filename, newText)
     log(`🔥 Writing inline logic types: ${osPath.relative(process.cwd(), filename)}`)
     return { filesToWrite: 1, writtenFiles: 1 }
+}
+
+/**
+ * Compare generated code ignoring formatting, so a formatter (prettier, oxfmt, ...) reflowing the
+ * block - semicolons, trailing commas, quotes, line breaks - does not make us rewrite it forever.
+ */
+function sameGeneratedCode(existingCode: string, generatedCode: string): boolean {
+    const normalize = (code: string): string =>
+        code
+            .replace(/"/g, "'")
+            .replace(/[;,]/g, '')
+            .replace(/\s+/g, '')
+            // leading pipe of a formatter-reflowed union type, e.g. `selection: | number | EditorRange`
+            .replace(/([:(<=[])\|/g, '$1')
+    return normalize(existingCode) === normalize(generatedCode)
 }
 
 /** Start of the generated block: the kea-typegen marker comment if present, otherwise the declaration itself */

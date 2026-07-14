@@ -1,5 +1,6 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
+import { NodeBuilderFlags } from 'typescript'
 import { cloneNodeSorted, gatherImports, getParameterDeclaration } from '../utils'
 import { Expression, Type } from 'typescript'
 
@@ -47,6 +48,7 @@ export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: E
 
                 const symbol = checker.getSymbolAtLocation(logicReference)
                 const otherLogicType = checker.getTypeOfSymbolAtLocation(symbol, logicReference)
+                const sourceLogic = ts.isIdentifier(logicReference) ? logicReference.text : logicReference.getText()
 
                 if (loaderName === 'actions') {
                     const actionsForLogic = otherLogicType
@@ -85,9 +87,56 @@ export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: E
                                                 name: lookup[name],
                                                 returnTypeNode,
                                                 parameters,
+                                                sourceLogic,
                                             })
                                         }
                                     }
+                                }
+                            }
+                        }
+                    } else if (actionsForLogic) {
+                        // `actionCreators` is not a literal type node we can walk syntactically - e.g. the other
+                        // logic is typed with MakeLogicType, where actionCreators is a mapped type. Resolve the
+                        // connected action types semantically instead.
+                        const actionCreatorsType = checker.getTypeOfSymbolAtLocation(actionsForLogic, logicReference)
+                        for (const actionProperty of actionCreatorsType.getProperties()) {
+                            const name = actionProperty.getName()
+                            if (!lookup[name]) {
+                                continue
+                            }
+                            const actionCreatorType = checker.getTypeOfSymbolAtLocation(actionProperty, logicReference)
+                            const signature = actionCreatorType.getCallSignatures()[0]
+                            if (!signature) {
+                                continue
+                            }
+                            const signatureNode = checker.signatureToSignatureDeclaration(
+                                signature,
+                                ts.SyntaxKind.FunctionType,
+                                logicReference,
+                                NodeBuilderFlags.NoTruncation | NodeBuilderFlags.IgnoreErrors,
+                            ) as ts.FunctionTypeNode | undefined
+                            if (!signatureNode) {
+                                continue
+                            }
+                            const parameters = signatureNode.parameters.map((param) => getParameterDeclaration(param))
+                            let returnType: ts.TypeNode = signatureNode.type
+                            if (ts.isParenthesizedTypeNode(returnType)) {
+                                returnType = returnType.type
+                            }
+                            if (ts.isTypeLiteralNode(returnType)) {
+                                const payload = returnType.members.find(
+                                    (m) => m.name && ts.isIdentifier(m.name) && m.name.text === 'payload',
+                                )
+                                if (payload && ts.isPropertySignature(payload) && payload.type) {
+                                    const returnTypeNode = cloneNodeSorted(payload.type)
+                                    gatherImports(signatureNode, checker, parsedLogic)
+
+                                    parsedLogic.actions.push({
+                                        name: lookup[name],
+                                        returnTypeNode,
+                                        parameters,
+                                        sourceLogic,
+                                    })
                                 }
                             }
                         }
@@ -109,6 +158,7 @@ export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: E
                                         name: lookup[name],
                                         typeNode,
                                         functionTypes: [],
+                                        sourceLogic,
                                     })
                                 }
                             }

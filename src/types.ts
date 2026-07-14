@@ -5,11 +5,15 @@ export interface ActionTransform {
     name: string
     parameters: ts.ParameterDeclaration[]
     returnTypeNode: ts.TypeNode
+    /** Name of the logic this action was connected from, e.g. "userLogic" */
+    sourceLogic?: string
 }
 
 export interface NameType {
     name: string
     typeNode: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
+    /** Name of the logic this value was connected from, e.g. "userLogic" */
+    sourceLogic?: string
 }
 
 export interface ReducerTransform extends NameType {}

@@ -194,7 +194,8 @@ describe('inline mode', () => {
             expect(updatedLogic.match(/export type logicType = MakeLogicType</g)?.length).toBe(1)
             expect(updatedLogic.match(/export interface logicValues \{/g)?.length).toBe(1)
             expect(updatedLogic.match(/export interface logicActions \{/g)?.length).toBe(1)
-            expect(updatedLogic.match(/DO NOT EDIT THIS BLOCK MANUALLY/g)?.length).toBe(1)
+            // one marker per generated interface (values, actions, props)
+            expect(updatedLogic.match(/DO NOT EDIT THIS BLOCK MANUALLY/g)?.length).toBe(3)
         } finally {
             fs.rmSync(tempDir, { recursive: true, force: true })
         }
@@ -259,6 +260,130 @@ describe('inline mode', () => {
             expect(writtenLogic).toContain('export type logicType = MakeLogicType<{}, logicActions>')
             expect(writtenLogic).toContain('export const logic = kea<logicType>({')
             expect(fs.existsSync(logicTypePath)).toBe(false)
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
+        }
+    })
+
+    test('leaves a reformatted but semantically identical block alone', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-inline-reformat-'))
+
+        try {
+            const logicDir = path.join(tempDir, 'src')
+            const logicPath = path.join(logicDir, 'logic.ts')
+            const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+
+            fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+            fs.mkdirSync(logicDir, { recursive: true })
+
+            fs.writeFileSync(
+                keaDtsPath,
+                [
+                    'export function kea<T = any>(input: any): T',
+                    'export interface MakeLogicType<V = any, A = any, P = any> {}',
+                    '',
+                ].join('\n'),
+            )
+            fs.writeFileSync(
+                logicPath,
+                [
+                    "import { MakeLogicType, kea } from 'kea'",
+                    '',
+                    'export const logic = kea({',
+                    '    actions: () => ({',
+                    '        setValue: (value: string | number) => ({ value }),',
+                    '    }),',
+                    '})',
+                    '',
+                ].join('\n'),
+            )
+
+            const appOptions: AppOptions = {
+                rootPath: logicDir,
+                typesPath: logicDir,
+                packageJsonPath: path.join(tempDir, 'package.json'),
+                inline: true,
+                write: true,
+                log: () => {},
+            }
+
+            const program = createProgram([logicPath])
+            await printToFiles(program, appOptions, visitProgram(program, appOptions))
+
+            // simulate a formatter pass: strip semicolons and reflow unions with a leading pipe
+            const formatted = fs
+                .readFileSync(logicPath, 'utf8')
+                .replace(/;$/gm, '')
+                .replace(/value: string \| number\) =>/g, 'value:\n        | string\n        | number\n    ) =>')
+            fs.writeFileSync(logicPath, formatted)
+
+            const secondProgram = createProgram([logicPath])
+            const secondResponse = await printToFiles(secondProgram, appOptions, visitProgram(secondProgram, appOptions))
+            expect(secondResponse).toEqual({ filesToWrite: 0, writtenFiles: 0, filesToModify: 0 })
+            expect(fs.readFileSync(logicPath, 'utf8')).toBe(formatted)
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
+        }
+    })
+
+    test('keeps leading comments attached to the logic when inserting the block', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-inline-comments-'))
+
+        try {
+            const logicDir = path.join(tempDir, 'src')
+            const logicPath = path.join(logicDir, 'logic.ts')
+            const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+
+            fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+            fs.mkdirSync(logicDir, { recursive: true })
+
+            fs.writeFileSync(
+                keaDtsPath,
+                [
+                    'export function kea<T = any>(input: any): T',
+                    'export interface MakeLogicType<V = any, A = any, P = any> {}',
+                    '',
+                ].join('\n'),
+            )
+            fs.writeFileSync(
+                logicPath,
+                [
+                    "import { kea } from 'kea'",
+                    '',
+                    '// this comment describes the logic and must stay attached to it',
+                    'export const logic = kea({',
+                    '    actions: () => ({',
+                    '        setValue: (value: string) => ({ value }),',
+                    '    }),',
+                    '})',
+                    '',
+                ].join('\n'),
+            )
+
+            const appOptions: AppOptions = {
+                rootPath: logicDir,
+                typesPath: logicDir,
+                packageJsonPath: path.join(tempDir, 'package.json'),
+                inline: true,
+                write: true,
+                log: () => {},
+            }
+
+            const program = createProgram([logicPath])
+            const response = await printToFiles(program, appOptions, visitProgram(program, appOptions))
+            expect(response.writtenFiles).toBe(1)
+
+            const writtenLogic = fs.readFileSync(logicPath, 'utf8')
+            expect(writtenLogic).toContain(
+                [
+                    '// this comment describes the logic and must stay attached to it',
+                    'export const logic = kea<logicType>({',
+                ].join('\n'),
+            )
+            // the generated block sits above the comment
+            expect(writtenLogic.indexOf('DO NOT EDIT THIS BLOCK MANUALLY')).toBeLessThan(
+                writtenLogic.indexOf('// this comment describes the logic'),
+            )
         } finally {
             fs.rmSync(tempDir, { recursive: true, force: true })
         }
@@ -435,6 +560,131 @@ describe('mixed mode with inlinePaths', () => {
                 '// Generated by kea-typegen. DO NOT EDIT THIS BLOCK MANUALLY.',
             )
             expect(fs.existsSync(path.join(inlineDir, 'inlinedLogicType.ts'))).toBe(false)
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
+        }
+    })
+
+    test('connected actions from an inline (MakeLogicType) logic land in the consuming logic type', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-inline-connect-'))
+
+        try {
+            const rootDir = path.join(tempDir, 'src')
+            const inlineLogicPath = path.join(rootDir, 'inlinedLogic.ts')
+            const consumerLogicPath = path.join(rootDir, 'consumerLogic.ts')
+            const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+
+            fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+            fs.mkdirSync(rootDir, { recursive: true })
+
+            // minimal kea with a mapped-type MakeLogicType, mirroring the real shape
+            fs.writeFileSync(
+                keaDtsPath,
+                [
+                    'export function kea<T = any>(input: any): T',
+                    'export type AnyFunction = (...args: any) => any',
+                    'export interface MakeLogicType<V = any, A = any, P = any> {',
+                    '    actionCreators: {',
+                    '        [K in keyof A]: A[K] extends AnyFunction',
+                    '            ? (...args: Parameters<A[K]>) => { type: string; payload: ReturnType<A[K]> }',
+                    '            : never',
+                    '    }',
+                    '    values: V',
+                    '}',
+                    '',
+                ].join('\n'),
+            )
+            fs.writeFileSync(
+                inlineLogicPath,
+                [
+                    "import { MakeLogicType, kea } from 'kea'",
+                    '',
+                    '// Generated by kea-typegen. DO NOT EDIT THIS BLOCK MANUALLY.',
+                    'export interface inlinedLogicValues {',
+                    '    value: string',
+                    '}',
+                    '',
+                    'export interface inlinedLogicActions {',
+                    '    setValue: (value: string) => {',
+                    '        value: string',
+                    '    }',
+                    '}',
+                    '',
+                    'export type inlinedLogicType = MakeLogicType<inlinedLogicValues, inlinedLogicActions>',
+                    '',
+                    'export const inlinedLogic = kea<inlinedLogicType>({',
+                    '    actions: () => ({',
+                    '        setValue: (value: string) => ({ value }),',
+                    '    }),',
+                    '    reducers: () => ({',
+                    "        value: ['' as string, { setValue: (_, { value }) => value }],",
+                    '    }),',
+                    '})',
+                    '',
+                ].join('\n'),
+            )
+            fs.writeFileSync(
+                consumerLogicPath,
+                [
+                    "import { kea } from 'kea'",
+                    '',
+                    "import { inlinedLogic } from './inlinedLogic'",
+                    '',
+                    'export const consumerLogic = kea({',
+                    '    connect: {',
+                    "        actions: [inlinedLogic, ['setValue']],",
+                    "        values: [inlinedLogic, ['value']],",
+                    '    },',
+                    '})',
+                    '',
+                ].join('\n'),
+            )
+            const inlineConsumerDir = path.join(rootDir, 'inlineConsumer')
+            const inlineConsumerLogicPath = path.join(inlineConsumerDir, 'inlineConsumerLogic.ts')
+            fs.mkdirSync(inlineConsumerDir, { recursive: true })
+            fs.writeFileSync(
+                inlineConsumerLogicPath,
+                [
+                    "import { kea } from 'kea'",
+                    '',
+                    "import { inlinedLogic } from '../inlinedLogic'",
+                    '',
+                    'export const inlineConsumerLogic = kea({',
+                    '    connect: {',
+                    "        actions: [inlinedLogic, ['setValue']],",
+                    "        values: [inlinedLogic, ['value']],",
+                    '    },',
+                    '})',
+                    '',
+                ].join('\n'),
+            )
+
+            const appOptions: AppOptions = {
+                rootPath: rootDir,
+                typesPath: rootDir,
+                packageJsonPath: path.join(tempDir, 'package.json'),
+                inlinePaths: [inlineConsumerDir],
+                write: true,
+                log: () => {},
+            }
+
+            const program = createProgram([inlineLogicPath, consumerLogicPath, inlineConsumerLogicPath])
+            await printToFiles(program, appOptions, visitProgram(program, appOptions))
+
+            // consumerLogic is classic-mode, so it gets a logicType.ts that must include the connected action
+            const consumerType = fs.readFileSync(path.join(rootDir, 'consumerLogicType.ts'), 'utf8')
+            expect(consumerType).toContain('setValue: (value: string) => void')
+            expect(consumerType).toContain('value: string')
+
+            // the inline consumer's block marks connected values/actions with their source logic
+            const inlineConsumer = fs.readFileSync(inlineConsumerLogicPath, 'utf8')
+            expect(inlineConsumer).toMatch(/value: string.* \/\/ inlinedLogic/)
+            expect(inlineConsumer).toMatch(/\};? \/\/ inlinedLogic/)
+
+            // a second pass over the annotated block changes nothing
+            const secondProgram = createProgram([inlineLogicPath, consumerLogicPath, inlineConsumerLogicPath])
+            const secondResponse = await printToFiles(secondProgram, appOptions, visitProgram(secondProgram, appOptions))
+            expect(secondResponse).toEqual({ filesToWrite: 0, writtenFiles: 0, filesToModify: 0 })
         } finally {
             fs.rmSync(tempDir, { recursive: true, force: true })
         }

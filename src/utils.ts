@@ -214,7 +214,8 @@ export function getParameterDeclaration(param: ts.ParameterDeclaration) {
     return factory.createParameterDeclaration(
         undefined,
         undefined,
-        factory.createIdentifier(param.name.getText()),
+        // .getText() throws on synthetic nodes (e.g. from signatureToSignatureDeclaration)
+        factory.createIdentifier(ts.isIdentifier(param.name) ? param.name.text : param.name.getText()),
         param.initializer || param.questionToken ? factory.createToken(SyntaxKind.QuestionToken) : undefined,
         cloneNodeSorted(param.type || factory.createKeywordTypeNode(SyntaxKind.AnyKeyword)),
         undefined,
