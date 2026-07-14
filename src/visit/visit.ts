@@ -10,6 +10,7 @@ import {
     getLogicPathString,
     getTypeNodeForNode,
     isKeaCall,
+    isManuallyTypedLogic,
 } from '../utils'
 import { visitActions } from './visitActions'
 import { visitReducers } from './visitReducers'
@@ -215,6 +216,19 @@ export function visitKeaCalls(
         // get "logicType" in "kea<logicType>(..)"
         const keaTypeArguments = ts.isCallExpression(node.parent) ? node.parent.typeArguments : []
         const keaTypeArgument = keaTypeArguments?.[0]
+
+        // if the logic is already manually typed (e.g. kea<MakeLogicType<...>>(...)), leave it alone
+        if (keaTypeArgument && isManuallyTypedLogic(keaTypeArgument, logicTypeName, checker)) {
+            if (appOptions?.verbose) {
+                appOptions.log(
+                    `🩶 Skipping manually typed logic "${logicName}" in ${path.relative(
+                        process.cwd(),
+                        sourceFile.fileName,
+                    )}`,
+                )
+            }
+            return
+        }
 
         const pathString = getLogicPathString(appOptions, sourceFile.fileName)
         let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')

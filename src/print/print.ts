@@ -36,6 +36,7 @@ import { printSharedListeners } from './printSharedListeners'
 import { printListeners } from './printListeners'
 import { writePaths } from '../write/writePaths'
 import { writeTypeImports } from '../write/writeTypeImports'
+import { writeInlineLogicTypes } from '../write/writeInlineLogicTypes'
 import { printInternalExtraInput } from './printInternalExtraInput'
 import { convertToBuilders } from '../write/convertToBuilders'
 import { cacheWrittenFile } from '../cache'
@@ -78,8 +79,10 @@ export async function printToFiles(
         }
         groupedByFile[parsedLogic.fileName].push(parsedLogic)
 
-        // create the Nodes and gather referenced types
-        printLogicType(parsedLogic, appOptions)
+        if (!appOptions.inline) {
+            // create the Nodes and gather referenced types
+            printLogicType(parsedLogic, appOptions)
+        }
     }
 
     // Automatically ignore imports from "node_modules/@types/node", if {types: ["node"]} in tsconfig.json
@@ -105,12 +108,38 @@ export async function printToFiles(
     const shouldIgnore = (absolutePath: string) =>
         !!doNotImportFromPaths.find((badPath) => absolutePath.startsWith(badPath))
 
+    const nodeModulesPath = path.join(
+        appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
+        'node_modules',
+    )
+
     let writtenFiles = 0
     let filesToWrite = 0
     let filesToModify = 0
 
     for (const [fileName, parsedLogics] of Object.entries(groupedByFile)) {
         const typeFileName = parsedLogics[0].typeFileName
+
+        if (appOptions.inline) {
+            // write/update MakeLogicType blocks above the logics instead of writing a logicType.ts file
+            const inlineResponse = await writeInlineLogicTypes(
+                program,
+                appOptions,
+                fileName,
+                parsedLogics,
+                nodeModulesPath,
+                shouldIgnore,
+            )
+            filesToWrite += inlineResponse.filesToWrite
+            writtenFiles += inlineResponse.writtenFiles
+
+            // the logicType.ts file is superseded by the inline block
+            if (appOptions.delete && fs.existsSync(typeFileName)) {
+                log(`🗑️ Deleting: ${path.relative(process.cwd(), typeFileName)}`)
+                fs.unlinkSync(typeFileName)
+            }
+            continue
+        }
 
         const logicStrings = []
         const requiredKeys = new Set(['Logic'])
@@ -131,62 +160,12 @@ export async function printToFiles(
 
         const output = logicStrings.join('\n\n')
 
-        const nodeModulesPath = path.join(
-            appOptions.packageJsonPath ? path.dirname(appOptions.packageJsonPath) : appOptions.rootPath,
-            'node_modules',
+        const otherimports = buildTypeImportEntries(
+            parsedLogics[0].typeReferencesToImportFromFiles,
+            parsedLogics[0].typeFileName,
+            nodeModulesPath,
+            shouldIgnore,
         )
-
-        const otherimports = Object.entries(parsedLogics[0].typeReferencesToImportFromFiles)
-            .filter(([_, list]) => list.size > 0)
-            .map(([file, list]) => {
-                let finalPath = file
-
-                // Relative path? Get the absolute.
-                if (finalPath.startsWith('.')) {
-                    finalPath = path.resolve(path.dirname(parsedLogics[0].typeFileName), finalPath)
-                }
-                if (finalPath.startsWith('node_modules/')) {
-                    finalPath = path.resolve(path.dirname(nodeModulesPath), finalPath)
-                }
-                // clean up '../../node_modules/...'
-                if (finalPath.startsWith(nodeModulesPath)) {
-                    finalPath = finalPath.substring(nodeModulesPath.length + 1)
-                    if (finalPath.startsWith('.pnpm/')) {
-                        // node_modules/.pnpm/pkg@version/node_modules/* --> *
-                        const regex = /\.pnpm\/[^/]+@[^\/]+\/node_modules\/(.*)/
-                        const result = finalPath.match(regex)
-                        if (result && result.length > 1) {
-                            finalPath = result[1]
-                        }
-                    }
-                    if (finalPath.startsWith('@types/')) {
-                        finalPath = finalPath.substring(7)
-                    }
-                }
-
-                // Resolve absolute urls
-                if (finalPath.startsWith('/')) {
-                    finalPath = path.relative(path.dirname(parsedLogics[0].typeFileName), finalPath)
-                    if (!finalPath.startsWith('.')) {
-                        finalPath = `./${finalPath}`
-                    }
-                }
-
-                // Remove extension
-                finalPath = finalPath.replace(/(\.d|)\.tsx?$/, '')
-
-                // Remove "/index"
-                if (finalPath.split('/').length === 2 && finalPath.endsWith('/index')) {
-                    finalPath = finalPath.substring(0, finalPath.length - 6)
-                }
-
-                return {
-                    list: [...list].sort(),
-                    fullPath: file,
-                    finalPath,
-                }
-            })
-            .filter((entry) => !shouldIgnore(entry.fullPath))
             .map(({ list, finalPath }) => `import type { ${list.join(', ')} } from '${finalPath}'`)
             .join('\n')
 
@@ -304,6 +283,72 @@ export async function printToFiles(
     }
 
     return { filesToWrite, writtenFiles, filesToModify }
+}
+
+export interface TypeImportEntry {
+    list: string[]
+    fullPath: string
+    finalPath: string
+}
+
+/** Resolve gathered type references into import specifiers, relative to the file they'll be imported into */
+export function buildTypeImportEntries(
+    typeReferencesToImportFromFiles: Record<string, Set<string>>,
+    importIntoFile: string,
+    nodeModulesPath: string,
+    shouldIgnore: (absolutePath: string) => boolean,
+): TypeImportEntry[] {
+    return Object.entries(typeReferencesToImportFromFiles)
+        .filter(([_, list]) => list.size > 0)
+        .map(([file, list]) => {
+            let finalPath = file
+
+            // Relative path? Get the absolute.
+            if (finalPath.startsWith('.')) {
+                finalPath = path.resolve(path.dirname(importIntoFile), finalPath)
+            }
+            if (finalPath.startsWith('node_modules/')) {
+                finalPath = path.resolve(path.dirname(nodeModulesPath), finalPath)
+            }
+            // clean up '../../node_modules/...'
+            if (finalPath.startsWith(nodeModulesPath)) {
+                finalPath = finalPath.substring(nodeModulesPath.length + 1)
+                if (finalPath.startsWith('.pnpm/')) {
+                    // node_modules/.pnpm/pkg@version/node_modules/* --> *
+                    const regex = /\.pnpm\/[^/]+@[^\/]+\/node_modules\/(.*)/
+                    const result = finalPath.match(regex)
+                    if (result && result.length > 1) {
+                        finalPath = result[1]
+                    }
+                }
+                if (finalPath.startsWith('@types/')) {
+                    finalPath = finalPath.substring(7)
+                }
+            }
+
+            // Resolve absolute urls
+            if (finalPath.startsWith('/')) {
+                finalPath = path.relative(path.dirname(importIntoFile), finalPath)
+                if (!finalPath.startsWith('.')) {
+                    finalPath = `./${finalPath}`
+                }
+            }
+
+            // Remove extension
+            finalPath = finalPath.replace(/(\.d|)\.tsx?$/, '')
+
+            // Remove "/index"
+            if (finalPath.split('/').length === 2 && finalPath.endsWith('/index')) {
+                finalPath = finalPath.substring(0, finalPath.length - 6)
+            }
+
+            return {
+                list: [...list].sort(),
+                fullPath: file,
+                finalPath,
+            }
+        })
+        .filter((entry) => !shouldIgnore(entry.fullPath))
 }
 
 export function nodeToString(node: Node): string {

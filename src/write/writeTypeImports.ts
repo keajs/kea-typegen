@@ -3,13 +3,13 @@ import * as ts from 'typescript'
 import * as osPath from 'path'
 import { runThroughPrettier } from '../print/print'
 import * as fs from 'fs'
-interface TextEdit {
+export interface TextEdit {
     start: number
     end: number
     text: string
 }
 
-function applyTextEdits(source: string, edits: TextEdit[]): string {
+export function applyTextEdits(source: string, edits: TextEdit[]): string {
     return edits
         .sort((a, b) => b.start - a.start || b.end - a.end)
         .reduce((output, { start, end, text }) => output.slice(0, start) + text + output.slice(end), source)
@@ -19,7 +19,7 @@ function getImportPath(importDeclaration: ts.ImportDeclaration): string | null {
     return ts.isStringLiteralLike(importDeclaration.moduleSpecifier) ? importDeclaration.moduleSpecifier.text : null
 }
 
-function getImportInsertPosition(sourceFile: ts.SourceFile, rawCode: string): number {
+export function getImportInsertPosition(sourceFile: ts.SourceFile, rawCode: string): number {
     const importDeclarations = sourceFile.statements.filter(ts.isImportDeclaration)
     if (importDeclarations.length > 0) {
         return importDeclarations[importDeclarations.length - 1].getEnd()
@@ -29,7 +29,7 @@ function getImportInsertPosition(sourceFile: ts.SourceFile, rawCode: string): nu
     return shebangMatch ? shebangMatch[0].length : 0
 }
 
-function getTypeArgumentInsertEnd(callExpression: ts.CallExpression, sourceFile: ts.SourceFile): number {
+export function getTypeArgumentInsertEnd(callExpression: ts.CallExpression, sourceFile: ts.SourceFile): number {
     const openParenToken = callExpression
         .getChildren(sourceFile)
         .find((child) => child.kind === ts.SyntaxKind.OpenParenToken)

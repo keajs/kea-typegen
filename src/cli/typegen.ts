@@ -39,6 +39,10 @@ yargs
     .option('delete', { describe: 'Delete logicType.ts files without a corresponding logic.ts', type: 'boolean' })
     .option('add-ts-nocheck', { describe: 'Add @ts-nocheck to top of logicType.ts files', type: 'boolean' })
     .option('convert-to-builders', { describe: 'Convert Kea 2.0 inputs to Kea 3.0 logic builders', type: 'boolean' })
+    .option('inline', {
+        describe: 'Write logic types as MakeLogicType blocks above each kea() call, instead of logicType.ts files',
+        type: 'boolean',
+    })
     .option('import-global-types', {
         describe: 'Add import statements in logicType.ts files for global types (e.g. @types/node)',
         type: 'boolean',

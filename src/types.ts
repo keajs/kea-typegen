@@ -78,6 +78,8 @@ export interface AppOptions {
     addTsNocheck?: boolean
     /** Convert kea 2.0 logic input to kea 3.0 builders */
     convertToBuilders?: boolean
+    /** Write logic types as MakeLogicType blocks above each kea() call, instead of into logicType.ts files */
+    inline?: boolean
     /** Show TypeScript errors */
     showTsErrors?: boolean
     /** Cache generated logic files into .typegen, use them if generating a logic type for the first time */
