@@ -39,7 +39,8 @@ import { writeTypeImports } from '../write/writeTypeImports'
 import { writeInlineLogicTypes } from '../write/writeInlineLogicTypes'
 import { printInternalExtraInput } from './printInternalExtraInput'
 import { convertToBuilders } from '../write/convertToBuilders'
-import { cacheWrittenFile } from '../cache'
+import { cacheWrittenFile, deleteCachedFile } from '../cache'
+import { isInlineFile } from '../utils'
 
 const prettierConfigCache = new Map<string, Promise<prettier.Options | null>>()
 
@@ -78,11 +79,6 @@ export async function printToFiles(
             groupedByFile[parsedLogic.fileName] = []
         }
         groupedByFile[parsedLogic.fileName].push(parsedLogic)
-
-        if (!appOptions.inline) {
-            // create the Nodes and gather referenced types
-            printLogicType(parsedLogic, appOptions)
-        }
     }
 
     // Automatically ignore imports from "node_modules/@types/node", if {types: ["node"]} in tsconfig.json
@@ -120,7 +116,7 @@ export async function printToFiles(
     for (const [fileName, parsedLogics] of Object.entries(groupedByFile)) {
         const typeFileName = parsedLogics[0].typeFileName
 
-        if (appOptions.inline) {
+        if (isInlineFile(appOptions, program.getSourceFile(fileName), parsedLogics)) {
             // write/update MakeLogicType blocks above the logics instead of writing a logicType.ts file
             const inlineResponse = await writeInlineLogicTypes(
                 program,
@@ -137,8 +133,14 @@ export async function printToFiles(
             if (appOptions.delete && fs.existsSync(typeFileName)) {
                 log(`🗑️ Deleting: ${path.relative(process.cwd(), typeFileName)}`)
                 fs.unlinkSync(typeFileName)
+                deleteCachedFile(typeFileName, appOptions)
             }
             continue
+        }
+
+        // create the Nodes and gather referenced types
+        for (const parsedLogic of parsedLogics) {
+            printLogicType(parsedLogic, appOptions)
         }
 
         const logicStrings = []

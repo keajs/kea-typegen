@@ -281,6 +281,7 @@ export function visitKeaCalls(
             hasKeyInLogic: false,
             hasPathInLogic: false,
             typeReferencesToImportFromFiles: {},
+            selectorParamAnnotations: [],
             extraActions: {},
             extraInput: {},
             extraLogicFields: {},

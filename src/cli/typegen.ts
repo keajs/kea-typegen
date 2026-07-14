@@ -43,6 +43,12 @@ yargs
         describe: 'Write logic types as MakeLogicType blocks above each kea() call, instead of logicType.ts files',
         type: 'boolean',
     })
+    .option('inline-paths', {
+        describe:
+            'Like --inline, but only for logic files under these paths (relative to --root). ' +
+            'Everything else keeps its logicType.ts file.',
+        type: 'array',
+    })
     .option('import-global-types', {
         describe: 'Add import statements in logicType.ts files for global types (e.g. @types/node)',
         type: 'boolean',

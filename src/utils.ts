@@ -99,6 +99,47 @@ export function isGeneratedInlineBlock(
     return getInlineBlockStatements(declaration, logicName).some(hasKeaTypegenMarker)
 }
 
+/** Find a top-level `type logicType = ...` or `interface logicType {...}` declaration in the file */
+export function findLogicTypeDeclaration(
+    sourceFile: ts.SourceFile,
+    logicTypeName: string,
+): ts.TypeAliasDeclaration | ts.InterfaceDeclaration | undefined {
+    return sourceFile.statements.find(
+        (statement): statement is ts.TypeAliasDeclaration | ts.InterfaceDeclaration =>
+            (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) &&
+            statement.name.text === logicTypeName,
+    )
+}
+
+/**
+ * Should this logic file get inline MakeLogicType blocks instead of a logicType.ts file?
+ * True when running with --inline, when the file sits under one of `inlinePaths`, or when the
+ * file already carries a generated inline block (so converted files stay inline, whatever the config).
+ */
+export function isInlineFile(
+    appOptions: AppOptions | undefined,
+    sourceFile: ts.SourceFile | undefined,
+    parsedLogics: ParsedLogic[],
+): boolean {
+    if (appOptions?.inline) {
+        return true
+    }
+    if (!sourceFile) {
+        return false
+    }
+    for (const inlinePath of appOptions?.inlinePaths ?? []) {
+        const resolvedPath = path.resolve(appOptions?.rootPath ?? '.', inlinePath)
+        const resolvedFileName = path.resolve(sourceFile.fileName)
+        if (resolvedFileName === resolvedPath || resolvedFileName.startsWith(resolvedPath + path.sep)) {
+            return true
+        }
+    }
+    return parsedLogics.some((parsedLogic) => {
+        const declaration = findLogicTypeDeclaration(sourceFile, parsedLogic.logicTypeName)
+        return declaration ? isGeneratedInlineBlock(declaration, parsedLogic.logicName) : false
+    })
+}
+
 /**
  * True if the type argument in `kea<...>()` is a manually written type (e.g. `MakeLogicType<...>`
  * or a custom interface), as opposed to a type that kea-typegen generates and keeps updated.

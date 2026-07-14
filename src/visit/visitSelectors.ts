@@ -14,8 +14,14 @@ export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression:
             const inputFunctionTypeNode = checker.getTypeAtLocation(inputFunction)
 
             const selectorInputFunctionType = inputFunctionTypeNode.getCallSignatures()[0]?.getReturnType() as ts.Type
+            // IgnoreErrors: the tuple may mention types not referenceable from the logic file
+            // (e.g. kea's internal Props); we only consume the elements' return types anyway
             const selectorInputTypeNode = selectorInputFunctionType
-                ? checker.typeToTypeNode(selectorInputFunctionType, inputFunction, NodeBuilderFlags.NoTruncation)
+                ? checker.typeToTypeNode(
+                      selectorInputFunctionType,
+                      inputFunction,
+                      NodeBuilderFlags.NoTruncation | NodeBuilderFlags.IgnoreErrors,
+                  )
                 : null
 
             let functionNames = []
@@ -74,6 +80,25 @@ export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression:
                     name,
                     typeNode,
                     functionTypes,
+                })
+
+                // combiner parameters without a type annotation, e.g. `(counter) => counter * 2`.
+                // In inline mode these get their inferred types written into the source, since
+                // MakeLogicType's loose selector typing can no longer infer them contextually.
+                computedFunction.parameters.forEach((parameter, index) => {
+                    const functionType = functionTypes[index]
+                    if (
+                        !parameter.type &&
+                        !parameter.dotDotDotToken &&
+                        ts.isIdentifier(parameter.name) &&
+                        functionType &&
+                        functionType.type.kind !== ts.SyntaxKind.AnyKeyword
+                    ) {
+                        parsedLogic.selectorParamAnnotations.push({
+                            parameter,
+                            typeNode: functionType.type,
+                        })
+                    }
                 })
             }
         }

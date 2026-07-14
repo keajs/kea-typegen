@@ -18,6 +18,12 @@ export interface SelectorTransform extends NameType {
     functionTypes?: { name: string; type: ts.TypeNode }[]
 }
 
+/** A selector combiner parameter without a type annotation, plus the inferred type to write into the source */
+export interface SelectorParamAnnotation {
+    parameter: ts.ParameterDeclaration
+    typeNode: ts.TypeNode
+}
+
 export interface ListenerTransform {
     name: string
     action: ts.TypeNode | ts.KeywordTypeNode | ts.ParenthesizedTypeNode
@@ -46,6 +52,7 @@ export interface ParsedLogic {
     propsType?: ts.TypeNode
     keyType?: ts.TypeNode
     typeReferencesToImportFromFiles: Record<string, Set<string>>
+    selectorParamAnnotations: SelectorParamAnnotation[]
     interfaceDeclaration?: ts.InterfaceDeclaration
     extraActions: Record<string, ts.TypeNode>
     extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
@@ -80,6 +87,8 @@ export interface AppOptions {
     convertToBuilders?: boolean
     /** Write logic types as MakeLogicType blocks above each kea() call, instead of into logicType.ts files */
     inline?: boolean
+    /** Like `inline`, but only for logic files under these paths. Everything else keeps its logicType.ts file. */
+    inlinePaths?: string[]
     /** Show TypeScript errors */
     showTsErrors?: boolean
     /** Cache generated logic files into .typegen, use them if generating a logic type for the first time */

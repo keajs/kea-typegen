@@ -31,6 +31,6 @@ export const counterLogic = kea<counterLogicType>({
         dashboard: [null as Dashboard | null, { setDashboard: (_, { dashboard }) => dashboard }],
     },
     selectors: {
-        doubleCounter: [(s) => [s.counter], (counter) => counter * 2],
+        doubleCounter: [(s) => [s.counter], (counter: number) => counter * 2],
     },
 })

@@ -263,4 +263,235 @@ describe('inline mode', () => {
             fs.rmSync(tempDir, { recursive: true, force: true })
         }
     })
+
+    test('annotates untyped selector combiner parameters', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-inline-selectors-'))
+
+        try {
+            const logicDir = path.join(tempDir, 'src')
+            const logicPath = path.join(logicDir, 'logic.ts')
+            const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+
+            fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+            fs.mkdirSync(logicDir, { recursive: true })
+
+            fs.writeFileSync(
+                keaDtsPath,
+                [
+                    'export function kea<T = any>(input: any): T',
+                    'export interface MakeLogicType<V = any, A = any, P = any> {}',
+                    '',
+                ].join('\n'),
+            )
+            fs.writeFileSync(
+                logicPath,
+                [
+                    "import { kea } from 'kea'",
+                    '',
+                    'export const logic = kea({',
+                    '    actions: () => ({',
+                    '        setCounter: (counter: number) => ({ counter }),',
+                    '    }),',
+                    '    reducers: () => ({',
+                    '        counter: [0 as number, { setCounter: (_, { counter }) => counter }],',
+                    '    }),',
+                    '    selectors: () => ({',
+                    '        doubleCounter: [(s): [() => number] => [s.counter], (counter) => counter * 2],',
+                    '        typedCounter: [(s): [() => number] => [s.counter], (counter: number) => counter * 3],',
+                    '    }),',
+                    '})',
+                    '',
+                ].join('\n'),
+            )
+
+            const appOptions: AppOptions = {
+                rootPath: logicDir,
+                typesPath: logicDir,
+                packageJsonPath: path.join(tempDir, 'package.json'),
+                inline: true,
+                write: true,
+                log: () => {},
+            }
+
+            const program = createProgram([logicPath])
+            const response = await printToFiles(program, appOptions, visitProgram(program, appOptions))
+            expect(response.writtenFiles).toBe(1)
+
+            const writtenLogic = fs.readFileSync(logicPath, 'utf8')
+            expect(writtenLogic).toContain('(counter: number) => counter * 2')
+            // already annotated params stay untouched
+            expect(writtenLogic).toContain('(counter: number) => counter * 3')
+
+            // a second pass changes nothing
+            const secondProgram = createProgram([logicPath])
+            const secondResponse = await printToFiles(secondProgram, appOptions, visitProgram(secondProgram, appOptions))
+            expect(secondResponse).toEqual({ filesToWrite: 0, writtenFiles: 0, filesToModify: 0 })
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
+        }
+    })
+})
+
+describe('mixed mode with inlinePaths', () => {
+    const createProgram = (fileNames: string[]) =>
+        ts.createProgram(fileNames, {
+            module: ts.ModuleKind.CommonJS,
+            moduleResolution: ts.ModuleResolutionKind.NodeJs,
+            target: ts.ScriptTarget.ES2020,
+            skipLibCheck: true,
+        })
+
+    const writeKeaDts = (tempDir: string) => {
+        const keaDtsPath = path.join(tempDir, 'node_modules', 'kea', 'index.d.ts')
+        fs.mkdirSync(path.dirname(keaDtsPath), { recursive: true })
+        fs.writeFileSync(
+            keaDtsPath,
+            [
+                'export function kea<T = any>(input: any): T',
+                'export interface MakeLogicType<V = any, A = any, P = any> {}',
+                '',
+            ].join('\n'),
+        )
+    }
+
+    const simpleLogicSource = [
+        "import { kea } from 'kea'",
+        '',
+        'export const logic = kea({',
+        '    actions: () => ({',
+        '        setValue: (value: string) => ({ value }),',
+        '    }),',
+        '})',
+        '',
+    ].join('\n')
+
+    test('files under inlinePaths go inline, everything else keeps logicType.ts', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-inline-paths-'))
+
+        try {
+            const rootDir = path.join(tempDir, 'src')
+            const inlineDir = path.join(rootDir, 'scenes', 'inlined')
+            const classicDir = path.join(rootDir, 'scenes', 'classic')
+            const inlineLogicPath = path.join(inlineDir, 'inlinedLogic.ts')
+            const classicLogicPath = path.join(classicDir, 'classicLogic.ts')
+
+            writeKeaDts(tempDir)
+            fs.mkdirSync(inlineDir, { recursive: true })
+            fs.mkdirSync(classicDir, { recursive: true })
+            fs.writeFileSync(inlineLogicPath, simpleLogicSource.replace('export const logic', 'export const inlinedLogic'))
+            fs.writeFileSync(classicLogicPath, simpleLogicSource.replace('export const logic', 'export const classicLogic'))
+
+            const appOptions: AppOptions = {
+                rootPath: rootDir,
+                typesPath: rootDir,
+                packageJsonPath: path.join(tempDir, 'package.json'),
+                inlinePaths: [path.join(rootDir, 'scenes', 'inlined')],
+                write: true,
+                delete: true,
+                log: () => {},
+            }
+
+            const program = createProgram([inlineLogicPath, classicLogicPath])
+            await printToFiles(program, appOptions, visitProgram(program, appOptions))
+
+            const writtenInlineLogic = fs.readFileSync(inlineLogicPath, 'utf8')
+            expect(writtenInlineLogic).toContain('// Generated by kea-typegen. DO NOT EDIT THIS BLOCK MANUALLY.')
+            expect(writtenInlineLogic).toContain('export type inlinedLogicType = MakeLogicType<{}, inlinedLogicActions>')
+            expect(fs.existsSync(path.join(inlineDir, 'inlinedLogicType.ts'))).toBe(false)
+
+            const writtenClassicLogic = fs.readFileSync(classicLogicPath, 'utf8')
+            expect(writtenClassicLogic).not.toContain('MakeLogicType')
+            expect(fs.existsSync(path.join(classicDir, 'classicLogicType.ts'))).toBe(true)
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
+        }
+    })
+
+    test('relative inlinePaths resolve against rootPath', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-inline-paths-relative-'))
+
+        try {
+            const rootDir = path.join(tempDir, 'src')
+            const inlineDir = path.join(rootDir, 'scenes', 'inlined')
+            const inlineLogicPath = path.join(inlineDir, 'inlinedLogic.ts')
+
+            writeKeaDts(tempDir)
+            fs.mkdirSync(inlineDir, { recursive: true })
+            fs.writeFileSync(inlineLogicPath, simpleLogicSource.replace('export const logic', 'export const inlinedLogic'))
+
+            const appOptions: AppOptions = {
+                rootPath: rootDir,
+                typesPath: rootDir,
+                packageJsonPath: path.join(tempDir, 'package.json'),
+                inlinePaths: ['./scenes/inlined'],
+                write: true,
+                log: () => {},
+            }
+
+            const program = createProgram([inlineLogicPath])
+            await printToFiles(program, appOptions, visitProgram(program, appOptions))
+
+            expect(fs.readFileSync(inlineLogicPath, 'utf8')).toContain(
+                '// Generated by kea-typegen. DO NOT EDIT THIS BLOCK MANUALLY.',
+            )
+            expect(fs.existsSync(path.join(inlineDir, 'inlinedLogicType.ts'))).toBe(false)
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
+        }
+    })
+
+    test('files that already carry an inline block stay inline without any inline options', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-typegen-inline-sticky-'))
+
+        try {
+            const rootDir = path.join(tempDir, 'src')
+            const logicPath = path.join(rootDir, 'stickyLogic.ts')
+
+            writeKeaDts(tempDir)
+            fs.mkdirSync(rootDir, { recursive: true })
+            fs.writeFileSync(
+                logicPath,
+                [
+                    "import { MakeLogicType, kea } from 'kea'",
+                    '',
+                    '// Generated by kea-typegen. DO NOT EDIT THIS BLOCK MANUALLY.',
+                    'export interface stickyLogicActions {',
+                    '    setValue: (value: string) => {',
+                    '        value: string',
+                    '    }',
+                    '}',
+                    '',
+                    'export type stickyLogicType = MakeLogicType<{}, stickyLogicActions>',
+                    '',
+                    'export const stickyLogic = kea<stickyLogicType>({',
+                    '    actions: () => ({',
+                    '        setValue: (value: string) => ({ value }),',
+                    '        setOther: (other: number) => ({ other }),',
+                    '    }),',
+                    '})',
+                    '',
+                ].join('\n'),
+            )
+
+            // no `inline`, no `inlinePaths` - the existing block alone keeps the file inline
+            const appOptions: AppOptions = {
+                rootPath: rootDir,
+                typesPath: rootDir,
+                packageJsonPath: path.join(tempDir, 'package.json'),
+                write: true,
+                log: () => {},
+            }
+
+            const program = createProgram([logicPath])
+            const response = await printToFiles(program, appOptions, visitProgram(program, appOptions))
+            expect(response.writtenFiles).toBe(1)
+
+            const writtenLogic = fs.readFileSync(logicPath, 'utf8')
+            expect(writtenLogic).toContain('setOther: (other: number) =>')
+            expect(writtenLogic.match(/DO NOT EDIT THIS BLOCK MANUALLY/g)?.length).toBe(1)
+            expect(fs.existsSync(path.join(rootDir, 'stickyLogicType.ts'))).toBe(false)
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true })
+        }
+    })
 })

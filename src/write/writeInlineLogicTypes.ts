@@ -135,6 +135,14 @@ export async function writeInlineLogicTypes(
                 edits.push({ start, end, text })
             }
         }
+
+        // annotate untyped selector combiner parameters, e.g. `(counter) => ...` -> `(counter: number) => ...`.
+        // MakeLogicType types these as `any`, so without an explicit annotation the inferred
+        // value types would degrade to `any` on the next typegen run.
+        for (const { parameter, typeNode } of parsedLogic.selectorParamAnnotations) {
+            const insertPos = (parameter.questionToken ?? parameter.name).getEnd()
+            edits.push({ start: insertPos, end: insertPos, text: `: ${nodeToString(typeNode)}` })
+        }
     }
 
     if (managedLogics.length > 0) {
