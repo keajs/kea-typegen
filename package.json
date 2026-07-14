@@ -1,6 +1,6 @@
 {
     "name": "kea-typegen",
-    "version": "3.7.1",
+    "version": "3.8.0",
     "description": "Generate type definitions for kea logic",
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
@@ -13,6 +13,8 @@
         "samples:write": "ts-node ./src/cli/typegen.ts write -r ./samples --write-paths --delete",
         "samples:convert": "ts-node ./src/cli/typegen.ts write -r ./samples --convert-to-builders",
         "samples:watch": "ts-node ./src/cli/typegen.ts watch -r ./samples --delete",
+        "samples:inline:check": "ts-node ./src/cli/typegen.ts check -r ./samples-inline --inline",
+        "samples:inline:write": "ts-node ./src/cli/typegen.ts write -r ./samples-inline --inline --delete",
         "samples:write:posthog": "NODE_OPTIONS=\"--max-old-space-size=16384\" ts-node ./src/cli/typegen.ts write --show-ts-errors -c",
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
