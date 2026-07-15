@@ -60,11 +60,11 @@ export function hasKeaTypegenMarker(node: ts.Node): boolean {
     return ranges.some(({ pos, end }) => sourceFile.text.slice(pos, end).includes('kea-typegen'))
 }
 
-const INLINE_BLOCK_SUFFIXES = ['Values', 'Actions', 'Props']
+const INLINE_BLOCK_SUFFIXES = ['Values', 'Actions', 'Props', 'Meta']
 
 /**
  * The statements making up an inline logic type block: the `logicType` alias itself, plus any
- * `logicValues` / `logicActions` / `logicProps` interfaces directly above it.
+ * `logicValues` / `logicActions` / `logicProps` / `logicMeta` interfaces directly above it.
  */
 export function getInlineBlockStatements(
     declaration: ts.TypeAliasDeclaration | ts.InterfaceDeclaration,

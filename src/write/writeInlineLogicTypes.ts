@@ -4,6 +4,11 @@ import * as osPath from 'path'
 import { factory, SyntaxKind } from 'typescript'
 import { AppOptions, ParsedLogic } from '../types'
 import { buildTypeImportEntries, nodeToString, runThroughPrettier } from '../print/print'
+import { printInternalExtraInput } from '../print/printInternalExtraInput'
+import { printInternalReducerActions } from '../print/printInternalReducerActions'
+import { printInternalSelectorTypes } from '../print/printInternalSelectorTypes'
+import { printKey } from '../print/printKey'
+import { printSharedListeners } from '../print/printSharedListeners'
 import { cleanDuplicateAnyNodes, getInlineBlockStatements, isGeneratedInlineBlock } from '../utils'
 import { applyTextEdits, getImportInsertPosition, getTypeArgumentInsertEnd, TextEdit } from './writeTypeImports'
 
@@ -39,7 +44,9 @@ export function printInlineLogicType(parsedLogic: ParsedLogic): string {
 
     // mark connected values/actions with the logic they come from, e.g. `user: UserType | null // userLogic`
     const withSourceLogicComment = <T extends ts.TypeElement>(member: T, sourceLogic: string | undefined): T =>
-        sourceLogic ? ts.addSyntheticTrailingComment(member, SyntaxKind.SingleLineCommentTrivia, ` ${sourceLogic}`, false) : member
+        sourceLogic
+            ? ts.addSyntheticTrailingComment(member, SyntaxKind.SingleLineCommentTrivia, ` ${sourceLogic}`, false)
+            : member
 
     // connected entries first, grouped by source logic (groups alphabetical, entries alphabetical
     // within each group), then the logic's own entries alphabetically
@@ -90,6 +97,39 @@ export function printInlineLogicType(parsedLogic: ParsedLogic): string {
             // props are already a named type (e.g. `props: {} as MyProps`) - reference it directly
             typeArguments.push(parsedLogic.propsType)
         }
+    }
+
+    const metaMembers: ts.TypeElement[] = []
+    const addMetaProperty = (name: string, typeNode: ts.TypeNode): void => {
+        metaMembers.push(
+            factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, typeNode),
+        )
+    }
+    if (parsedLogic.keyType) {
+        addMetaProperty('key', printKey(parsedLogic))
+    }
+    if (parsedLogic.sharedListeners.length > 0) {
+        addMetaProperty('sharedListeners', printSharedListeners(parsedLogic))
+    }
+    if (parsedLogic.selectors.some((selector) => (selector.functionTypes?.length ?? 0) > 0)) {
+        addMetaProperty('__keaTypeGenInternalSelectorTypes', printInternalSelectorTypes(parsedLogic))
+    }
+    if (Object.keys(parsedLogic.extraActions).length > 0) {
+        addMetaProperty('__keaTypeGenInternalReducerActions', printInternalReducerActions(parsedLogic))
+    }
+    if (Object.keys(parsedLogic.extraInput).length > 0) {
+        addMetaProperty('__keaTypeGenInternalExtraInput', printInternalExtraInput(parsedLogic))
+    }
+    if (metaMembers.length > 0) {
+        if (!parsedLogic.propsType) {
+            typeArguments.push(
+                factory.createTypeReferenceNode(factory.createIdentifier('Record'), [
+                    factory.createKeywordTypeNode(SyntaxKind.StringKeyword),
+                    factory.createKeywordTypeNode(SyntaxKind.AnyKeyword),
+                ]),
+            )
+        }
+        addSection('Meta', metaMembers)
     }
 
     const typeAlias = factory.createTypeAliasDeclaration(
@@ -206,6 +246,12 @@ export async function writeInlineLogicTypes(
                 newImportLines.push(`import type { MakeLogicType } from 'kea'`)
             }
         }
+        if (
+            managedLogics.some((parsedLogic) => parsedLogic.sharedListeners.length > 0) &&
+            !importsNamedKeaType(importDeclarations, 'BreakPointFunction')
+        ) {
+            newImportLines.push(`import type { BreakPointFunction } from 'kea'`)
+        }
 
         // remove the now obsolete `import type { logicType } from './logicType'`, if any
         const typeFileNameBase = parsedLogics[0].typeFileName.replace(/\.[tj]sx?$/, '')
@@ -292,13 +338,32 @@ export async function writeInlineLogicTypes(
  * block - semicolons, trailing commas, quotes, line breaks - does not make us rewrite it forever.
  */
 function sameGeneratedCode(existingCode: string, generatedCode: string): boolean {
-    const normalize = (code: string): string =>
-        code
+    const normalize = (code: string): string => {
+        const sourceFile = ts.createSourceFile(
+            'inlineLogicType.ts',
+            code,
+            ts.ScriptTarget.Latest,
+            true,
+            ts.ScriptKind.TS,
+        )
+        const transformer: ts.TransformerFactory<ts.SourceFile> = (context) => {
+            const visit: ts.Visitor = (node) =>
+                ts.isParenthesizedTypeNode(node)
+                    ? ts.visitNode(node.type, visit)
+                    : ts.visitEachChild(node, visit, context)
+            return (root) => ts.visitNode(root, visit) as ts.SourceFile
+        }
+        const transformed = ts.transform(sourceFile, [transformer])
+        const normalized = ts
+            .createPrinter({ removeComments: true })
+            .printFile(transformed.transformed[0])
             .replace(/"/g, "'")
-            .replace(/[;,]/g, '')
             .replace(/\s+/g, '')
-            // leading pipe of a formatter-reflowed union type, e.g. `selection: | number | EditorRange`
-            .replace(/([:(<=[])\|/g, '$1')
+            .replace(/,(?=[}\])])/g, '')
+            .replace(/'([A-Za-z_$][\w$]*)':/g, '$1:')
+        transformed.dispose()
+        return normalized
+    }
     return normalize(existingCode) === normalize(generatedCode)
 }
 
@@ -318,6 +383,10 @@ function getTopLevelStatement(node: ts.Node): ts.Node {
 }
 
 function importsMakeLogicType(importDeclarations: ts.ImportDeclaration[]): boolean {
+    return importsNamedKeaType(importDeclarations, 'MakeLogicType')
+}
+
+function importsNamedKeaType(importDeclarations: ts.ImportDeclaration[], name: string): boolean {
     return importDeclarations.some(
         (declaration) =>
             ts.isStringLiteralLike(declaration.moduleSpecifier) &&
@@ -325,7 +394,7 @@ function importsMakeLogicType(importDeclarations: ts.ImportDeclaration[]): boole
             declaration.importClause?.namedBindings &&
             ts.isNamedImports(declaration.importClause.namedBindings) &&
             declaration.importClause.namedBindings.elements.some(
-                (element) => element.name.text === 'MakeLogicType' && !element.propertyName,
+                (element) => element.name.text === name && !element.propertyName,
             ),
     )
 }
