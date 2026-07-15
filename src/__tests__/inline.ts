@@ -5,7 +5,37 @@ import * as ts from 'typescript'
 import { AppOptions } from '../types'
 import { programFromSource } from '../utils'
 import { visitProgram } from '../visit/visit'
-import { printToFiles } from '../print/print'
+import { buildTypeImportEntries, printToFiles } from '../print/print'
+
+describe('inline type imports', () => {
+    test('collapses physical pnpm paths outside the configured node_modules root', () => {
+        const workspace = path.join(os.tmpdir(), 'kea-typegen-workspace')
+        const physicalType = path.join(
+            workspace,
+            'node_modules',
+            '.pnpm',
+            'kea-router@3.4.1_kea@4.0.0_patch_hash=abc',
+            'node_modules',
+            'kea-router',
+            'lib',
+            'types.d.ts',
+        )
+        const entries = buildTypeImportEntries(
+            { [physicalType]: new Set(['LocationChangedPayload']) },
+            path.join(workspace, 'frontend', 'src', 'logic.ts'),
+            path.join(workspace, 'frontend', 'node_modules'),
+            () => false,
+        )
+
+        expect(entries).toEqual([
+            {
+                list: ['LocationChangedPayload'],
+                fullPath: physicalType,
+                finalPath: 'kea-router/lib/types',
+            },
+        ])
+    })
+})
 
 describe('manually typed logics', () => {
     test('skips logics typed with MakeLogicType', () => {

@@ -323,9 +323,17 @@ export function buildTypeImportEntries(
                         finalPath = result[1]
                     }
                 }
-                if (finalPath.startsWith('@types/')) {
-                    finalPath = finalPath.substring(7)
-                }
+            }
+
+            // A workspace package.json can point at a different node_modules root than the physical
+            // dependency path. Collapse the innermost package path instead of writing pnpm internals.
+            const nestedNodeModules = `${path.sep}node_modules${path.sep}`
+            const nestedNodeModulesIndex = finalPath.lastIndexOf(nestedNodeModules)
+            if (nestedNodeModulesIndex >= 0) {
+                finalPath = finalPath.substring(nestedNodeModulesIndex + nestedNodeModules.length)
+            }
+            if (finalPath.startsWith('@types/')) {
+                finalPath = finalPath.substring(7)
             }
 
             // Resolve absolute urls
