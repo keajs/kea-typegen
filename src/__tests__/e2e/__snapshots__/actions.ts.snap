@@ -227,3 +227,42 @@ exports[`actions - with random values instead of functions 1`] = `
     _isKeaWithKey: false;
 }"
 `;
+
+exports[`actions - with generic 1`] = `
+"export interface logicType extends Logic {
+    actionCreators: {
+        updateName: <T extends string>(name?: T) => ({
+            type: \\"update name (logic)\\";
+            payload: {
+                name: T;
+            };
+        });
+    };
+    actionKeys: {
+        \\"update name (logic)\\": \\"updateName\\";
+    };
+    actionTypes: {
+        updateName: \\"update name (logic)\\";
+    };
+    actions: {
+        updateName: <T extends string>(name?: T) => void;
+    };
+    defaults: {};
+    events: {};
+    key: undefined;
+    listeners: {};
+    path: [
+        \\"logic\\"
+    ];
+    pathString: \\"logic\\";
+    props: Record<string, unknown>;
+    reducer: (state: any, action: any, fullState: any) => {};
+    reducers: {};
+    selector: (state: any) => {};
+    selectors: {};
+    sharedListeners: {};
+    values: {};
+    _isKea: true;
+    _isKeaWithKey: false;
+}"
+`;
