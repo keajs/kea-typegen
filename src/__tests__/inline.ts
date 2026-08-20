@@ -507,9 +507,16 @@ describe('inline mode', () => {
             expect(response.writtenFiles).toBe(1)
 
             const writtenLogic = fs.readFileSync(logicPath, 'utf8')
-            expect(writtenLogic).toContain('(counter: number) => counter * 2')
+            // an own value is annotated through the generated interface, so the annotation follows
+            // the Values block on every regeneration instead of freezing one pass's inference
+            expect(writtenLogic).toContain("(counter: logicValues['counter']) => counter * 2")
             // already annotated params stay untouched
             expect(writtenLogic).toContain('(counter: number) => counter * 3')
+            // this stub kea's MakeLogicType has three type parameters (kea 3), so the metadata
+            // is intersected instead of passed as a fourth argument
+            expect(writtenLogic).toContain(
+                'export type logicType = MakeLogicType<logicValues, logicActions, Record<string, any>> & logicMeta',
+            )
 
             // a second pass changes nothing
             const secondProgram = createProgram([logicPath])

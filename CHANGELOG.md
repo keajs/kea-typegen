@@ -1,3 +1,8 @@
+## 3.8.4 - 2026-08-21
+
+- Inline mode on kea 3: `MakeLogicType` only has three type parameters there, so passing the `logicMeta` interface as a fourth argument was a type error in every logic with a key, shared listeners, typed selectors or kea-forms input. The metadata is now intersected on kea 3 (`MakeLogicType<V, A, P> & logicMeta`) and stays the fourth argument on kea 4 — detected from the `MakeLogicType` declaration the project resolves.
+- Inline mode: a selector combiner parameter fed by one of the logic's own values is annotated as `logicValues['name']` instead of a frozen copy of whatever the checker inferred on the pass that wrote it. Previously a multi-pass conversion could pin `{ foo: any }` for a value whose type only settled a pass later, and an annotation, once written, is never touched again.
+
 ## 3.8.0 - 2026-07-14
 
 - Skip logics that are manually typed, e.g. `kea<MakeLogicType<Values, Actions>>(...)` or any other custom type in `kea<...>()`. Such logics are now left completely alone.

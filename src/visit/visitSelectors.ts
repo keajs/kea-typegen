@@ -97,6 +97,7 @@ export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression:
                         parsedLogic.selectorParamAnnotations.push({
                             parameter,
                             typeNode: functionType.type,
+                            sourceValue: functionNames[index] ?? undefined,
                         })
                     }
                 })

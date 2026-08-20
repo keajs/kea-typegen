@@ -26,6 +26,8 @@ export interface SelectorTransform extends NameType {
 export interface SelectorParamAnnotation {
     parameter: ts.ParameterDeclaration
     typeNode: ts.TypeNode
+    /** the value this parameter comes from when the selector input is `s.<name>`, e.g. `counter` */
+    sourceValue?: string
 }
 
 export interface ListenerTransform {

@@ -33,8 +33,14 @@ export const counterLogic = kea<counterLogicType>({ ... })
 - A file that already carries a generated inline block stays inline even without either option, so
   conversions never regress and single files can be converted with `kea-typegen write --inline -f <file>`.
 - With `--delete`, the now obsolete `logicType.ts` files are removed on conversion.
-- Untyped selector combiner parameters get their inferred types written into the source
-  (`(counter) => ...` becomes `(counter: number) => ...`), since `MakeLogicType` types them as `any`.
+- Untyped selector combiner parameters get their types written into the source, since `MakeLogicType` types
+  them as `any`. An input that is one of the logic's own values indexes the generated interface
+  (`(counter) => ...` becomes `(counter: counterLogicValues['counter']) => ...`), so the annotation follows
+  the block on every regeneration; other inputs get their inferred type (`(id: number) => ...`).
+- Logic metadata (`key`, `sharedListeners`, reducer actions from other logics, kea-forms input, ...) goes into a
+  `logicMeta` interface. kea 4 takes it as the fourth `MakeLogicType` type argument; on kea 3, whose
+  `MakeLogicType` has three, it is intersected instead: `MakeLogicType<V, A, P> & logicMeta`. The shape is
+  picked from the kea your project resolves.
 - Values and actions pulled in via `connect` are marked with their source logic, e.g.
   `user: UserType | null // userLogic`, and sorted: connected entries first, grouped by source logic
   (groups and entries alphabetical), then the logic's own entries alphabetically.
