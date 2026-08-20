@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { NodeBuilderFlags } from 'typescript'
-import { cloneNodeSorted, gatherImports, getParameterDeclaration } from '../utils'
+import { cloneNodeSorted, gatherImports, getParameterDeclaration, resolveImportTypes } from '../utils'
 import { Expression, Type } from 'typescript'
 
 export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
@@ -99,9 +99,12 @@ export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: E
                         // logic is typed with MakeLogicType, where actionCreators is a mapped type. Resolve the
                         // connected action types semantically instead.
                         const actionCreatorsType = checker.getTypeOfSymbolAtLocation(actionsForLogic, logicReference)
-                        for (const actionProperty of actionCreatorsType.getProperties()) {
-                            const name = actionProperty.getName()
-                            if (!lookup[name]) {
+                        // Walk the connect list, not getProperties(): a mapped type's property order follows
+                        // TypeScript's internal type ids and can differ from one program to the next, which
+                        // made consecutive passes flip the order in the written file.
+                        for (const name of Object.keys(lookup)) {
+                            const actionProperty = actionCreatorsType.getProperty(name)
+                            if (!actionProperty) {
                                 continue
                             }
                             const actionCreatorType = checker.getTypeOfSymbolAtLocation(actionProperty, logicReference)
@@ -109,15 +112,17 @@ export function visitConnect(parsedLogic: ParsedLogic, type: Type, expression: E
                             if (!signature) {
                                 continue
                             }
-                            const signatureNode = checker.signatureToSignatureDeclaration(
+                            const printedSignature = checker.signatureToSignatureDeclaration(
                                 signature,
                                 ts.SyntaxKind.FunctionType,
                                 logicReference,
                                 NodeBuilderFlags.NoTruncation | NodeBuilderFlags.IgnoreErrors,
                             ) as ts.FunctionTypeNode | undefined
-                            if (!signatureNode) {
+                            if (!printedSignature) {
                                 continue
                             }
+                            // types out of scope at logicReference come back as import("/abs/path").T
+                            const signatureNode = resolveImportTypes(printedSignature, parsedLogic)
                             const parameters = signatureNode.parameters.map((param) => getParameterDeclaration(param))
                             let returnType: ts.TypeNode = signatureNode.type
                             if (ts.isParenthesizedTypeNode(returnType)) {

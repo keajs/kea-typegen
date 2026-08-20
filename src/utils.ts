@@ -528,6 +528,58 @@ export function getFilenameForNode(node: ts.Node, checker: ts.TypeChecker): stri
     }
 }
 
+/**
+ * The checker prints types that are not in scope at the requested location as
+ * `import("/abs/path/to/module").Name<...>` nodes. Those are only meaningful on the machine
+ * that generated them, so turn each into a plain `Name<...>` reference and register a type
+ * import for it, exactly as gatherImports does for named references. `typeof import(...)`
+ * is left alone.
+ */
+export function resolveImportTypes<T extends ts.Node>(node: T, parsedLogic: ParsedLogic): T {
+    const { checker } = parsedLogic
+    const transformer: ts.TransformerFactory<ts.Node> = (context) => {
+        const visit = (node: ts.Node): ts.Node => {
+            if (
+                ts.isImportTypeNode(node) &&
+                !node.isTypeOf &&
+                node.qualifier &&
+                ts.isLiteralTypeNode(node.argument) &&
+                ts.isStringLiteral(node.argument.literal)
+            ) {
+                const rootName = ts.isIdentifier(node.qualifier)
+                    ? node.qualifier.text
+                    : leftmostIdentifier(node.qualifier).text
+                if (!isTypeNameAlreadyImported(parsedLogic, rootName)) {
+                    const physicalPath = node.argument.literal.text
+                    // prefer the specifier the logic file already uses for that package
+                    // ('kea-forms') over the physical module path ('kea-forms/lib/types')
+                    const importPath =
+                        findImportPathForPackageInSourceFile(
+                            parsedLogic.node.getSourceFile(),
+                            physicalPath,
+                            rootName,
+                            checker,
+                        ) || physicalPath
+                    if (!rejectImportPath(importPath)) {
+                        addTypeImport(parsedLogic, importPath, rootName)
+                    }
+                }
+                const typeArguments = node.typeArguments
+                    ? ts.visitNodes(node.typeArguments, visit, ts.isTypeNode)
+                    : undefined
+                return ts.factory.createTypeReferenceNode(node.qualifier, typeArguments)
+            }
+            return ts.visitEachChild(node, visit, context)
+        }
+        return (root) => ts.visitNode(root, visit)
+    }
+    return ts.transform(node, [transformer]).transformed[0] as T
+}
+
+function leftmostIdentifier(name: ts.EntityName): ts.Identifier {
+    return ts.isIdentifier(name) ? name : leftmostIdentifier(name.left)
+}
+
 function addTypeImport(parsedLogic: ParsedLogic, file: string, typeName: string) {
     if (!parsedLogic.typeReferencesToImportFromFiles[file]) {
         parsedLogic.typeReferencesToImportFromFiles[file] = new Set()

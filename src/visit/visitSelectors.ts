@@ -1,7 +1,7 @@
 import { ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { Expression, NodeBuilderFlags, Type } from 'typescript'
-import { cloneNodeSorted, gatherImports } from '../utils'
+import { cloneNodeSorted, gatherImports, resolveImportTypes } from '../utils'
 
 export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression: Expression) {
     const { checker } = parsedLogic
@@ -52,8 +52,11 @@ export function visitSelectors(parsedLogic: ParsedLogic, type: Type, expression:
                         }
                         return {
                             name,
+                            // printed at inputFunction, so a type out of scope there comes back
+                            // as import("/abs/path").T — resolve only in the return type we keep,
+                            // not the whole [Selector<...>, ...] tuple
                             type: ts.isFunctionTypeNode(selectorTypeNode)
-                                ? cloneNodeSorted(selectorTypeNode.type)
+                                ? resolveImportTypes(cloneNodeSorted(selectorTypeNode.type), parsedLogic)
                                 : ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
                         }
                     })

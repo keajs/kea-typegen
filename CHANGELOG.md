@@ -1,3 +1,8 @@
+## 3.8.5 - 2026-08-21
+
+- Connected actions and selector inputs resolved through the checker could come back as `import("/absolute/path/on/the/generating/machine").Type` nodes — types out of scope at the consuming logic — and were written verbatim, so the output only type-checked on the machine that generated it. They are now turned into regular type references with a proper import, preferring the specifier the file already uses for that package.
+- Connected actions from a `MakeLogicType`-typed logic are emitted in connect-list order. The previous `getProperties()` walk of the mapped type followed TypeScript's internal type ids, which could differ between passes and flip the written order.
+
 ## 3.8.4 - 2026-08-21
 
 - Inline mode on kea 3: `MakeLogicType` only has three type parameters there, so passing the `logicMeta` interface as a fourth argument was a type error in every logic with a key, shared listeners, typed selectors or kea-forms input. The metadata is now intersected on kea 3 (`MakeLogicType<V, A, P> & logicMeta`) and stays the fourth argument on kea 4 — detected from the `MakeLogicType` declaration the project resolves.
