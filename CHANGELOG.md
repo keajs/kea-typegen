@@ -1,3 +1,9 @@
+## 3.9.0 - 2026-11-19
+
+- Add the Go-based TypeScript 7.1.0-beta compiler for `check`, `write`, and `watch`. Typegen selects it automatically in TypeScript 7.x projects. Other projects use the bundled classic TypeScript 5.9.3 compiler. Override the selection with `--compiler native`, `--compiler classic`, or the `compiler` setting in `.kearc`.
+- Run `kea-typegen check --compiler native` to preview changes to inferred types and imports before writing them. Plugins that depend on the full classic checker can use `--compiler classic`.
+- Native watch mode releases the compiler between passes and checks the project again after a change. Classic watch mode retains its incremental compiler.
+
 ## 3.8.5 - 2026-08-21
 
 - Connected actions and selector inputs resolved through the checker could come back as `import("/absolute/path/on/the/generating/machine").Type` nodes — types out of scope at the consuming logic — and were written verbatim, so the output only type-checked on the machine that generated it. They are now turned into regular type references with a proper import, preferring the specifier the file already uses for that package.
