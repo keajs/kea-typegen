@@ -6,6 +6,27 @@ Automatically generate types for `kea()` calls for [Kea 2.2+](https://keajs.org/
 
 https://keajs.org/docs/intro/typescript
 
+## Native TypeScript 7.1 beta
+
+Run `kea-typegen check --compiler native` to compare your generated types with the Go-based compiler.
+Use `kea-typegen write --compiler native` to apply the changes. To use the same compiler for
+`check`, `write`, and `watch`, add `"compiler": "native"` to your `.kearc`. The CLI flag takes
+precedence. By default, typegen selects the native engine when the project resolves TypeScript 7.x
+and the classic engine (5.9.3) otherwise.
+
+Typegen bundles TypeScript 7.1.0-beta and calls its synchronous JavaScript API. Your application's
+TypeScript version can be installed independently. The Go process owns the semantic program.
+Node loads syntax trees on demand for Kea visitors, source edits, plugins, and the existing printer.
+Native watch mode runs a fresh project pass after a batch of changes and releases the compiler
+between passes. Classic watch mode retains its incremental compiler.
+
+The native engine uses your tsconfig and the new compiler's inference defaults. For example,
+in a project that omits `strict`, inferred action payloads can now include `null` and `undefined`.
+Kea logic syntax and plugin syntax nodes are still parsed with TypeScript 5.9. Plugins using typegen helpers can
+continue using those helpers. Select `--compiler classic` for plugins that need the full classic
+type checker. A plugin that directly imports `typescript` for its node factories must itself
+resolve a compatible classic compiler.
+
 ## Inline mode
 
 By default kea-typegen writes a `logicType.ts` file next to each logic. In inline mode it instead writes

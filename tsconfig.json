@@ -1,6 +1,8 @@
 {
     "compilerOptions": {
-        "module": "commonjs",
+        "module": "Node16",
+        "esModuleInterop": false,
+        "skipLibCheck": true,
         "declaration": true,
         "removeComments": true,
         "emitDecoratorMetadata": true,

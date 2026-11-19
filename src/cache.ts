@@ -1,7 +1,7 @@
+import { LogicProgram } from './program'
 import * as fs from 'fs'
 import * as path from 'path'
 import { AppOptions, ParsedLogic } from './types'
-import { Program } from 'typescript'
 import { visitProgram } from './visit/visit'
 import { isInlineFile } from './utils'
 
@@ -9,7 +9,7 @@ export function cachePath(appOptions: AppOptions, fileName: string): string {
     return path.join(process.cwd(), '.typegen', path.relative(process.cwd(), fileName))
 }
 
-export function restoreCachedTypes(program: Program, appOptions: AppOptions, log: (msg: string) => void): boolean {
+export function restoreCachedTypes(program: LogicProgram, appOptions: AppOptions, log: (msg: string) => void): boolean {
     if (!appOptions.useCache) {
         return false
     }

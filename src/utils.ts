@@ -121,6 +121,8 @@ export function isInlineFile(
     sourceFile: ts.SourceFile | undefined,
     parsedLogics: ParsedLogic[],
 ): boolean {
+    // JavaScript source files cannot contain a generated TypeScript interface.
+    if (sourceFile && !/\.(?:[cm]?ts|tsx)$/.test(sourceFile.fileName)) return false
     if (appOptions?.inline) {
         return true
     }
@@ -338,7 +340,7 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
     const pathString = path
         .relative(cwd, fileName)
         .replace(/^.\//, '')
-        .replace(/\.[jt]sx?$/, '')
+        .replace(/\.[cm]?[jt]sx?$/, '')
         .replace(/\//g, '.')
 
     return pathString
@@ -380,6 +382,9 @@ export function storeExtractedSymbol(
     parsedLogic: ParsedLogic,
     typeRootName?: string,
 ) {
+    // Native lib symbols can refer to large files such as lib.dom.d.ts. They are
+    // already in scope, so avoid fetching their declarations across the process boundary.
+    if ('isDefaultLibrarySymbol' in symbol && symbol.isDefaultLibrarySymbol) return
     const declaration = symbol.getDeclarations()?.[0]
     let typeName = typeRootName
 
@@ -550,7 +555,10 @@ export function resolveImportTypes<T extends ts.Node>(node: T, parsedLogic: Pars
                     ? node.qualifier.text
                     : leftmostIdentifier(node.qualifier).text
                 if (!isTypeNameAlreadyImported(parsedLogic, rootName)) {
-                    const physicalPath = node.argument.literal.text
+                    const specifier = node.argument.literal.text
+                    const physicalPath = specifier.startsWith('.')
+                        ? path.resolve(path.dirname(parsedLogic.fileName), specifier)
+                        : specifier
                     // prefer the specifier the logic file already uses for that package
                     // ('kea-forms') over the physical module path ('kea-forms/lib/types')
                     const importPath =
@@ -574,6 +582,47 @@ export function resolveImportTypes<T extends ts.Node>(node: T, parsedLogic: Pars
         return (root) => ts.visitNode(root, visit)
     }
     return ts.transform(node, [transformer]).transformed[0] as T
+}
+
+/** The native checker renders import() paths relative to the enclosing logic.
+ * Keep the qualification (different modules may export the same name) and make
+ * the path relative to the destination when writing to a separate types folder. */
+export function relocateImportTypes<T extends ts.Node>(node: T, fromFile: string, toFile: string): T {
+    const transform = ts.transform(node, [
+        (context) => {
+            const visit = (node: ts.Node): ts.Node => {
+                if (
+                    ts.isImportTypeNode(node) &&
+                    ts.isLiteralTypeNode(node.argument) &&
+                    ts.isStringLiteral(node.argument.literal)
+                ) {
+                    const specifier = node.argument.literal.text
+                    if (
+                        path.isAbsolute(specifier) ||
+                        (specifier.startsWith('.') && path.dirname(fromFile) !== path.dirname(toFile))
+                    ) {
+                        const absolute = path.resolve(path.dirname(fromFile), specifier)
+                        const relative = path.relative(path.dirname(toFile), absolute).split(path.sep).join('/')
+                        const argument = factory.createLiteralTypeNode(
+                            factory.createStringLiteral(relative.startsWith('.') ? relative : './' + relative),
+                        )
+                        return ts.visitEachChild(
+                            node,
+                            (child) => (child === node.argument ? argument : visit(child)),
+                            context,
+                        )
+                    }
+                }
+                return ts.visitEachChild(node, visit, context)
+            }
+            return (root) => ts.visitNode(root, visit) as T
+        },
+    ])
+    try {
+        return transform.transformed[0]
+    } finally {
+        transform.dispose()
+    }
 }
 
 function leftmostIdentifier(name: ts.EntityName): ts.Identifier {
@@ -718,7 +767,7 @@ export function cloneNodeSorted<T extends ts.Node>(node: T): T {
         }
         ts.forEachChild(node, visit)
     }
-    const cloned = cloneNode(node)
+    const cloned = cloneNode(node, { typescript: ts })
     visit(cloned)
     return cloned
 }

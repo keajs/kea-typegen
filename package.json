@@ -5,7 +5,7 @@
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
         "clean": "rimraf dist/*",
-        "build": "tsc -p .",
+        "build": "node node_modules/typescript/bin/tsc -p .",
         "prepublishOnly": "npm run test && npm run clean && npm run build",
         "run-built-cli": "node dist/src/cli/typegen.js",
         "test": "node --experimental-vm-modules node_modules/.bin/jest",
@@ -32,7 +32,9 @@
         "ts-clone-node": "^3.0.0",
         "prettier": "^3.6.2",
         "recast": "^0.23.4",
-        "yargs": "^16.2.0"
+        "yargs": "^16.2.0",
+        "typescript": "5.9.3",
+        "typescript-native": "npm:typescript@7.1.0-beta"
     },
     "devDependencies": {
         "@types/jest": "^26.0.20",
@@ -54,11 +56,7 @@
         "reselect": "^4.1.5",
         "rimraf": "^3.0.2",
         "ts-jest": "^28.0.8",
-        "ts-node": "^10.7.0",
-        "typescript": "5.9.3"
-    },
-    "peerDependencies": {
-        "typescript": ">=5.9.0"
+        "ts-node": "^10.7.0"
     },
     "jest": {
         "testPathIgnorePatterns": [

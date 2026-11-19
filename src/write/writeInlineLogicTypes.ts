@@ -1,3 +1,4 @@
+import { LogicProgram, sourceFileNames } from '../program'
 import * as ts from 'typescript'
 import * as fs from 'fs'
 import * as osPath from 'path'
@@ -169,7 +170,7 @@ export function printInlineLogicType(
  * instead of writing a separate logicType.ts file.
  */
 export async function writeInlineLogicTypes(
-    program: ts.Program,
+    program: LogicProgram,
     appOptions: AppOptions,
     filename: string,
     parsedLogics: ParsedLogic[],
@@ -179,7 +180,7 @@ export async function writeInlineLogicTypes(
     const { log } = appOptions
     const unchanged = { filesToWrite: 0, writtenFiles: 0 }
 
-    if (!filename.match(/\.tsx?$/)) {
+    if (!filename.match(/\.(?:[cm]?ts|tsx)$/)) {
         return unchanged
     }
     const sourceFile = program.getSourceFile(filename)
@@ -293,7 +294,7 @@ export async function writeInlineLogicTypes(
             if (!specifier.startsWith('.')) {
                 continue
             }
-            if (osPath.resolve(osPath.dirname(filename), specifier) === typeFileNameBase) {
+            if (osPath.resolve(osPath.dirname(filename), specifier.replace(/\.js$/, '')) === typeFileNameBase) {
                 const start = declaration.getStart(sourceFile)
                 let end = declaration.getEnd()
                 if (rawCode[end] === '\n') {
@@ -319,7 +320,13 @@ export async function writeInlineLogicTypes(
             }
         }
 
-        for (const entry of buildTypeImportEntries(mergedTypeReferences, filename, nodeModulesPath, shouldIgnore)) {
+        for (const entry of buildTypeImportEntries(
+            mergedTypeReferences,
+            filename,
+            nodeModulesPath,
+            shouldIgnore,
+            program.requiresImportExtension?.(filename),
+        )) {
             const absolutePath = entry.fullPath.startsWith('.')
                 ? osPath.resolve(osPath.dirname(filename), entry.fullPath)
                 : entry.fullPath
@@ -473,23 +480,23 @@ function isOwnValue(parsedLogic: ParsedLogic, name: string): boolean {
     )
 }
 
-const makeLogicTypeArityCache = new WeakMap<ts.Program, boolean>()
+const makeLogicTypeArityCache = new WeakMap<LogicProgram, boolean>()
 
 /**
  * Does the kea this program resolves declare `MakeLogicType` with a fourth (`Meta`) type parameter?
  * kea 3.x stops at `<Values, Actions, LogicProps>`; passing a fourth argument there is a type error.
  */
-export function makeLogicTypeAcceptsMeta(program: ts.Program): boolean {
+export function makeLogicTypeAcceptsMeta(program: LogicProgram): boolean {
     const cached = makeLogicTypeArityCache.get(program)
     if (cached !== undefined) {
         return cached
     }
     let result: boolean | undefined
-    for (const sourceFile of program.getSourceFiles()) {
-        if (!/[\\/]kea[\\/]/.test(sourceFile.fileName) || !sourceFile.isDeclarationFile) {
+    for (const fileName of sourceFileNames(program)) {
+        if (!/[\\/]kea[\\/]/.test(fileName) || !/\.d\.[cm]?ts$/i.test(fileName)) {
             continue
         }
-        for (const statement of sourceFile.statements) {
+        for (const statement of program.getSourceFile(fileName).statements) {
             if (
                 (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) &&
                 statement.name.text === 'MakeLogicType'
