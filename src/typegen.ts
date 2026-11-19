@@ -4,258 +4,245 @@ import { visitProgram } from './visit/visit'
 import { printToFiles } from './print/print'
 import { AppOptions } from './types'
 import { Program } from 'typescript'
+import { openNativeProgram } from './native'
+import { watchNativeProject } from './nativeWatch'
+import { LogicProgram, sourceFileNames } from './program'
 import { version } from '../package.json'
 import { restoreCachedTypes } from './cache'
 import { createWatchChangeTracker, planWatchTypegenPass, WatchFileChange, WatchTypegenPlan } from './watch'
 
-// The undocumented defaultMaximumTruncationLength setting determines at what point printed types are truncated in versions less than 5.
-// In kea-typegen output, we NEVER want the types truncated, as that results in a syntax error –
-// "... n more ..." is not valid .d.ts syntax. This is a risk with union types in particular, so we disable truncation.
-// See https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/utilities.ts#L563
-// and https://github.com/microsoft/TypeScript/blob/cbb8df/src/compiler/checker.ts#L6331-L6334.
-if (parseInt(ts.versionMajorMinor.split('.')[0]) < 5) {
-    ;(ts as any).defaultMaximumTruncationLength = Infinity
+interface ProgramSession {
+    program: LogicProgram
+    close?(): void
+}
+
+function projectCompiler(options: AppOptions): 'classic' | 'native' {
+    const directory = path.dirname(path.resolve(options.tsConfigPath ?? options.sourceFilePath))
+    try {
+        const manifest = require.resolve('typescript/package.json', { paths: [directory] })
+        return require(manifest).version.startsWith('7.') ? 'native' : 'classic'
+    } catch (error) {
+        if (error.code === 'MODULE_NOT_FOUND') return 'classic'
+        throw error
+    }
 }
 
 export async function runTypeGen(appOptions: AppOptions) {
-    let program: Program
-    let resetProgram: () => void
-
     const { log } = appOptions
     log(`🦜 Kea-TypeGen v${version}`)
+    if (!appOptions.tsConfigPath && !appOptions.sourceFilePath) throw new Error('Specify a tsconfig or source file.')
 
-    if (appOptions.sourceFilePath) {
-        log(`❇️ Loading file: ${appOptions.sourceFilePath}`)
-        const compilerOptions = appOptions.tsConfigPath
-            ? loadTsConfig(appOptions.tsConfigPath, log).options
-            : {
-                  target: ts.ScriptTarget.ES5,
-                  module: ts.ModuleKind.CommonJS,
-                  noEmit: true,
-                  noErrorTruncation: true,
-              }
+    appOptions = { ...appOptions, compiler: appOptions.compiler ?? projectCompiler(appOptions) }
+    if (!['native', 'classic'].includes(appOptions.compiler)) {
+        throw new Error(`Unknown typegen compiler: ${appOptions.compiler}`)
+    }
+    if (appOptions.compiler === 'native') {
+        log(`🥚 Native TypeScript ${require('typescript-native/package.json').version}`)
+        const generate = (onProgramFiles?: (files: readonly string[]) => void) =>
+            generateFiles(appOptions, () => openNativeProgram(appOptions), onProgramFiles)
+        return appOptions.watch ? watchNativeProject(appOptions, generate) : generate()
+    }
 
-        resetProgram = () => {
-            program = replaceProgram(
-                () => ts.createProgram([appOptions.sourceFilePath], compilerOptions),
-                (nextProgram) => {
-                    program = nextProgram
-                },
-            )
+    const config = appOptions.tsConfigPath && loadTsConfig(appOptions.tsConfigPath, log)
+    if (appOptions.watch && config && !appOptions.sourceFilePath) {
+        return watchClassicProject(appOptions, config)
+    }
+    const compilerOptions = config?.options ?? {
+        target: ts.ScriptTarget.ES5,
+        module: ts.ModuleKind.CommonJS,
+        noEmit: true,
+        noErrorTruncation: true,
+    }
+    const files = appOptions.sourceFilePath ? [appOptions.sourceFilePath] : config.fileNames
+    if (!appOptions.watch) {
+        return generateFiles(appOptions, () => ({ program: ts.createProgram(files, compilerOptions) }))
+    }
+}
+
+async function generateFiles(
+    options: AppOptions,
+    open: () => ProgramSession | Promise<ProgramSession>,
+    onProgramFiles?: (files: readonly string[]) => void,
+) {
+    for (let round = 0; round < 51; round++) {
+        const session = await open()
+        try {
+            onProgramFiles?.(sourceFileNames(session.program))
+            if (
+                round === 0 &&
+                options.write &&
+                !options.sourceFilePath &&
+                restoreCachedTypes(session.program, options, options.log)
+            ) {
+                continue
+            }
+            const { writtenFiles, filesToModify } = await goThroughAllTheFiles(session.program, options)
+            if (!options.write || options.sourceFilePath || (!writtenFiles && !filesToModify)) {
+                if (options.write && !options.watch) options.log('👋 Finished writing files! Exiting.')
+                return
+            }
+        } finally {
+            session.close?.()
         }
-        resetProgram()
-    } else if (appOptions.tsConfigPath) {
-        const compilerOptions = loadTsConfig(appOptions.tsConfigPath, log)
+    }
+    throw new Error('Type generation did not converge after 51 passes.')
+}
 
-        if (appOptions.watch) {
-            // We don't emit JavaScript files in typegen watch mode, so the semantic-only
-            // builder is enough and avoids extra emit-related work on every rebuild.
-            const createProgram = ts.createSemanticDiagnosticsBuilderProgram
-            const watchChangeTracker = createWatchChangeTracker(ts.sys)
+function watchClassicProject(appOptions: AppOptions, compilerOptions: ts.ParsedCommandLine) {
+    const { log } = appOptions
+    // We don't emit JavaScript files in typegen watch mode, so the semantic-only
+    // builder is enough and avoids extra emit-related work on every rebuild.
+    const createProgram = ts.createSemanticDiagnosticsBuilderProgram
+    const watchChangeTracker = createWatchChangeTracker(ts.sys)
 
-            const host = ts.createWatchCompilerHost(
-                appOptions.tsConfigPath,
-                compilerOptions.options,
-                {
-                    ...watchChangeTracker.system,
-                    writeFile(_path: string, _data: string, _writeByteOrderMark?: boolean) {
-                        // skip emit
-                        // https://github.com/microsoft/TypeScript/issues/32385
-                        // https://github.com/microsoft/TypeScript/issues/36917
-                        return null
-                    },
-                },
-                createProgram,
-                reportDiagnostic,
-                reportWatchStatusChanged,
-            )
+    const host = ts.createWatchCompilerHost(
+        appOptions.tsConfigPath,
+        compilerOptions.options,
+        {
+            ...watchChangeTracker.system,
+            writeFile(_path: string, _data: string, _writeByteOrderMark?: boolean) {
+                // skip emit
+                // https://github.com/microsoft/TypeScript/issues/32385
+                // https://github.com/microsoft/TypeScript/issues/36917
+                return null
+            },
+        },
+        createProgram,
+        reportDiagnostic,
+        reportWatchStatusChanged,
+    )
 
-            console.info(`🥚 TypeScript Compiler API v${ts.version}`)
+    console.info(`🥚 TypeScript Compiler API v${ts.version}`)
 
-            const formatHost: ts.FormatDiagnosticsHost = {
-                getCanonicalFileName: (path) => path,
-                getCurrentDirectory: ts.sys.getCurrentDirectory,
-                getNewLine: () => ts.sys.newLine,
-            }
+    const formatHost: ts.FormatDiagnosticsHost = {
+        getCanonicalFileName: (path) => path,
+        getCurrentDirectory: ts.sys.getCurrentDirectory,
+        getNewLine: () => ts.sys.newLine,
+    }
 
-            function reportDiagnostic(diagnostic: ts.Diagnostic) {
-                if (appOptions.verbose || appOptions.showTsErrors) {
-                    log('💔 ' + ts.formatDiagnosticsWithColorAndContext([diagnostic], formatHost))
-                }
-            }
+    function reportDiagnostic(diagnostic: ts.Diagnostic) {
+        if (appOptions.verbose || appOptions.showTsErrors) {
+            log('💔 ' + ts.formatDiagnosticsWithColorAndContext([diagnostic], formatHost))
+        }
+    }
 
-            function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
-                const codes = {
-                    6031: `👀 Starting TypeScript watch mode`,
-                    6032: `🔄 Reloading...`,
-                }
-                console.info(codes[diagnostic.code] || `🥚 ${ts.formatDiagnostic(diagnostic, formatHost).trim()}`)
-            }
+    function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
+        const codes = {
+            6031: `👀 Starting TypeScript watch mode`,
+            6032: `🔄 Reloading...`,
+        }
+        console.info(codes[diagnostic.code] || `🥚 ${ts.formatDiagnostic(diagnostic, formatHost).trim()}`)
+    }
 
-            const origPostProgramCreate = host.afterProgramCreate
-            let scheduledProgram: Program | undefined
-            let scheduledChanges: WatchFileChange[] = []
-            let runningTypegen = false
+    const origPostProgramCreate = host.afterProgramCreate
+    let scheduledProgram: Program | undefined
+    let scheduledChanges: WatchFileChange[] = []
+    let runningTypegen = false
 
-            const runScheduledTypegen = async () => {
-                if (runningTypegen) {
-                    return
-                }
+    const runScheduledTypegen = async () => {
+        if (runningTypegen) {
+            return
+        }
 
-                runningTypegen = true
+        runningTypegen = true
+
+        try {
+            while (scheduledProgram) {
+                const nextProgram = scheduledProgram
+                const nextChanges = scheduledChanges
+                scheduledProgram = undefined
+                scheduledChanges = []
 
                 try {
-                    while (scheduledProgram) {
-                        const nextProgram = scheduledProgram
-                        const nextChanges = scheduledChanges
-                        scheduledProgram = undefined
-                        scheduledChanges = []
-
-                        try {
-                            await goThroughWatchTypegenPlan(
-                                nextProgram,
-                                appOptions,
-                                planWatchTypegenPass(nextProgram, nextChanges),
-                            )
-                        } catch (error) {
-                            console.error('⛔ Error running kea-typegen in watch mode')
-                            console.error(error)
-                        }
-                    }
-                } finally {
-                    runningTypegen = false
-
-                    if (scheduledProgram) {
-                        void runScheduledTypegen()
-                    }
+                    await goThroughWatchTypegenPlan(
+                        nextProgram,
+                        appOptions,
+                        planWatchTypegenPass(nextProgram, nextChanges),
+                    )
+                } catch (error) {
+                    console.error('⛔ Error running kea-typegen in watch mode')
+                    console.error(error)
                 }
             }
+        } finally {
+            runningTypegen = false
 
-            host.afterProgramCreate = (prog) => {
-                program = prog.getProgram()
-                const changes = watchChangeTracker.consume()
-                origPostProgramCreate?.(prog)
-                scheduledProgram = program
-                scheduledChanges.push(...changes)
+            if (scheduledProgram) {
                 void runScheduledTypegen()
             }
-
-            ts.createWatchProgram(host)
-        } else {
-            resetProgram = () => {
-                // Write mode can require multiple passes as generated imports and type files
-                // land on disk. Reusing the previous Program retains too much compiler state
-                // for large projects, so rebuild from a fresh host each round instead.
-                // Clear the previous Program reference before allocating the next one to
-                // avoid holding both huge compiler graphs live at the same time.
-                program = replaceProgram(
-                    () => {
-                        const host = ts.createCompilerHost(compilerOptions.options)
-                        return ts.createProgram(compilerOptions.fileNames, compilerOptions.options, host)
-                    },
-                    (nextProgram) => {
-                        program = nextProgram
-                    },
-                )
-            }
-            resetProgram()
         }
-    } else {
-        log(`⛔ No tsconfig.json found! No source file specified.`)
     }
 
-    async function goThroughAllTheFiles(
-        program,
-        appOptions,
-    ): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
-        const parsedLogics = visitProgram(program, appOptions)
+    host.afterProgramCreate = (prog) => {
+        const program = prog.getProgram()
+        const changes = watchChangeTracker.consume()
+        origPostProgramCreate?.(prog)
+        scheduledProgram = program
+        scheduledChanges.push(...changes)
+        void runScheduledTypegen()
+    }
+
+    return ts.createWatchProgram(host)
+}
+
+async function goThroughAllTheFiles(
+    program: LogicProgram,
+    appOptions: AppOptions,
+): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
+    const parsedLogics = visitProgram(program, appOptions)
+    if (appOptions.verbose) {
+        appOptions.log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
+    }
+
+    const response = await printToFiles(program, appOptions, parsedLogics)
+
+    // running "kea-typegen check" and would write files?
+    // exit with 1
+    if (!appOptions.write && !appOptions.watch && (response.filesToWrite > 0 || response.filesToModify > 0)) {
+        process.exitCode = 1
+    }
+
+    return response
+}
+
+async function goThroughWatchTypegenPlan(
+    program,
+    appOptions,
+    plan: WatchTypegenPlan,
+): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
+    if (plan.kind === 'skip') {
         if (appOptions.verbose) {
-            log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
+            appOptions.log(`⏭️ Skipping typegen watch pass: ${plan.reason}`)
         }
-
-        const response = await printToFiles(program, appOptions, parsedLogics)
-
-        // running "kea-typegen check" and would write files?
-        // exit with 1
-        if (!appOptions.write && !appOptions.watch && (response.filesToWrite > 0 || response.filesToModify > 0)) {
-            process.exit(1)
-        }
-
-        return response
+        return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
     }
 
-    async function goThroughWatchTypegenPlan(
-        program,
-        appOptions,
-        plan: WatchTypegenPlan,
-    ): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
-        if (plan.kind === 'skip') {
-            if (appOptions.verbose) {
-                appOptions.log(`⏭️ Skipping typegen watch pass: ${plan.reason}`)
-            }
-            return { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
-        }
-
-        if (plan.kind === 'full') {
-            if (appOptions.verbose) {
-                appOptions.log(`🔎 Running full typegen watch pass: ${plan.reason}`)
-            }
-            return await goThroughAllTheFiles(program, appOptions)
-        }
-
+    if (plan.kind === 'full') {
         if (appOptions.verbose) {
-            appOptions.log(`🎯 Running incremental typegen watch pass: ${plan.reason}`)
+            appOptions.log(`🔎 Running full typegen watch pass: ${plan.reason}`)
         }
-
-        const response = { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
-
-        for (const sourceFilePath of plan.sourceFilePaths) {
-            const fileResponse = await goThroughAllTheFiles(program, {
-                ...appOptions,
-                delete: false,
-                sourceFilePath,
-            })
-
-            response.filesToWrite += fileResponse.filesToWrite
-            response.writtenFiles += fileResponse.writtenFiles
-            response.filesToModify += fileResponse.filesToModify
-        }
-
-        return response
+        return await goThroughAllTheFiles(program, appOptions)
     }
 
-    if (program && !appOptions.watch && appOptions.sourceFilePath) {
-        await goThroughAllTheFiles(program, appOptions)
-        if (appOptions.write) {
-            log(`👋 Finished writing files! Exiting.`)
-        }
-    } else if (program && !appOptions.watch) {
-        if (appOptions.write) {
-            if (restoreCachedTypes(program, appOptions, log)) {
-                resetProgram()
-            }
-
-            let round = 0
-            while ((round += 1)) {
-                const { writtenFiles, filesToModify } = await goThroughAllTheFiles(program, appOptions)
-
-                if (writtenFiles === 0 && filesToModify === 0) {
-                    log(`👋 Finished writing files! Exiting.`)
-                    process.exit(0)
-                }
-
-                if (round > 50) {
-                    log(`🔁 We seem to be stuck in a loop (ran %{round} times)! Exiting!`)
-                    process.exit(1)
-                }
-
-                resetProgram()
-            }
-        } else {
-            // check them once
-            goThroughAllTheFiles(program, appOptions)
-        }
+    if (appOptions.verbose) {
+        appOptions.log(`🎯 Running incremental typegen watch pass: ${plan.reason}`)
     }
+
+    const response = { filesToWrite: 0, writtenFiles: 0, filesToModify: 0 }
+
+    for (const sourceFilePath of plan.sourceFilePaths) {
+        const fileResponse = await goThroughAllTheFiles(program, {
+            ...appOptions,
+            delete: false,
+            sourceFilePath,
+        })
+
+        response.filesToWrite += fileResponse.filesToWrite
+        response.writtenFiles += fileResponse.writtenFiles
+        response.filesToModify += fileResponse.filesToModify
+    }
+
+    return response
 }
 
 function loadTsConfig(tsConfigPath: string, log: AppOptions['log']): ts.ParsedCommandLine {

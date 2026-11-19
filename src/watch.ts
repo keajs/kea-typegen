@@ -1,10 +1,10 @@
+import { sourceExtensions } from './program'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as ts from 'typescript'
 import { getFilenameForImportDeclaration } from './utils'
 
 const KEA_CALL_REGEX = /\bkea\s*[<(]/
-const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.mjsx']
 const TYPEGEN_FILE_REGEX = /(^|\.|\/)typegen\.[tj]s$/
 const MAX_INCREMENTAL_CHANGED_FILES = 50
 
@@ -239,7 +239,7 @@ function sourcePathsForTypeFile(typeFilePath: string, sourceFilesByPath: Map<str
 
     const sourceBasePath = typeFilePath.slice(0, -'Type.ts'.length)
 
-    return SOURCE_EXTENSIONS.map((extension) => `${sourceBasePath}${extension}`).filter((sourcePath) =>
+    return sourceExtensions.map((extension) => `${sourceBasePath}${extension}`).filter((sourcePath) =>
         sourceFilesByPath.has(path.resolve(sourcePath)),
     )
 }
@@ -249,7 +249,7 @@ function isGeneratedTypeFile(filePath: string): boolean {
 }
 
 function isSourceLikeFile(filePath: string): boolean {
-    return SOURCE_EXTENSIONS.some((extension) => filePath.endsWith(extension))
+    return sourceExtensions.some((extension) => filePath.endsWith(extension))
 }
 
 function isTypegenModuleFile(filePath: string): boolean {

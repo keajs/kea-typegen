@@ -68,6 +68,7 @@ export interface ParsedLogic {
 }
 
 export interface AppOptions {
+    compiler?: 'native' | 'classic'
     tsConfigPath?: string
     packageJsonPath?: string
     sourceFilePath?: string

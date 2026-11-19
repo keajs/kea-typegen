@@ -1,3 +1,4 @@
+import { LogicProgram, sourceExtensions, sourceFileNames } from '../program'
 import * as ts from 'typescript'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -25,7 +26,6 @@ import { visitListeners } from './visitListeners'
 import { visitEvents } from './visitEvents'
 import { visitDefaults } from './visitDefaults'
 import { visitSharedListeners } from './visitSharedListeners'
-import { cloneNode } from 'ts-clone-node'
 import { NodeBuilderFlags } from 'typescript'
 
 const visitFunctions = {
@@ -56,58 +56,69 @@ const visitFunctions = {
 const KEA_CALL_REGEX = /\bkea\s*[<(]/
 const prefilterDisabled = process.env.KEA_TYPEGEN_NO_PREFILTER === '1'
 
-function fileMightContainKeaCall(sourceFile: ts.SourceFile): boolean {
-    return prefilterDisabled || KEA_CALL_REGEX.test(sourceFile.text)
-}
-
-function fileMightContainResetContext(sourceFile: ts.SourceFile): boolean {
-    return prefilterDisabled || sourceFile.text.includes('resetContext')
-}
-
-export function visitProgram(program: ts.Program, appOptions?: AppOptions): ParsedLogic[] {
-    const checker = program.getTypeChecker()
+export function visitProgram(program: LogicProgram, appOptions?: AppOptions): ParsedLogic[] {
     const parsedLogics: ParsedLogic[] = []
     const pluginModules: PluginModule[] = []
     const typeBuilderModules: TypeBuilderModule[] = []
     const sourceFilePath = appOptions?.sourceFilePath ? path.resolve(appOptions.sourceFilePath) : undefined
 
-    for (const sourceFile of program.getSourceFiles()) {
-        if (
-            !sourceFile.isDeclarationFile &&
-            !sourceFile.fileName.endsWith('Type.ts') &&
-            fileMightContainResetContext(sourceFile)
-        ) {
-            ts.forEachChild(sourceFile, visitResetContext(checker, pluginModules))
-        }
-    }
-
-    for (const sourceFile of program.getSourceFiles()) {
-        if (sourceFilePath && path.resolve(sourceFile.fileName) !== sourceFilePath) {
+    const names = sourceFileNames(program)
+    const logicFiles: string[] = []
+    for (const fileName of names) {
+        if (/\.d\.[cm]?ts$/i.test(fileName) || fileName.endsWith('Type.ts')) {
             continue
         }
-
-        if (
-            !sourceFile.isDeclarationFile &&
-            !sourceFile.fileName.endsWith('Type.ts') &&
-            fileMightContainKeaCall(sourceFile)
-        ) {
-            if (appOptions?.verbose) {
-                appOptions.log(`👀 Visiting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
-            }
+        const text =
+            'readSourceText' in program ? program.readSourceText(fileName) : program.getSourceFile(fileName)?.text
+        if (text === undefined) {
+            continue
+        }
+        if (prefilterDisabled || text.includes('resetContext')) {
+            const sourceFile = program.getSourceFile(fileName)
             ts.forEachChild(
                 sourceFile,
-                visitKeaCalls(checker, parsedLogics, sourceFile, appOptions, pluginModules, typeBuilderModules),
+                visitResetContext(program.getTypeChecker(sourceFile), pluginModules, appOptions),
             )
+        }
+        if (
+            (!sourceFilePath || path.resolve(fileName) === sourceFilePath) &&
+            (prefilterDisabled || KEA_CALL_REGEX.test(text))
+        ) {
+            logicFiles.push(fileName)
         }
     }
 
-    if (appOptions?.delete) {
-        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.mjsx']
-        for (const sourceFile of program.getSourceFiles()) {
-            if (sourceFile.fileName.endsWith('Type.ts')) {
-                if (!extensions.find((e) => fs.existsSync(sourceFile.fileName.replace('Type.ts', e)))) {
-                    appOptions.log(`🗑️ Deleting: ${path.relative(process.cwd(), sourceFile.fileName)}`)
-                    fs.unlinkSync(sourceFile.fileName)
+    for (const fileName of logicFiles) {
+        const sourceFile = program.getSourceFile(fileName)
+        if (appOptions?.verbose) {
+            appOptions.log(`👀 Visiting: ${path.relative(process.cwd(), fileName)}`)
+        }
+        ts.forEachChild(
+            sourceFile,
+            visitKeaCalls(
+                program.getTypeChecker(sourceFile),
+                parsedLogics,
+                sourceFile,
+                appOptions,
+                pluginModules,
+                typeBuilderModules,
+            ),
+        )
+    }
+
+    if (appOptions?.delete && appOptions.write && !appOptions.sourceFilePath) {
+        for (const fileName of names) {
+            if (fileName.endsWith('Type.ts')) {
+                const bases = [fileName.slice(0, -'Type.ts'.length)]
+                if (appOptions.rootPath && appOptions.typesPath && appOptions.rootPath !== appOptions.typesPath) {
+                    const relative = path.relative(appOptions.typesPath, bases[0])
+                    if (!relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) {
+                        bases.push(path.resolve(appOptions.rootPath, relative))
+                    }
+                }
+                if (!bases.some((base) => sourceExtensions.some((extension) => fs.existsSync(base + extension)))) {
+                    appOptions.log(`🗑️ Deleting: ${path.relative(process.cwd(), fileName)}`)
+                    fs.unlinkSync(fileName)
                 }
             }
         }
@@ -115,7 +126,7 @@ export function visitProgram(program: ts.Program, appOptions?: AppOptions): Pars
     return parsedLogics
 }
 
-export function visitResetContext(checker: ts.TypeChecker, pluginModules: PluginModule[]) {
+export function visitResetContext(checker: ts.TypeChecker, pluginModules: PluginModule[], appOptions?: AppOptions) {
     return function visit(node: ts.Node) {
         // find a `resetContext` call
         if (
@@ -171,6 +182,14 @@ export function visitResetContext(checker: ts.TypeChecker, pluginModules: Plugin
                                                         break
                                                     }
                                                 } catch (error) {
+                                                    if (
+                                                        appOptions?.compiler === 'native' &&
+                                                        fs.existsSync(typegenFile)
+                                                    ) {
+                                                        throw new Error(
+                                                            `Could not load typegen plugin ${typegenFile}: ${error}`,
+                                                        )
+                                                    }
                                                     if (error.code !== 'MODULE_NOT_FOUND') {
                                                         console.error(error)
                                                     }
@@ -231,7 +250,12 @@ export function visitKeaCalls(
         }
 
         const pathString = getLogicPathString(appOptions, sourceFile.fileName)
-        let typeFileName = sourceFile.fileName.replace(/\.[tj]sx?$/, 'Type.ts')
+        let typeFileName = sourceFile.fileName.slice(0, -path.extname(sourceFile.fileName).length) + 'Type.ts'
+
+        if (appOptions?.rootPath && appOptions?.typesPath) {
+            const relativePathFromRoot = path.relative(appOptions.rootPath, typeFileName)
+            typeFileName = path.resolve(appOptions.typesPath, relativePathFromRoot)
+        }
 
         if (keaTypeArgument?.typeName?.escapedText === logicTypeName) {
             // kea<logicType<somethingElse>>(...)
@@ -250,11 +274,6 @@ export function visitKeaCalls(
                     logicTypeImported = filename === typeFileName
                 }
             }
-        }
-
-        if (appOptions?.rootPath && appOptions?.typesPath) {
-            const relativePathFromRoot = path.relative(appOptions.rootPath, typeFileName)
-            typeFileName = path.resolve(appOptions.typesPath, relativePathFromRoot)
         }
 
         const input = (node.parent as ts.CallExpression).arguments[0]
@@ -368,6 +387,9 @@ export function visitKeaCalls(
                                         typeBuilderModules.push(typeBuilderModule)
                                         break declarations
                                     } catch (error) {
+                                        if (appOptions?.compiler === 'native' && fs.existsSync(typegenFile)) {
+                                            throw new Error(`Could not load type builder ${typegenFile}: ${error}`)
+                                        }
                                         if (error.code !== 'MODULE_NOT_FOUND') {
                                             console.error(
                                                 `[KEA] Error loading type builder "${builderName}" in "${typegenFile}"`,
@@ -447,6 +469,9 @@ export function visitKeaCalls(
                 try {
                     pluginModule.typeBuilder?.(visitKeaPropertyArguments)
                 } catch (e) {
+                    if (appOptions?.compiler === 'native') {
+                        throw new Error(`Type builder "${pluginModule.name}" failed (${pluginModule.file}): ${e}`)
+                    }
                     console.error(
                         `!! Problem running "typeBuilder" on plugin "${pluginModule.name}" (${pluginModule.file})`,
                     )
@@ -459,6 +484,9 @@ export function visitKeaCalls(
                     try {
                         pluginModule.visitKeaProperty?.(visitKeaPropertyArguments)
                     } catch (e) {
+                        if (appOptions?.compiler === 'native') {
+                            throw new Error(`Typegen plugin "${pluginModule.name}" failed (${pluginModule.file}): ${e}`)
+                        }
                         console.error(
                             `!! Problem running "visitKeaProperty" on plugin "${pluginModule.name}" (${pluginModule.file})`,
                         )

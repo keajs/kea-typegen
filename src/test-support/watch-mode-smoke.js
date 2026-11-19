@@ -62,6 +62,7 @@ function scheduleFinishIfSettled() {
     }
 
     clearTimeout(settleTimer)
+    // Let directory events from the initial generated files reach the compiler before editing one logic.
     settleTimer = setTimeout(() => {
         if (!editTriggered && started > 1) {
             editTriggered = true
@@ -72,7 +73,7 @@ function scheduleFinishIfSettled() {
         if (editTriggered && incrementalAfterEdit) {
             finish(0)
         }
-    }, 300)
+    }, 1500)
 }
 
 process.on('uncaughtException', (error) => {

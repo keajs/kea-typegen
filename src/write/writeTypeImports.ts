@@ -1,3 +1,4 @@
+import { LogicProgram } from '../program'
 import { AppOptions, ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import * as osPath from 'path'
@@ -39,7 +40,7 @@ export function getTypeArgumentInsertEnd(callExpression: ts.CallExpression, sour
 
 export async function writeTypeImports(
     appOptions: AppOptions,
-    program: ts.Program,
+    program: LogicProgram,
     filename: string,
     logicsNeedingImports: ParsedLogic[],
     parsedLogics: ParsedLogic[],
@@ -53,7 +54,9 @@ export async function writeTypeImports(
 
     let importLocation = osPath
         .relative(osPath.dirname(filename), logicsNeedingImports[0].typeFileName)
-        .replace(/\.[tj]sx?$/, '')
+        .replace(/\.[tj]sx?$/, program.requiresImportExtension?.(filename) ? '.js' : '')
+        .split(osPath.sep)
+        .join('/')
     if (!importLocation.startsWith('.')) {
         importLocation = `./${importLocation}`
     }
@@ -64,8 +67,8 @@ export async function writeTypeImports(
         const importPath = getImportPath(importDeclaration)
         return (
             importPath !== null &&
-            osPath.resolve(osPath.dirname(filename), importPath) ===
-                osPath.resolve(osPath.dirname(filename), importLocation)
+            osPath.resolve(osPath.dirname(filename), importPath.replace(/\.js$/, '')) ===
+                osPath.resolve(osPath.dirname(filename), importLocation.replace(/\.js$/, ''))
         )
     })
 

@@ -17,6 +17,10 @@ yargs
     .command('watch', '- watch for changes and write logicType.ts files', {}, async (argv) => {
         await runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: true })
     })
+    .option('compiler', {
+        choices: ['native', 'classic'] as const,
+        describe: 'TypeScript engine (defaults to native for TypeScript 7 projects)',
+    })
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json (otherwise auto-detected)', type: 'string' })
     .option('file', {
         alias: 'f',

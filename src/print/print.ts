@@ -1,3 +1,4 @@
+import { LogicProgram } from '../program'
 import {
     createPrinter,
     createSourceFile,
@@ -5,7 +6,6 @@ import {
     factory,
     Node,
     NewLineKind,
-    Program,
     ScriptKind,
     ScriptTarget,
     SyntaxKind,
@@ -40,7 +40,7 @@ import { writeInlineLogicTypes } from '../write/writeInlineLogicTypes'
 import { printInternalExtraInput } from './printInternalExtraInput'
 import { convertToBuilders } from '../write/convertToBuilders'
 import { cacheWrittenFile, deleteCachedFile } from '../cache'
-import { isInlineFile } from '../utils'
+import { isInlineFile, relocateImportTypes } from '../utils'
 
 const prettierConfigCache = new Map<string, Promise<prettier.Options | null>>()
 
@@ -67,7 +67,7 @@ export async function runThroughPrettier(sourceText: string, filePath: string): 
 
 // returns files to write
 export async function printToFiles(
-    program: Program,
+    program: LogicProgram,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
 ): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
@@ -130,7 +130,7 @@ export async function printToFiles(
             writtenFiles += inlineResponse.writtenFiles
 
             // the logicType.ts file is superseded by the inline block
-            if (appOptions.delete && fs.existsSync(typeFileName)) {
+            if (appOptions.delete && appOptions.write && fs.existsSync(typeFileName)) {
                 log(`🗑️ Deleting: ${path.relative(process.cwd(), typeFileName)}`)
                 fs.unlinkSync(typeFileName)
                 deleteCachedFile(typeFileName, appOptions)
@@ -167,6 +167,7 @@ export async function printToFiles(
             parsedLogics[0].typeFileName,
             nodeModulesPath,
             shouldIgnore,
+            program.requiresImportExtension?.(typeFileName, fileName),
         )
             .map(({ list, finalPath }) => `import type { ${list.join(', ')} } from '${finalPath}'`)
             .join('\n')
@@ -219,14 +220,14 @@ export async function printToFiles(
             (pl.logicTypeImported === false ||
                 // reload if don't have the right types in arguments
                 pl.logicTypeArguments.length > 0) &&
-            pl.fileName.match(/\.tsx?$/)
+            pl.fileName.match(/\.(?:[cm]?ts|tsx)$/)
 
         // write the type into the logic itself
         const logicsNeedingImports = parsedLogics.filter(parsedLogicNeedsTypeImport)
-        if (logicsNeedingImports.length > 0) {
-            if (appOptions.write && !appOptions.noImport) {
+        if (logicsNeedingImports.length > 0 && !appOptions.noImport) {
+            filesToModify += logicsNeedingImports.length
+            if (appOptions.write) {
                 await writeTypeImports(appOptions, program, fileName, logicsNeedingImports, parsedLogics)
-                filesToModify += logicsNeedingImports.length
             } else {
                 log(
                     `❌ Will not write ${logicsNeedingImports.length} logic type import${
@@ -239,10 +240,10 @@ export async function printToFiles(
         // add a path if needed
         const parsedLogicNeedsPath = appOptions.writePaths ? (pl: ParsedLogic) => !pl.hasPathInLogic : () => false
         const logicsNeedingPaths = parsedLogics.filter(parsedLogicNeedsPath)
-        if (logicsNeedingPaths.length > 0) {
-            if (appOptions.write && !appOptions.noImport) {
+        if (logicsNeedingPaths.length > 0 && !appOptions.noImport) {
+            filesToModify += logicsNeedingPaths.length
+            if (appOptions.write) {
                 writePaths(appOptions, program, fileName, logicsNeedingPaths)
-                filesToModify += logicsNeedingPaths.length
             } else {
                 log(
                     `❌ Will not write ${logicsNeedingPaths.length} logic path${
@@ -257,10 +258,10 @@ export async function printToFiles(
             ? (pl: ParsedLogic) => !pl.inputBuilderArray
             : () => false
         const logicsNeedingConversion = parsedLogics.filter(parsedLogicNeedsConversion)
-        if (logicsNeedingConversion.length > 0) {
-            if (appOptions.write && !appOptions.noImport) {
+        if (logicsNeedingConversion.length > 0 && !appOptions.noImport) {
+            filesToModify += logicsNeedingConversion.length
+            if (appOptions.write) {
                 convertToBuilders(appOptions, program, fileName, logicsNeedingConversion)
-                filesToModify += logicsNeedingConversion.length
             } else {
                 log(
                     `❌ Will not write ${logicsNeedingConversion.length} logic path${
@@ -299,6 +300,7 @@ export function buildTypeImportEntries(
     importIntoFile: string,
     nodeModulesPath: string,
     shouldIgnore: (absolutePath: string) => boolean,
+    requiresExtension = false,
 ): TypeImportEntry[] {
     return Object.entries(typeReferencesToImportFromFiles)
         .filter(([_, list]) => list.size > 0)
@@ -344,8 +346,12 @@ export function buildTypeImportEntries(
                 }
             }
 
-            // Remove extension
-            finalPath = finalPath.replace(/(\.d|)\.tsx?$/, '')
+            if (requiresExtension && finalPath.startsWith('.')) {
+                finalPath = finalPath.replace(/(?:\.d)?\.([cm]?)tsx?$/, '.$1js')
+                if (!/\.[cm]?jsx?$/.test(finalPath)) finalPath += '.js'
+            } else {
+                finalPath = finalPath.replace(/(?:\.d)?\.[cm]?tsx?$/, '')
+            }
 
             // Remove "/index"
             if (finalPath.split('/').length === 2 && finalPath.endsWith('/index')) {
@@ -438,4 +444,11 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
                 factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, typeNode),
             ),
     )
+    if (appOptions?.compiler === 'native') {
+        parsedLogic.interfaceDeclaration = relocateImportTypes(
+            parsedLogic.interfaceDeclaration,
+            parsedLogic.fileName,
+            parsedLogic.typeFileName,
+        )
+    }
 }
