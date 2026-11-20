@@ -13,28 +13,31 @@ const manifest = () => JSON.parse(read('package.json'))
 const output = (key, value) =>
     process.env.GITHUB_OUTPUT && fs.appendFileSync(process.env.GITHUB_OUTPUT, key + '=' + value + '\n')
 
+function changesSinceRelease(previousVersion) {
+    const previousTag = 'v' + previousVersion
+    const tagged = git('tag', '--list', previousTag)
+    const base =
+        tagged || git('log', '-1', '--format=%H', '-S', '"version": "' + previousVersion + '"', '--', 'package.json')
+    if (!base) throw Error('Cannot find the previous release in git history')
+    return git('log', '--no-merges', '--format=- %s (%h)', base + '..HEAD') || '- Rebuild the published package.'
+}
+
 function prepare(dir, requested) {
     const pkg = manifest()
     const semver = require(require.resolve('semver', { paths: [root] }))
-    const version = requested || semver.inc(pkg.version, 'minor')
-    if (semver.valid(version) !== version || !semver.gt(version, pkg.version))
+    const [introduction, ...sections] = read('CHANGELOG.md').split(/^## /m)
+    const prepared = sections[0]?.split(/\r?\n/, 1)[0] === pkg.version + ' - Unreleased'
+    const version = requested || (prepared ? pkg.version : semver.inc(pkg.version, 'minor'))
+    const usesPreparedVersion = prepared && version === pkg.version
+    if (semver.valid(version) !== version || (!usesPreparedVersion && !semver.gt(version, pkg.version)))
         throw Error('Expected a new semantic version greater than ' + pkg.version)
     const isCore = pkg.name === 'kea-typegen'
     const platforms = isCore ? targets() : []
-    const previousTag = 'v' + pkg.version
-    const tagged = git('tag', '--list', previousTag)
-    const base =
-        tagged || git('log', '-1', '--format=%H', '-S', '"version": "' + pkg.version + '"', '--', 'package.json')
-    if (!base) throw Error('Cannot find the previous release in git history')
-    const notes = git('log', '--no-merges', '--format=- %s (%h)', base + '..HEAD') || '- Rebuild the published package.'
+    const notes = prepared ? sections.shift().split('\n').slice(1).join('\n').trim() : changesSinceRelease(pkg.version)
     const date = process.env.RELEASE_DATE || new Date().toISOString().slice(0, 10)
     fs.mkdirSync(dir, { recursive: true })
-    const changelog = read('CHANGELOG.md')
-    const index = Math.max(0, changelog.search(/^## /m))
-    write(
-        'CHANGELOG.md',
-        changelog.slice(0, index) + '## ' + version + ' - ' + date + '\n\n' + notes + '\n\n' + changelog.slice(index),
-    )
+    sections.unshift(version + ' - ' + date + '\n\n' + notes + '\n\n')
+    write('CHANGELOG.md', [introduction, ...sections].join('## '))
     write('package.json', read('package.json').replace(/("version"\s*:\s*)"[^"]+"/, '$1"' + version + '"'))
     for (const file of ['package.json', 'CHANGELOG.md']) fs.copyFileSync(file, path.join(dir, file))
     write(path.join(dir, 'notes.md'), notes + '\n')

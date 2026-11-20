@@ -1,3 +1,9 @@
+## 4.0.0 - Unreleased
+
+- TypeScript 7 projects now generate declarations with the Go engine by default. Run `kea-typegen check` to review changes to inferred types before running `write`. Use `--compiler native` for the previous TypeScript 7 engine or `--compiler classic` for the TypeScript 5 checker.
+- npm installs the Go worker for your platform automatically. Packages with custom builders can ship a portable WASI visitor using the v1 Go plugin SDK. Existing JavaScript visitors still run through the compatibility path.
+- A full check of 1,725 PostHog logics took a median of 29.03 s with the existing forms visitor and 20.75 s with kea-forms 3.3.0, compared with 64.49 s on typegen 3.9.0. [Benchmark and methodology](benchmarks/posthog.md)
+
 ## 3.9.0 - 2026-11-19
 
 - Add the Go-based TypeScript 7.1.0-beta compiler for `check`, `write`, and `watch`. Typegen selects it automatically in TypeScript 7.x projects. Other projects use the bundled classic TypeScript 5.9.3 compiler. Override the selection with `--compiler native`, `--compiler classic`, or the `compiler` setting in `.kearc`.

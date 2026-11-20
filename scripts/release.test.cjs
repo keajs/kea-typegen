@@ -94,3 +94,38 @@ cp.execFileSync=function(cmd,args,...rest){
         fs.rmSync(dir, { recursive: true, force: true })
     }
 })
+
+test('a reviewed version is released once with its notes and the project changelog header', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-prepared-release-'))
+    try {
+        fs.symlinkSync(path.resolve(__dirname, '../node_modules'), path.join(dir, 'node_modules'), 'junction')
+        execFileSync('git', ['init', '-b', 'main'], { cwd: dir })
+        const git = (...args) => execFileSync('git', args, { cwd: dir })
+        const changelog = path.join(dir, 'CHANGELOG.md')
+        const details = '- Ships the portable visitor.'
+        for (const [name, version, input] of [
+            ['kea-typegen', '4.0.0', ['4.0.0']],
+            ['kea-forms', '3.3.0', []],
+        ]) {
+            fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name, version }))
+            fs.writeFileSync(changelog, `# Changes\n\n## ${version} - Unreleased\n\n${details}\n\n## 3.2.0\n`)
+            git('add', 'package.json', 'CHANGELOG.md')
+            git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Prepare ' + name)
+            const prepare = (...args) =>
+                execFileSync(
+                    process.execPath,
+                    [path.join(__dirname, 'release.cjs'), 'prepare', dir + '/artifacts', ...args],
+                    { cwd: dir, env: { ...process.env, RELEASE_DATE: '2026-11-20' }, stdio: 'pipe' },
+                )
+            prepare(...input)
+            assert.equal(
+                fs.readFileSync(changelog, 'utf8'),
+                `# Changes\n\n## ${version} - 2026-11-20\n\n${details}\n\n## 3.2.0\n`,
+            )
+            assert.equal(fs.readFileSync(path.join(dir, 'artifacts', 'notes.md'), 'utf8'), details + '\n')
+            assert.throws(() => prepare(version), /Expected a new semantic version/)
+        }
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+    }
+})

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: New version (blank for the next minor)
+        description: Version (blank for the prepared release or next minor)
         required: false
         type: string
   workflow_call:
