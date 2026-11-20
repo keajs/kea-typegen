@@ -6,6 +6,19 @@ Automatically generate types for `kea()` calls for [Kea 2.2+](https://keajs.org/
 
 https://keajs.org/docs/intro/typescript
 
+## Developing locally
+
+From the checkout, activate the Flox environment and install the project dependencies:
+
+```sh
+flox activate
+yarn install --frozen-lockfile
+npm run build:go
+npm run build
+```
+
+Flox provides Node 24, npm 11.21.3, Yarn Classic from `package.json`, and Go 1.27.3 on macOS and Linux. The first activation downloads the tools. On Intel Macs the Go launcher downloads the pinned compiler on its first invocation. [Install Flox](https://flox.dev/docs/install-flox/)
+
 ## Native TypeScript 7.1 beta
 
 Run `kea-typegen check --compiler native` to compare your generated types with the Go-based compiler.
