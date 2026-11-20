@@ -1,4 +1,4 @@
-## 4.0.0 - Unreleased
+## 4.0.0 - 2026-11-20
 
 - TypeScript 7 projects now generate declarations with the Go engine by default. Run `kea-typegen check` to review changes to inferred types before running `write`. Use `--compiler native` for the previous TypeScript 7 engine or `--compiler classic` for the TypeScript 5 checker.
 - npm installs the Go worker for your platform automatically. Packages with custom builders can ship a portable WASI visitor using the v1 Go plugin SDK. Existing JavaScript visitors still run through the compatibility path.
