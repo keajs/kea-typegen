@@ -1,3 +1,7 @@
+## 4.1.0 - 2026-11-20
+
+- Support saga logic fields and release portable plugins from their default branch (#63) (de08f34)
+
 ## 4.0.0 - 2026-11-20
 
 - TypeScript 7 projects now generate declarations with the Go engine by default. Run `kea-typegen check` to review changes to inferred types before running `write`. Use `--compiler native` for the previous TypeScript 7 engine or `--compiler classic` for the TypeScript 5 checker.
