@@ -59,3 +59,16 @@ test('actions - with random values instead of functions', () => {
     `
     expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
 })
+
+test('actions - with generic', () => {
+    const logicSource = `
+        import { kea } from 'kea'
+        
+        const logic = kea({
+            actions: {
+                updateName: <T extends string>(name?: T) => ({ name }),
+            }
+        })
+    `
+    expect(logicSourceToLogicType(logicSource)).toMatchSnapshot()
+})
