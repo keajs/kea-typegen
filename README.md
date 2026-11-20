@@ -11,7 +11,7 @@ https://keajs.org/docs/intro/typescript
 Run `kea-typegen check --compiler native` to compare your generated types with the Go-based compiler.
 Use `kea-typegen write --compiler native` to apply the changes. To use the same compiler for
 `check`, `write`, and `watch`, add `"compiler": "native"` to your `.kearc`. The CLI flag takes
-precedence. By default, typegen selects the native engine when the project resolves TypeScript 7.x
+precedence. By default, typegen selects the Go typegen engine when the project resolves TypeScript 7.x
 and the classic engine (5.9.3) otherwise.
 
 Typegen bundles TypeScript 7.1.0-beta and calls its synchronous JavaScript API. Your application's
@@ -26,6 +26,27 @@ Kea logic syntax and plugin syntax nodes are still parsed with TypeScript 5.9. P
 continue using those helpers. Select `--compiler classic` for plugins that need the full classic
 type checker. A plugin that directly imports `typescript` for its node factories must itself
 resolve a compatible classic compiler.
+
+## Go typegen
+
+Install kea-typegen as usual. Its npm package selects a prebuilt worker for your OS and CPU.
+Run `kea-typegen check --compiler go` to try it, or set `"compiler": "go"` in your project's
+`.kearc` for `check`, `write`, and `watch`. TypeScript 7.x projects select it automatically.
+
+Go runs the built-in visitors inside the TypeScript checker and generates inline and external
+declarations. Node handles formatting and source edits. Packages can ship a portable Go
+visitor as WebAssembly. Existing JavaScript plugins use the native TypeScript adapter when
+needed. Use `--verbose` to see how many logics each path generated.
+
+For a source checkout, build with `npm run build` and `npm run build:go` using Go 1.27 or
+newer. If optional dependencies were omitted, a local build is also available with
+`npm --prefix "$(npm root)/kea-typegen" run build:go`. The worker pins the same TypeScript
+7.1.0-beta revision as the JS adapter. Its module path sits under the compiler's import
+namespace to access the internal checker API.
+
+- [Writing a Go plugin](plugin/README.md)
+- [PostHog benchmark and plugin timings](benchmarks/posthog.md#portable-forms-plugin)
+- [Publishing a release](docs/releases.md)
 
 ## Inline mode
 

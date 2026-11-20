@@ -1,0 +1,212 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: New version (blank for the next minor)
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: false
+        type: string
+    secrets:
+      NPM_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+concurrency:
+  group: npm-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      tools: ${{ steps.plan.outputs.tools }}
+      version: ${{ steps.plan.outputs.version }}
+      platforms: ${{ steps.plan.outputs.platforms }}
+      core: ${{ steps.plan.outputs.core }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: keajs/kea-typegen
+          ref: ${{ github.repository == 'keajs/kea-typegen' && github.sha || 'main' }}
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/
+            /go/go.mod
+          path: .release-tools
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .release-tools/go/go.mod
+          cache: false
+      - run: yarn install --frozen-lockfile
+      - id: plan
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "tools=$(git -C .release-tools rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          export RELEASE_DATE="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at[:10]')"
+          node .release-tools/scripts/release.cjs prepare "$RUNNER_TEMP/packages" "$VERSION"
+      - if: steps.plan.outputs.core == 'true'
+        run: |
+          node --test scripts/release.test.cjs
+          go test -C plugin ./...
+          go test -C go ./...
+          npm run build:go
+      - if: steps.plan.outputs.core == 'false'
+        run: go test -C typegen ./...
+      - run: npm run build
+      - run: npm test -- --runInBand
+      - run: npm run --if-present samples:check
+      - run: node .release-tools/scripts/release.cjs pack "$RUNNER_TEMP/packages"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-main
+          path: ${{ runner.temp }}/packages
+          if-no-files-found: error
+
+  platform:
+    needs: prepare
+    if: needs.prepare.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.prepare.outputs.platforms) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: node scripts/platform.cjs "$TARGET" "$VERSION" "$RUNNER_TEMP/packages"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ matrix.target }}
+          path: ${{ runner.temp }}/packages/*.tgz
+          if-no-files-found: error
+
+  install:
+    needs: [prepare, platform]
+    if: needs.prepare.outputs.core == 'true'
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: windows-latest, target: win32-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: macos-15, target: darwin-arm64 }
+          - { os: macos-15-intel, target: darwin-x64 }
+          - { os: windows-11-arm, target: win32-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-main
+          path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-${{ matrix.target }}
+          path: packages
+      - shell: bash
+        run: |
+          mkdir installed
+          cd installed
+          npm init -y
+          npm install --ignore-scripts --no-audit --no-fund ../packages/*.tgz
+          node ../scripts/smoke.cjs
+
+  forms-install:
+    needs: prepare
+    if: needs.prepare.outputs.core == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: keajs/kea-typegen
+          ref: ${{ needs.prepare.outputs.tools }}
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-main
+          path: packages
+      - run: |
+          mkdir installed
+          cd installed
+          npm init -y
+          npm install --ignore-scripts --no-audit --no-fund ../packages/*.tgz kea-typegen@latest
+          node ../scripts/smoke.cjs --forms
+
+  publish:
+    needs: [prepare, platform, install, forms-install]
+    if: >-
+      always() && !cancelled() && needs.prepare.result == 'success' &&
+      ((needs.prepare.outputs.core == 'true' && needs.platform.result == 'success' && needs.install.result == 'success') ||
+      (needs.prepare.outputs.core == 'false' && needs.platform.result == 'skipped' && needs.install.result == 'skipped' && needs.forms-install.result == 'success'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: keajs/kea-typegen
+          ref: ${{ needs.prepare.outputs.tools }}
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/
+            /go/go.mod
+          path: .release-tools
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: npm-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/packages
+      - env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: node .release-tools/scripts/release.cjs publish "$RUNNER_TEMP/packages"

@@ -1,4 +1,4 @@
-import { LogicProgram } from '../program'
+import { OutputProgram } from '../program'
 import { AppOptions, ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { print, visit } from 'recast'
@@ -9,7 +9,7 @@ import { t, b, visitAllKeaCalls, assureImport, getAst } from './utils'
 
 export async function writePaths(
     appOptions: AppOptions,
-    program: LogicProgram,
+    program: OutputProgram,
     filename: string,
     parsedLogics: ParsedLogic[],
 ) {

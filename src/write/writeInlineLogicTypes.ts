@@ -1,4 +1,4 @@
-import { LogicProgram, sourceFileNames } from '../program'
+import { OutputProgram, sourceFileNames } from '../program'
 import * as ts from 'typescript'
 import * as fs from 'fs'
 import * as osPath from 'path'
@@ -31,6 +31,7 @@ export function printInlineLogicType(
     parsedLogic: ParsedLogic,
     { metaTypeArgument }: InlinePrintOptions = { metaTypeArgument: true },
 ): string {
+    if (parsedLogic.generated) return parsedLogic.generated.declaration
     const statements: ts.Statement[] = []
     const typeArguments: ts.TypeNode[] = []
 
@@ -170,7 +171,7 @@ export function printInlineLogicType(
  * instead of writing a separate logicType.ts file.
  */
 export async function writeInlineLogicTypes(
-    program: LogicProgram,
+    program: OutputProgram,
     appOptions: AppOptions,
     filename: string,
     parsedLogics: ParsedLogic[],
@@ -278,7 +279,7 @@ export async function writeInlineLogicTypes(
             }
         }
         if (
-            managedLogics.some((parsedLogic) => parsedLogic.sharedListeners.length > 0) &&
+            managedLogics.some((logic) => logic.generated?.sharedListeners || logic.sharedListeners.length > 0) &&
             !importsNamedKeaType(importDeclarations, 'BreakPointFunction')
         ) {
             newImportLines.push(`import type { BreakPointFunction } from 'kea'`)
@@ -474,19 +475,20 @@ function collectKnownTypeNames(sourceFile: ts.SourceFile): Set<string> {
 
 /** Is `name` one of the logic's own values (a reducer or selector), i.e. a member of the generated Values interface? */
 function isOwnValue(parsedLogic: ParsedLogic, name: string): boolean {
+    if (parsedLogic.generated) return parsedLogic.generated.values.has(name)
     return (
         parsedLogic.selectors.some((selector) => selector.name === name) ||
         parsedLogic.reducers.some((reducer) => reducer.name === name)
     )
 }
 
-const makeLogicTypeArityCache = new WeakMap<LogicProgram, boolean>()
+const makeLogicTypeArityCache = new WeakMap<OutputProgram, boolean>()
 
 /**
  * Does the kea this program resolves declare `MakeLogicType` with a fourth (`Meta`) type parameter?
  * kea 3.x stops at `<Values, Actions, LogicProps>`; passing a fourth argument there is a type error.
  */
-export function makeLogicTypeAcceptsMeta(program: LogicProgram): boolean {
+export function makeLogicTypeAcceptsMeta(program: OutputProgram): boolean {
     const cached = makeLogicTypeArityCache.get(program)
     if (cached !== undefined) {
         return cached

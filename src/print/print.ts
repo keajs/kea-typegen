@@ -1,4 +1,4 @@
-import { LogicProgram } from '../program'
+import { OutputProgram } from '../program'
 import {
     createPrinter,
     createSourceFile,
@@ -67,7 +67,7 @@ export async function runThroughPrettier(sourceText: string, filePath: string): 
 
 // returns files to write
 export async function printToFiles(
-    program: LogicProgram,
+    program: OutputProgram,
     appOptions: AppOptions,
     parsedLogics: ParsedLogic[],
 ): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
@@ -140,13 +140,13 @@ export async function printToFiles(
 
         // create the Nodes and gather referenced types
         for (const parsedLogic of parsedLogics) {
-            printLogicType(parsedLogic, appOptions)
+            if (!parsedLogic.generated) printLogicType(parsedLogic, appOptions)
         }
 
         const logicStrings = []
         const requiredKeys = new Set(['Logic'])
         for (const parsedLogic of parsedLogics) {
-            const logicTypeString = nodeToString(parsedLogic.interfaceDeclaration)
+            const logicTypeString = parsedLogic.generated?.declaration ?? nodeToString(parsedLogic.interfaceDeclaration)
             logicStrings.push(
                 appOptions.prettier === false
                     ? logicTypeString
@@ -155,7 +155,7 @@ export async function printToFiles(
             for (const string of parsedLogic.importFromKeaInLogicType.values()) {
                 requiredKeys.add(string)
             }
-            if (parsedLogic.sharedListeners.length > 0) {
+            if (parsedLogic.generated?.sharedListeners || parsedLogic.sharedListeners.length > 0) {
                 requiredKeys.add('BreakPointFunction')
             }
         }
@@ -305,7 +305,7 @@ export function buildTypeImportEntries(
     return Object.entries(typeReferencesToImportFromFiles)
         .filter(([_, list]) => list.size > 0)
         .map(([file, list]) => {
-            let finalPath = file
+            let finalPath = path.isAbsolute(file) ? path.normalize(file) : file
 
             // Relative path? Get the absolute.
             if (finalPath.startsWith('.')) {
@@ -316,7 +316,7 @@ export function buildTypeImportEntries(
             }
             // clean up '../../node_modules/...'
             if (finalPath.startsWith(nodeModulesPath)) {
-                finalPath = finalPath.substring(nodeModulesPath.length + 1)
+                finalPath = finalPath.substring(nodeModulesPath.length + 1).split(path.sep).join('/')
                 if (finalPath.startsWith('.pnpm/')) {
                     // node_modules/.pnpm/pkg@version/node_modules/* --> *
                     const regex = /\.pnpm\/[^/]+@[^\/]+\/node_modules\/(.*)/
@@ -329,7 +329,8 @@ export function buildTypeImportEntries(
 
             // A workspace package.json can point at a different node_modules root than the physical
             // dependency path. Collapse the innermost package path instead of writing pnpm internals.
-            const nestedNodeModules = `${path.sep}node_modules${path.sep}`
+            finalPath = finalPath.split(path.sep).join('/')
+            const nestedNodeModules = '/node_modules/'
             const nestedNodeModulesIndex = finalPath.lastIndexOf(nestedNodeModules)
             if (nestedNodeModulesIndex >= 0) {
                 finalPath = finalPath.substring(nestedNodeModulesIndex + nestedNodeModules.length)
@@ -339,8 +340,8 @@ export function buildTypeImportEntries(
             }
 
             // Resolve absolute urls
-            if (finalPath.startsWith('/')) {
-                finalPath = path.relative(path.dirname(importIntoFile), finalPath)
+            if (path.isAbsolute(finalPath)) {
+                finalPath = path.relative(path.dirname(importIntoFile), finalPath).split(path.sep).join('/')
                 if (!finalPath.startsWith('.')) {
                     finalPath = `./${finalPath}`
                 }
@@ -444,7 +445,7 @@ export function printLogicType(parsedLogic: ParsedLogic, appOptions?: AppOptions
                 factory.createPropertySignature(undefined, factory.createIdentifier(name), undefined, typeNode),
             ),
     )
-    if (appOptions?.compiler === 'native') {
+    if (appOptions?.compiler === 'native' || appOptions?.compiler === 'go') {
         parsedLogic.interfaceDeclaration = relocateImportTypes(
             parsedLogic.interfaceDeclaration,
             parsedLogic.fileName,

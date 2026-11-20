@@ -106,6 +106,11 @@ export function visitProgram(program: LogicProgram, appOptions?: AppOptions): Pa
         )
     }
 
+    deleteOrphanedTypes(names, appOptions)
+    return parsedLogics
+}
+
+export function deleteOrphanedTypes(names: readonly string[], appOptions: AppOptions) {
     if (appOptions?.delete && appOptions.write && !appOptions.sourceFilePath) {
         for (const fileName of names) {
             if (fileName.endsWith('Type.ts')) {
@@ -123,7 +128,6 @@ export function visitProgram(program: LogicProgram, appOptions?: AppOptions): Pa
             }
         }
     }
-    return parsedLogics
 }
 
 export function visitResetContext(checker: ts.TypeChecker, pluginModules: PluginModule[], appOptions?: AppOptions) {
@@ -421,49 +425,7 @@ export function visitKeaCalls(
         }
 
         for (let { name, type, expression, typeBuilders } of calls) {
-            if (name === 'path' || name === 'logicPath') {
-                parsedLogic.hasPathInLogic = true
-            }
-            if (name === 'key') {
-                parsedLogic.hasKeyInLogic = true
-            }
-
-            // Equivalent to the previous `ts.isFunctionTypeNode(typeNode)` check, but without
-            // eagerly building a typeNode: a pure function type has call signatures and no
-            // members, so we unwrap it to its return type before visiting/printing.
-            const callSignatures = type.getCallSignatures()
-            if (callSignatures.length > 0 && type.getProperties().length === 0) {
-                type = callSignatures[0].getReturnType()
-            }
-
-            visitFunctions[name]?.(parsedLogic, type, expression)
-
-            let typeNode: ts.TypeNode | null | undefined = undefined
-            const getTypeNode = (): ts.TypeNode | null => {
-                if (typeNode === undefined) {
-                    typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
-                }
-                return typeNode
-            }
-
-            const visitKeaPropertyArguments: VisitKeaPropertyArguments = {
-                name,
-                appOptions,
-                type,
-                get typeNode() {
-                    return getTypeNode()
-                },
-                parsedLogic,
-                node: expression,
-                checker,
-                gatherImports: (input) => gatherImports(input, checker, parsedLogic),
-                cloneNode: cloneNodeSorted,
-                getTypeNodeForNode: (node) => getTypeNodeForNode(node, checker),
-                prepareForPrint: (node) => {
-                    gatherImports(node, checker, parsedLogic)
-                    return cloneNodeSorted(node)
-                },
-            }
+            const visitKeaPropertyArguments = visitBuiltin(parsedLogic, appOptions, name, expression, type)
 
             for (const pluginModule of typeBuilders) {
                 try {
@@ -496,5 +458,58 @@ export function visitKeaCalls(
             }
         }
         parsedLogics.push(parsedLogic)
+    }
+}
+
+export function visitBuiltin(
+    parsedLogic: ParsedLogic,
+    appOptions: AppOptions,
+    name: string,
+    expression: ts.Expression,
+    type: ts.Type,
+): VisitKeaPropertyArguments {
+    const checker = parsedLogic.checker
+    if (name === 'path' || name === 'logicPath') {
+        parsedLogic.hasPathInLogic = true
+    }
+    if (name === 'key') {
+        parsedLogic.hasKeyInLogic = true
+    }
+
+    // Equivalent to the previous `ts.isFunctionTypeNode(typeNode)` check, but without
+    // eagerly building a typeNode: a pure function type has call signatures and no
+    // members, so we unwrap it to its return type before visiting/printing.
+    const callSignatures = type.getCallSignatures()
+    if (callSignatures.length > 0 && type.getProperties().length === 0) {
+        type = callSignatures[0].getReturnType()
+    }
+
+    visitFunctions[name]?.(parsedLogic, type, expression)
+
+    let typeNode: ts.TypeNode | null | undefined = undefined
+    const getTypeNode = (): ts.TypeNode | null => {
+        if (typeNode === undefined) {
+            typeNode = type ? checker.typeToTypeNode(type, undefined, NodeBuilderFlags.NoTruncation) : null
+        }
+        return typeNode
+    }
+
+    return {
+        name,
+        appOptions,
+        type,
+        get typeNode() {
+            return getTypeNode()
+        },
+        parsedLogic,
+        node: expression,
+        checker,
+        gatherImports: (input) => gatherImports(input, checker, parsedLogic),
+        cloneNode: cloneNodeSorted,
+        getTypeNodeForNode: (node) => getTypeNodeForNode(node, checker),
+        prepareForPrint: (node) => {
+            gatherImports(node, checker, parsedLogic)
+            return cloneNodeSorted(node)
+        },
     }
 }

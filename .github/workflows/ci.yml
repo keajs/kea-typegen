@@ -15,6 +15,13 @@ jobs:
         with:
           node-version: 20
           cache: yarn
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
       - run: yarn install --frozen-lockfile
+      - run: node --test scripts/release.test.cjs
+      - run: go test -C go ./...
+      - run: yarn build:go
       - run: yarn test
       - run: yarn samples:check

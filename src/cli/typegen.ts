@@ -18,8 +18,8 @@ yargs
         await runTypeGen({ ...includeKeaConfig(parsedToAppOptions(argv)), write: true, watch: true })
     })
     .option('compiler', {
-        choices: ['native', 'classic'] as const,
-        describe: 'TypeScript engine (defaults to native for TypeScript 7 projects)',
+        choices: ['native', 'classic', 'go'] as const,
+        describe: 'Typegen engine (go runs built-in generation inside the TypeScript 7 checker)',
     })
     .option('config', { alias: 'c', describe: 'Path to tsconfig.json (otherwise auto-detected)', type: 'string' })
     .option('file', {

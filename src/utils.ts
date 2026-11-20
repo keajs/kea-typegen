@@ -312,7 +312,7 @@ export function extractImportedActions(
                                         const m = (actionCreator.type.type as any).members?.find(
                                             (m) => m.name?.getText() === 'type',
                                         )
-                                        if (ts.isPropertySignature(m) && ts.isLiteralTypeNode(m.type)) {
+                                        if (m && ts.isPropertySignature(m) && ts.isLiteralTypeNode(m.type)) {
                                             const str = m.type.getText()
                                             if (str) {
                                                 actionType = str.substring(1, str.length - 1)
@@ -339,6 +339,8 @@ export function getLogicPathString(appOptions: AppOptions, fileName: string) {
     }
     const pathString = path
         .relative(cwd, fileName)
+        .split(path.sep)
+        .join('/')
         .replace(/^.\//, '')
         .replace(/\.[cm]?[jt]sx?$/, '')
         .replace(/\//g, '.')
