@@ -13,6 +13,7 @@ For forms, CI builds the Go visitor once for WASI and includes it in the regular
 Use a local npm account with 2FA, publish access to `kea-typegen`, and permission to create public packages under the **npm** scope `@keajs`. From a dependency-installed typegen checkout on `main`, run:
 
 ```sh
+corepack yarn install --frozen-lockfile
 npx --yes npm@11.21.3 login --registry=https://registry.npmjs.org
 npx --yes npm@11.21.3 run release:setup
 gh workflow run release.yml --repo keajs/kea-typegen --ref main -f version=4.0.0

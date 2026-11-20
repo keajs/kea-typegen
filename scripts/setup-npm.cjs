@@ -3,6 +3,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
+const { createInterface } = require('node:readline/promises')
 const { setTimeout: delay } = require('node:timers/promises')
 const { scope, targets } = require('./platform.cjs')
 
@@ -18,7 +19,7 @@ function npm(args, capture = false) {
 
 async function stageMissingWorker(name) {
     const response = await fetch(registry + '/' + encodeURIComponent(name), { method: 'HEAD' })
-    if (response.ok) return
+    if (response.ok) return false
     if (response.status !== 404) throw Error('Looking up ' + name + ' returned ' + response.status)
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-npm-bootstrap-'))
     try {
@@ -31,14 +32,31 @@ async function stageMissingWorker(name) {
         }
         fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(manifest))
         npm(['stage', 'publish', dir, '--access=public', '--tag=bootstrap', '--ignore-scripts'])
+        return true
     } finally {
         fs.rmSync(dir, { recursive: true, force: true })
     }
 }
 
-function hasPublisher(name) {
+async function hasPublisher(name) {
     // npm trust list --json prints one object per configuration, separated by blank lines.
-    const output = npm(['trust', 'list', name, '--json'], true).trim()
+    let output
+    try {
+        output = npm(['trust', 'list', name, '--json'], true).trim()
+    } catch (error) {
+        // npm's browser/OTP prompt requires a terminal on both stdin and stdout.
+        if (!/\bEOTP\b/.test(String(error.stdout))) throw error
+        npm(['trust', 'list', name])
+        const prompt = createInterface({ input: process.stdin, output: process.stdout })
+        try {
+            const answer = await prompt.question(
+                `Does ${name} already list ${repo} / release.yml with publish access and a blank environment? [y/N] `,
+            )
+            return /^y(es)?$/i.test(answer.trim())
+        } finally {
+            prompt.close()
+        }
+    }
     const configs = output ? output.split(/\r?\n\s*\r?\n/).flatMap((item) => JSON.parse(item)) : []
     return configs.some(
         (config) =>
@@ -64,8 +82,8 @@ async function main() {
     npm(['whoami'])
     for (const name of packages) {
         console.log(name)
-        if (name !== 'kea-typegen') await stageMissingWorker(name)
-        if (!hasPublisher(name)) {
+        const created = name !== 'kea-typegen' && (await stageMissingWorker(name))
+        if (created || !(await hasPublisher(name))) {
             npm(['trust', 'github', name, '--repo=' + repo, '--file=release.yml', '--allow-publish', '--yes'])
             await delay(2000)
         }
