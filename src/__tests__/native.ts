@@ -5,6 +5,15 @@ import * as path from 'path'
 
 const repo = path.resolve(__dirname, '../..')
 
+// npm run build:go adds the in-process visitor to this compatibility suite.
+const binary = path.join(
+    repo,
+    'go/bin',
+    process.platform + '-' + process.arch,
+    'kea-typegen-go' + (process.platform === 'win32' ? '.exe' : ''),
+)
+const engines = fs.existsSync(binary) ? ['native', 'go'] : ['native']
+
 function runCli(root: string, ...args: string[]) {
     const result = spawnSync(
         process.execPath,
@@ -24,13 +33,15 @@ function runCli(root: string, ...args: string[]) {
     return result
 }
 
-test('native CLI checks, writes and converges with project options, inferred imports and UTF-16 source edits', () => {
+test.each(engines)('%s writes and converges with inferred imports and UTF-16 source edits', testWrite, 30000)
+
+function testWrite(compiler: string) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-native-'))
     const file = (name: string) => path.join(root, name)
     try {
         fs.mkdirSync(file('node_modules/kea'), { recursive: true })
         fs.writeFileSync(file('node_modules/kea/index.d.ts'), 'export declare function kea<T>(input: unknown): T')
-        fs.writeFileSync(file('.kearc'), JSON.stringify({ compiler: 'native' }))
+        fs.writeFileSync(file('.kearc'), JSON.stringify({ compiler }))
         fs.writeFileSync(
             file('base.json'),
             JSON.stringify({
@@ -81,9 +92,11 @@ test('native CLI checks, writes and converges with project options, inferred imp
     } finally {
         fs.rmSync(root, { recursive: true, force: true })
     }
-}, 30000)
+}
 
-test('TypeScript 7 projects generate Node ESM imports into a separate types directory', () => {
+test.each(engines)('%s generates Node ESM imports into a separate types directory', testEsm, 15000)
+
+function testEsm(compiler: string) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-native-esm-'))
     const file = (name: string) => path.join(root, name)
     try {
@@ -110,6 +123,7 @@ test('TypeScript 7 projects generate Node ESM imports into a separate types dire
             "import { kea } from 'kea'\nimport { make } from './model.js'\nexport const demo = kea({ actions: { load: () => make() } })",
         )
         const args = ['--root', 'src', '--types', 'generated', '--delete']
+        args.push('--compiler', compiler)
         const result = runCli(root, 'write', ...args)
         expect(result.status).toBe(0)
         expect(result.stdout).toContain('Native TypeScript')
@@ -119,4 +133,4 @@ test('TypeScript 7 projects generate Node ESM imports into a separate types dire
     } finally {
         fs.rmSync(root, { recursive: true, force: true })
     }
-}, 15000)
+}

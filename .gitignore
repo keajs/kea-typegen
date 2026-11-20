@@ -5,3 +5,5 @@ dist/
 form-plugin/lib/tsconfig.tsbuildinfo
 form-plugin/lib/**/*.map
 samples/.typegen
+
+go/bin/

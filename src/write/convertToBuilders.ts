@@ -1,4 +1,4 @@
-import { LogicProgram } from '../program'
+import { OutputProgram } from '../program'
 import { AppOptions, ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import { print, visit } from 'recast'
@@ -36,7 +36,7 @@ const supportedProperties = {
 
 export async function convertToBuilders(
     appOptions: AppOptions,
-    program: LogicProgram,
+    program: OutputProgram,
     filename: string,
     parsedLogics: ParsedLogic[],
 ) {

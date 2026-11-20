@@ -1,4 +1,4 @@
-import { LogicProgram } from '../program'
+import { OutputProgram } from '../program'
 import { AppOptions, ParsedLogic } from '../types'
 import * as ts from 'typescript'
 import * as osPath from 'path'
@@ -40,7 +40,7 @@ export function getTypeArgumentInsertEnd(callExpression: ts.CallExpression, sour
 
 export async function writeTypeImports(
     appOptions: AppOptions,
-    program: LogicProgram,
+    program: OutputProgram,
     filename: string,
     logicsNeedingImports: ParsedLogic[],
     parsedLogics: ParsedLogic[],
@@ -54,6 +54,8 @@ export async function writeTypeImports(
 
     let importLocation = osPath
         .relative(osPath.dirname(filename), logicsNeedingImports[0].typeFileName)
+        .split(osPath.sep)
+        .join('/')
         .replace(/\.[tj]sx?$/, program.requiresImportExtension?.(filename) ? '.js' : '')
         .split(osPath.sep)
         .join('/')

@@ -5,6 +5,7 @@
     "scripts": {
         "start": "ts-node ./src/cli/typegen.ts",
         "clean": "rimraf dist/*",
+        "build:go": "node go/build.cjs",
         "build": "node node_modules/typescript/bin/tsc -p .",
         "prepublishOnly": "npm run test && npm run clean && npm run build",
         "run-built-cli": "node dist/src/cli/typegen.js",
@@ -19,7 +20,28 @@
         "form-plugin:build": "cd form-plugin && yarn && yarn build && cd ..",
         "form-plugin:rebuild": "yarn form-plugin:build && rm -rf node_modules && yarn"
     },
+    "files": [
+        "dist",
+        "src",
+        "go/*.go",
+        "go/go.mod",
+        "go/go.sum",
+        "go/build.cjs",
+        "plugin",
+        "docs/releases.md",
+        "benchmarks/posthog.md",
+        "samples",
+        "samples-inline",
+        "form-plugin",
+        "classes.json",
+        "tsconfig.json",
+        "CHANGELOG.md"
+    ],
     "main": "dist/src/index.js",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/keajs/kea-typegen.git"
+    },
     "author": "Marius Andra <marius.andra@gmail.com>",
     "license": "MIT",
     "bin": {
@@ -54,6 +76,7 @@
         "react-redux": "^7.2.6",
         "redux": "^4.2.0",
         "reselect": "^4.1.5",
+        "semver": "^7.3.5",
         "rimraf": "^3.0.2",
         "ts-jest": "^28.0.8",
         "ts-node": "^10.7.0"

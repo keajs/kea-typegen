@@ -2,25 +2,26 @@ import * as ts from 'typescript'
 import * as path from 'path'
 import { visitProgram } from './visit/visit'
 import { printToFiles } from './print/print'
-import { AppOptions } from './types'
+import { AppOptions, ParsedLogic } from './types'
 import { Program } from 'typescript'
+import { openGoProgram } from './go'
 import { openNativeProgram } from './native'
 import { watchNativeProject } from './nativeWatch'
-import { LogicProgram, sourceFileNames } from './program'
+import { LogicProgram, OutputProgram, sourceFileNames } from './program'
 import { version } from '../package.json'
 import { restoreCachedTypes } from './cache'
 import { createWatchChangeTracker, planWatchTypegenPass, WatchFileChange, WatchTypegenPlan } from './watch'
 
-interface ProgramSession {
-    program: LogicProgram
-    close?(): void
-}
+type ProgramSession = { close?(): void } & (
+    | { program: LogicProgram }
+    | { program: OutputProgram; parsed: ParsedLogic[] }
+)
 
-function projectCompiler(options: AppOptions): 'classic' | 'native' {
+function projectCompiler(options: AppOptions): 'classic' | 'go' {
     const directory = path.dirname(path.resolve(options.tsConfigPath ?? options.sourceFilePath))
     try {
         const manifest = require.resolve('typescript/package.json', { paths: [directory] })
-        return require(manifest).version.startsWith('7.') ? 'native' : 'classic'
+        return require(manifest).version.startsWith('7.') ? 'go' : 'classic'
     } catch (error) {
         if (error.code === 'MODULE_NOT_FOUND') return 'classic'
         throw error
@@ -33,13 +34,16 @@ export async function runTypeGen(appOptions: AppOptions) {
     if (!appOptions.tsConfigPath && !appOptions.sourceFilePath) throw new Error('Specify a tsconfig or source file.')
 
     appOptions = { ...appOptions, compiler: appOptions.compiler ?? projectCompiler(appOptions) }
-    if (!['native', 'classic'].includes(appOptions.compiler)) {
+    if (!['native', 'classic', 'go'].includes(appOptions.compiler)) {
         throw new Error(`Unknown typegen compiler: ${appOptions.compiler}`)
     }
-    if (appOptions.compiler === 'native') {
-        log(`🥚 Native TypeScript ${require('typescript-native/package.json').version}`)
+    if (appOptions.compiler === 'native' || appOptions.compiler === 'go') {
+        const open = appOptions.compiler === 'go' ? openGoProgram : openNativeProgram
+        log(
+            `🥚 Native TypeScript ${require('typescript-native/package.json').version}${appOptions.compiler === 'go' ? ' (Go typegen)' : ''}`,
+        )
         const generate = (onProgramFiles?: (files: readonly string[]) => void) =>
-            generateFiles(appOptions, () => openNativeProgram(appOptions), onProgramFiles)
+            generateFiles(appOptions, () => open(appOptions), onProgramFiles)
         return appOptions.watch ? watchNativeProject(appOptions, generate) : generate()
     }
 
@@ -68,15 +72,16 @@ async function generateFiles(
         const session = await open()
         try {
             onProgramFiles?.(sourceFileNames(session.program))
+            const parsed = 'parsed' in session ? session.parsed : visitProgram(session.program, options)
             if (
                 round === 0 &&
                 options.write &&
                 !options.sourceFilePath &&
-                restoreCachedTypes(session.program, options, options.log)
+                restoreCachedTypes(session.program, options, parsed)
             ) {
                 continue
             }
-            const { writtenFiles, filesToModify } = await goThroughAllTheFiles(session.program, options)
+            const { writtenFiles, filesToModify } = await printPass(session.program, options, parsed)
             if (!options.write || options.sourceFilePath || (!writtenFiles && !filesToModify)) {
                 if (options.write && !options.watch) options.log('👋 Finished writing files! Exiting.')
                 return
@@ -189,7 +194,10 @@ async function goThroughAllTheFiles(
     program: LogicProgram,
     appOptions: AppOptions,
 ): Promise<{ filesToWrite: number; writtenFiles: number; filesToModify: number }> {
-    const parsedLogics = visitProgram(program, appOptions)
+    return printPass(program, appOptions, visitProgram(program, appOptions))
+}
+
+async function printPass(program: OutputProgram, appOptions: AppOptions, parsedLogics: ParsedLogic[]) {
     if (appOptions.verbose) {
         appOptions.log(`🗒️ ${parsedLogics.length} logic${parsedLogics.length === 1 ? '' : 's'} found!`)
     }

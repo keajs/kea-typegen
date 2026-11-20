@@ -1,19 +1,21 @@
-import { LogicProgram } from './program'
+import { OutputProgram } from './program'
 import * as fs from 'fs'
 import * as path from 'path'
 import { AppOptions, ParsedLogic } from './types'
-import { visitProgram } from './visit/visit'
 import { isInlineFile } from './utils'
 
 export function cachePath(appOptions: AppOptions, fileName: string): string {
     return path.join(process.cwd(), '.typegen', path.relative(process.cwd(), fileName))
 }
 
-export function restoreCachedTypes(program: LogicProgram, appOptions: AppOptions, log: (msg: string) => void): boolean {
+export function restoreCachedTypes(
+    program: OutputProgram,
+    appOptions: AppOptions,
+    parsedLogics: ParsedLogic[],
+): boolean {
     if (!appOptions.useCache) {
         return false
     }
-    const parsedLogics = visitProgram(program, appOptions)
     const parsedLogicsByFile: Record<string, ParsedLogic[]> = {}
     for (const pl of parsedLogics) {
         parsedLogicsByFile[pl.fileName] = [...(parsedLogicsByFile[pl.fileName] ?? []), pl]
@@ -29,7 +31,7 @@ export function restoreCachedTypes(program: LogicProgram, appOptions: AppOptions
             if (fs.existsSync(from)) {
                 fs.mkdirSync(path.dirname(pl.typeFileName), { recursive: true })
                 fs.copyFileSync(from, pl.typeFileName)
-                log(`♻️ Restored from cache: ${path.relative(process.cwd(), pl.typeFileName)}`)
+                appOptions.log(`♻️ Restored from cache: ${path.relative(process.cwd(), pl.typeFileName)}`)
                 restored = true
             }
         }

@@ -59,6 +59,7 @@ export interface ParsedLogic {
     keyType?: ts.TypeNode
     typeReferencesToImportFromFiles: Record<string, Set<string>>
     selectorParamAnnotations: SelectorParamAnnotation[]
+    generated?: { declaration: string; values: ReadonlySet<string>; sharedListeners: boolean }
     interfaceDeclaration?: ts.InterfaceDeclaration
     extraActions: Record<string, ts.TypeNode>
     extraInput: Record<string, { typeNode: ts.TypeNode; withLogicFunction: boolean }>
@@ -68,7 +69,7 @@ export interface ParsedLogic {
 }
 
 export interface AppOptions {
-    compiler?: 'native' | 'classic'
+    compiler?: 'native' | 'classic' | 'go'
     tsConfigPath?: string
     packageJsonPath?: string
     sourceFilePath?: string
