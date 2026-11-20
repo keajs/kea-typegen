@@ -360,17 +360,11 @@ export function gatherImports(input: ts.Node, checker: ts.TypeChecker, parsedLog
     function getImports(requestedNode) {
         let node = requestedNode
         if (ts.isTypeReferenceNode(node)) {
-            let typeRootName: string | undefined
-            if (node.typeName?.kind === SyntaxKind.FirstNode) {
-                try {
-                    typeRootName = node.typeName.getFirstToken().getText()
-                } catch (e) {
-                    typeRootName = (node.typeName.left as any)?.escapedText
-                }
-            }
-            const symbol = checker.getSymbolAtLocation(node.typeName) || (node.typeName as any).symbol
+            let name = node.typeName
+            while (ts.isQualifiedName(name)) name = name.left
+            const symbol = checker.getSymbolAtLocation(name) || (name as any).symbol
             if (symbol) {
-                storeExtractedSymbol(symbol, checker, parsedLogic, typeRootName)
+                storeExtractedSymbol(symbol, checker, parsedLogic, name !== node.typeName ? name.text : undefined)
             }
         }
         ts.forEachChild(requestedNode, getImports)

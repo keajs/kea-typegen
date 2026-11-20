@@ -18,6 +18,7 @@ type Property struct {
 type Request struct {
 	Version                              int
 	Builder, File, Logic, Argument, Kind string
+	SupportsLogicFieldMembers            bool
 	Properties                           []Property
 }
 
@@ -38,6 +39,8 @@ type Result struct {
 	Actions             []Action
 	Reducers, Selectors []Value
 	Imports             []Import
+	// LogicFieldMembers adds named members to object fields on the logic itself.
+	LogicFieldMembers map[string][]Value `json:",omitempty"`
 	// Delegate requests the package's JavaScript visitor for this file.
 	Delegate bool
 }
