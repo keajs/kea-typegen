@@ -13,14 +13,25 @@ const repo = 'keajs/kea-typegen'
 function npm(args, capture = false) {
     return execFileSync(process.execPath, [process.env.npm_execpath, ...args, '--registry=' + registry], {
         encoding: 'utf8',
-        stdio: ['inherit', capture ? 'pipe' : 'inherit', 'inherit'],
+        stdio: capture ? ['inherit', 'pipe', 'pipe'] : 'inherit',
     })
 }
 
-async function stageMissingWorker(name) {
-    const response = await fetch(registry + '/' + encodeURIComponent(name), { method: 'HEAD' })
-    if (response.ok) return false
-    if (response.status !== 404) throw Error('Looking up ' + name + ' returned ' + response.status)
+function npmErrorCode(error) {
+    try {
+        return JSON.parse(error.stdout).error.code
+    } catch {
+        return undefined
+    }
+}
+
+function stageMissingWorker(name) {
+    try {
+        npm(['view', name, 'dist-tags', '--tag=latest', '--prefer-online', '--json'], true)
+        return false
+    } catch (error) {
+        if (npmErrorCode(error) !== 'E404') throw error
+    }
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-npm-bootstrap-'))
     try {
         const manifest = {
@@ -45,7 +56,7 @@ async function hasPublisher(name) {
         output = npm(['trust', 'list', name, '--json'], true).trim()
     } catch (error) {
         // npm's browser/OTP prompt requires a terminal on both stdin and stdout.
-        if (!/\bEOTP\b/.test(String(error.stdout))) throw error
+        if (npmErrorCode(error) !== 'EOTP') throw error
         npm(['trust', 'list', name])
         const prompt = createInterface({ input: process.stdin, output: process.stdout })
         try {
@@ -82,7 +93,7 @@ async function main() {
     npm(['whoami'])
     for (const name of packages) {
         console.log(name)
-        const created = name !== 'kea-typegen' && (await stageMissingWorker(name))
+        const created = name !== 'kea-typegen' && stageMissingWorker(name)
         if (created || !(await hasPublisher(name))) {
             npm(['trust', 'github', name, '--repo=' + repo, '--file=release.yml', '--allow-publish', '--yes'])
             await delay(2000)

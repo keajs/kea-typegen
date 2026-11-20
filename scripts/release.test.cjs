@@ -129,3 +129,57 @@ test('a reviewed version is released once with its notes and the project changel
         fs.rmSync(dir, { recursive: true, force: true })
     }
 })
+
+test('worker setup resumes existing trust and only stages packages npm reports as missing', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kea-setup-test-'))
+    try {
+        const fixture = path.join(dir, 'registry.cjs')
+        const calls = path.join(dir, 'calls')
+        fs.writeFileSync(
+            fixture,
+            `
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const cp = require('node:child_process')
+require('node:timers/promises').setTimeout = async () => {}
+global.fetch = () => { throw Error('Look up workers through the npm CLI') }
+const missing = '@keajs/kea-typegen-win32-x64'
+cp.execFileSync = (node, [cli, command, ...args]) => {
+    assert.equal(node, process.execPath)
+    assert.equal(cli, 'test-npm')
+    assert.equal(args.pop(), '--registry=https://registry.npmjs.org')
+    if (command === '--version') return '11.21.3'
+    if (command === 'whoami') return 'maintainer'
+    if (command === 'view') {
+        if (args[0] === missing) {
+            const code = process.env.LOOKUP_ERROR
+            throw Object.assign(Error(code), {stdout: JSON.stringify({error: {code}})})
+        }
+        return '{}'
+    }
+    if (command === 'trust' && args[0] === 'list') {
+        return JSON.stringify({type:'github', repository:'keajs/kea-typegen', file:'release.yml', permissions:['createPackage']})
+    }
+    if (command === 'stage') {
+        assert.equal(JSON.parse(fs.readFileSync(args[1] + '/package.json')).name, missing)
+    } else {
+        assert.equal(command, 'trust')
+        assert.deepEqual(args.slice(0, 2), ['github', missing])
+    }
+    fs.appendFileSync(process.env.TEST_CALLS, command + '\\n')
+}
+`,
+        )
+        const setup = (code) =>
+            execFileSync(process.execPath, ['--require', fixture, path.join(__dirname, 'setup-npm.cjs')], {
+                env: { ...process.env, npm_execpath: 'test-npm', LOOKUP_ERROR: code, TEST_CALLS: calls },
+                stdio: 'pipe',
+            })
+        assert.throws(() => setup('ECONNRESET'), /ECONNRESET/)
+        assert.equal(fs.existsSync(calls), false)
+        setup('E404')
+        assert.equal(fs.readFileSync(calls, 'utf8'), 'stage\ntrust\n')
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+    }
+})

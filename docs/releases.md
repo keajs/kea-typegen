@@ -10,21 +10,22 @@ For forms, CI builds the Go visitor once for WASI and includes it in the regular
 
 ## First release with native workers
 
-Use a local npm account with 2FA, publish access to `kea-typegen`, and permission to create public packages under the **npm** scope `@keajs`. From a dependency-installed typegen checkout on `main`, run:
+Use a local npm account with 2FA, publish access to `kea-typegen`, and permission to create public packages under the **npm** scope `@keajs`. From a typegen checkout on `main`, run the following in your terminal.
 
 ```sh
-corepack yarn install --frozen-lockfile
-npx --yes npm@11.21.3 login --registry=https://registry.npmjs.org
-npx --yes npm@11.21.3 run release:setup
+flox activate
+yarn install --frozen-lockfile
+npm login --registry=https://registry.npmjs.org
+npm run release:setup
 gh workflow run release.yml --repo keajs/kea-typegen --ref main -f version=4.0.0
 ```
 
-The setup command lists its targets with `-- --list`. It stages a metadata-only bootstrap version for each missing worker, then grants `keajs/kea-typegen`'s `release.yml` direct publish access to typegen and its workers. npm creates a public placeholder for each new name as soon as it is staged. Leave the bootstrap stages pending or reject them after setup. The release workflow builds and publishes the actual binaries and the main package. Complete the first trusted publish within 48 hours of creating trust. [npm staged package creation](https://github.blog/changelog/2026-10-02-npm-staged-publishing-now-supports-creating-new-packages/) · [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
+The setup command lists its targets with `-- --list`. It stages a metadata-only bootstrap version for each missing worker, then grants `keajs/kea-typegen`'s `release.yml` direct publish access to typegen and its workers. npm creates a public placeholder for each new name as soon as it is staged. You can rerun setup after an interruption. If npm displays an existing publisher and asks for confirmation, answer yes when the repository, workflow, publish permission and blank environment match. Leave the bootstrap stages pending or reject them after setup. The release workflow builds and publishes the actual binaries and the main package. Complete the first trusted publish within 48 hours of creating trust. [npm staged package creation](https://github.blog/changelog/2026-10-02-npm-staged-publishing-now-supports-creating-new-packages/) · [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
 
 After typegen 4.0.0 is available on npm, configure and release forms:
 
 ```sh
-npx --yes npm@11.21.3 trust github kea-forms --repo=keajs/kea-forms --file=release.yml --allow-publish
+npm trust github kea-forms --repo=keajs/kea-forms --file=release.yml --allow-publish
 gh workflow run release.yml --repo keajs/kea-forms --ref main -f version=3.3.0
 ```
 
