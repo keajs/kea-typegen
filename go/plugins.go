@@ -126,7 +126,7 @@ func (h *pluginHost) load(file string, global bool) *sidecar {
 }
 
 func (v *visitor) runPlugin(sc *sidecar, name string, arg *ast.Node) (bool, error) {
-	request := api.Request{Version: api.Version, Builder: name, File: v.l.File, Logic: v.l.Name, Argument: scanner.GetTextOfNode(arg), Kind: strings.TrimPrefix(arg.Kind.String(), "Kind")}
+	request := api.Request{Version: api.Version, SupportsLogicFieldMembers: true, Builder: name, File: v.l.File, Logic: v.l.Name, Argument: scanner.GetTextOfNode(arg), Kind: strings.TrimPrefix(arg.Kind.String(), "Kind")}
 	node := arg
 	if ast.IsArrowFunction(node) && ast.IsParenthesizedExpression(node.Body()) {
 		node = node.Body().Expression()
@@ -166,6 +166,14 @@ func (v *visitor) runPlugin(sc *sidecar, name string, arg *ast.Node) (bool, erro
 	}
 	for _, s := range result.Selectors {
 		v.l.Selectors = append(v.l.Selectors, value{Name: s.Name, Type: s.Type})
+	}
+	for field, members := range result.LogicFieldMembers {
+		if v.l.LogicFieldMembers == nil {
+			v.l.LogicFieldMembers = make(map[string][]value)
+		}
+		for _, member := range members {
+			v.l.LogicFieldMembers[field] = append(v.l.LogicFieldMembers[field], value{Name: member.Name, Type: member.Type})
+		}
 	}
 	for _, i := range result.Imports {
 		v.addImport(i.File, i.Name)

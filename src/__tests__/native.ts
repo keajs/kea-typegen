@@ -53,11 +53,14 @@ function testWrite(compiler: string) {
             file('models.ts'),
             'export interface Model { label: string }; export declare function model(): Model',
         )
+        fs.writeFileSync(file('record.ts'), 'export interface Item { id: number }')
+        fs.writeFileSync(file('api.ts'), "export * as ModelAPI from './record'")
         const source = [
             "import { kea } from 'kea'",
             "import { model } from '@models'",
+            "import { ModelAPI } from './api'",
             '// 🦜 café',
-            'export const logic = kea({ actions: { load: () => model(), payload: (text: string | null) => ({ text }) } })',
+            'export const logic = kea({ actions: { save: (item: ModelAPI.Item) => ({item}), load: () => model(), payload: (text: string | null) => ({ text }) } })',
         ].join('\n')
         fs.writeFileSync(file('logic.ts'), source)
         fs.writeFileSync(file('second.ts'), source.replace('const logic', 'const second'))
@@ -72,6 +75,7 @@ function testWrite(compiler: string) {
         expect(fs.readFileSync(file('logic.ts'), 'utf8')).toContain('// 🦜 café\nexport const logic = kea<logicType>')
         const generated = fs.readFileSync(file('logicType.ts'), 'utf8')
         expect(generated).toMatch(/import\(['"](?:\.\/models|@models)['"]\)\.Model/)
+        expect(generated).toContain("import type { ModelAPI } from './api'")
         expect(generated).toMatch(/text: string \| null/)
         fs.writeFileSync(file('logic.ts'), source)
         expect(runCli(root, 'check', '--file', 'logic.ts').status).toBe(1)

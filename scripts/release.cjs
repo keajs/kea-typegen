@@ -1,4 +1,4 @@
-// Shared by the kea-typegen workflow and its kea-forms caller.
+// Shared by the kea-typegen workflow and the portable plugin packages.
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
@@ -101,29 +101,32 @@ async function publish(dir) {
             throw Error('Published archive differs: ' + a.pkg + '@' + version)
         a.exists = true
     }
-    if (process.env.GITHUB_REF !== 'refs/heads/main' || git('rev-parse', 'HEAD') !== sha)
-        throw Error('Release must use the tested main commit')
+    const branch = process.env.RELEASE_BRANCH
+    if (!branch) throw Error('Missing release branch')
+    const branchRef = 'refs/heads/' + branch
+    if (process.env.GITHUB_REF !== branchRef || git('rev-parse', 'HEAD') !== sha)
+        throw Error('Release must use the tested default-branch commit')
     const remoteTag = git('ls-remote', 'origin', 'refs/tags/' + tag).split(/\s+/)[0]
     git('config', 'user.name', 'github-actions[bot]')
     git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
     for (const file of ['CHANGELOG.md', 'package.json']) fs.copyFileSync(path.join(dir, file), file)
     if (remoteTag) {
-        git('fetch', 'origin', 'main')
+        git('fetch', 'origin', branchRef)
         if (JSON.parse(git('show', 'FETCH_HEAD:package.json')).version !== version)
             throw Error('A newer release has superseded this retry')
         git('fetch', 'origin', 'refs/tags/' + tag)
         if (git('rev-parse', 'FETCH_HEAD^') !== sha || git('diff', 'FETCH_HEAD', '--', 'package.json', 'CHANGELOG.md'))
             throw Error('Tag belongs to another release')
     } else {
-        if (git('ls-remote', 'origin', 'refs/heads/main').split(/\s+/)[0] !== sha)
-            throw Error('main advanced; dispatch a fresh release')
+        if (git('ls-remote', 'origin', branchRef).split(/\s+/)[0] !== sha)
+            throw Error(branch + ' advanced; dispatch a fresh release')
         git('add', '--', 'package.json', 'CHANGELOG.md')
         git('commit', '-m', 'Release ' + name + ' ' + version)
         git('tag', tag)
-        const refs = ['HEAD:refs/heads/main', 'refs/tags/' + tag]
-        if (platforms.length && !git('ls-remote', 'origin', 'refs/tags/plugin/v1.0.0')) {
-            git('tag', 'plugin/v1.0.0')
-            refs.push('refs/tags/plugin/v1.0.0')
+        const refs = ['HEAD:' + branchRef, 'refs/tags/' + tag]
+        if (platforms.length && !git('ls-remote', 'origin', 'refs/tags/plugin/v1.1.0')) {
+            git('tag', 'plugin/v1.1.0')
+            refs.push('refs/tags/plugin/v1.1.0')
         }
         git('push', '--atomic', 'origin', ...refs)
     }

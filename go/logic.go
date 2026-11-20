@@ -55,6 +55,7 @@ type logic struct {
 	Annotations                          []annotation
 	Imports                              []importedName
 	ExtraActions                         []value
+	LogicFieldMembers                    map[string][]value
 }
 
 type visitor struct {
@@ -260,12 +261,14 @@ func (v *visitor) defaultType(n *ast.Node, unwrap bool) string {
 	return v.render(t, v.file.AsNode(), false)
 }
 
-func rootName(n *ast.Node) string {
+func rootIdentifier(n *ast.Node) *ast.Node {
 	for ast.IsQualifiedName(n) {
 		n = n.AsQualifiedName().Left
 	}
-	return n.Text()
+	return n
 }
+
+func rootName(n *ast.Node) string { return rootIdentifier(n).Text() }
 
 func packageName(path string) string {
 	path = filepath.ToSlash(path)
@@ -329,7 +332,7 @@ func (v *visitor) gather(n, location *ast.Node) {
 		if location != nil {
 			sym = v.c.ResolveName(root, location, ast.SymbolFlagsType|ast.SymbolFlagsNamespace|ast.SymbolFlagsAlias, false)
 		} else {
-			sym = v.c.GetSymbolAtLocation(name)
+			sym = v.c.GetSymbolAtLocation(rootIdentifier(name))
 		}
 		d := declaration(sym)
 		if d == nil || v.program.IsSourceFileDefaultLibrary(ast.GetSourceFileOfNode(d).PathKey()) {

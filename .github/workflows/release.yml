@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -148,7 +148,7 @@ jobs:
           npm install --ignore-scripts --no-audit --no-fund ../packages/*.tgz
           node ../scripts/smoke.cjs
 
-  forms-install:
+  plugin-install:
     needs: prepare
     if: needs.prepare.outputs.core == 'false'
     runs-on: ubuntu-latest
@@ -166,19 +166,21 @@ jobs:
         with:
           name: npm-main
           path: packages
-      - run: |
+      - env:
+          PLUGIN_PACKAGE: ${{ github.event.repository.name }}
+        run: |
           mkdir installed
           cd installed
           npm init -y
           npm install --ignore-scripts --no-audit --no-fund ../packages/*.tgz kea-typegen@latest
-          node ../scripts/smoke.cjs --forms
+          node ../scripts/smoke.cjs "$PLUGIN_PACKAGE"
 
   publish:
-    needs: [prepare, platform, install, forms-install]
+    needs: [prepare, platform, install, plugin-install]
     if: >-
       always() && !cancelled() && needs.prepare.result == 'success' &&
       ((needs.prepare.outputs.core == 'true' && needs.platform.result == 'success' && needs.install.result == 'success') ||
-      (needs.prepare.outputs.core == 'false' && needs.platform.result == 'skipped' && needs.install.result == 'skipped' && needs.forms-install.result == 'success'))
+      (needs.prepare.outputs.core == 'false' && needs.platform.result == 'skipped' && needs.install.result == 'skipped' && needs.plugin-install.result == 'success'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -207,6 +209,7 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/packages
       - env:
+          RELEASE_BRANCH: ${{ github.event.repository.default_branch }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           GH_TOKEN: ${{ github.token }}
         run: node .release-tools/scripts/release.cjs publish "$RUNNER_TEMP/packages"

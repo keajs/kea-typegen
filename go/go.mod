@@ -5,7 +5,7 @@ module github.com/microsoft/TypeScript/tsc/kea-typegen
 go 1.27
 
 require (
-	github.com/keajs/kea-typegen/plugin v1.0.0
+	github.com/keajs/kea-typegen/plugin v1.1.0
 	github.com/microsoft/TypeScript/tsc v0.0.0-20261019203854-3e9236361fa9
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/text v0.42.0

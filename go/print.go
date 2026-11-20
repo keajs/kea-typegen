@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"encoding/json"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -124,6 +125,13 @@ func (l *logic) sharedListenersType() string {
 
 func (l *logic) internalFields() []string {
 	var fields []string
+	for _, name := range slices.Sorted(maps.Keys(l.LogicFieldMembers)) {
+		var members []string
+		for _, member := range uniqueValues(l.LogicFieldMembers[name]) {
+			members = append(members, field(member.Name, member.Type))
+		}
+		fields = append(fields, field(name, object(members)))
+	}
 	if t := l.selectorMeta(); t != "{}" {
 		fields = append(fields, field("__keaTypeGenInternalSelectorTypes", t))
 	}

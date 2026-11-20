@@ -14,7 +14,7 @@ test('a partial release resumes from the tested archives and rejects conflicting
         fs.mkdirSync(repo)
         const git = (...args) =>
             execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
-        git('init', '-b', 'main')
+        git('init', '-b', 'master')
         git('config', 'user.email', 'test@example.com')
         git('config', 'user.name', 'Test')
         fs.writeFileSync(path.join(repo, 'package.json'), '{ "name": "kea-forms", "version": "2.7.1" }\n')
@@ -25,7 +25,7 @@ test('a partial release resumes from the tested archives and rejects conflicting
         git('commit', '--allow-empty', '-m', 'Add portable visitors')
         git('init', '--bare', remote)
         git('remote', 'add', 'origin', remote)
-        git('push', 'origin', 'main', 'v2.7.1')
+        git('push', 'origin', 'master', 'v2.7.1')
         const sha = git('rev-parse', 'HEAD')
         fs.symlinkSync(path.resolve(__dirname, '../node_modules'), path.join(repo, 'node_modules'), 'junction')
         const preload = path.join(dir, 'offline.cjs')
@@ -60,7 +60,8 @@ cp.execFileSync=function(cmd,args,...rest){
         fs.writeFileSync(state, '{}')
         const env = {
             ...process.env,
-            GITHUB_REF: 'refs/heads/main',
+            RELEASE_BRANCH: 'master',
+            GITHUB_REF: 'refs/heads/master',
             GITHUB_REPOSITORY: 'example/fixture',
             REGISTRY_STATE: state,
             GITHUB_OUTPUT: '',
@@ -82,7 +83,7 @@ cp.execFileSync=function(cmd,args,...rest){
         plan.platforms = ['linux-x64']
         fs.writeFileSync(path.join(artifacts, 'plan.json'), JSON.stringify(plan))
         fs.writeFileSync(path.join(artifacts, 'keajs-kea-typegen-linux-x64-2.8.0.tgz'), 'worker')
-        fs.writeFileSync(path.join(artifacts, 'kea-forms-2.8.0.tgz'), 'main')
+        fs.writeFileSync(path.join(artifacts, 'kea-forms-2.8.0.tgz'), 'master')
         assert.throws(() => release('publish', { FAIL_MAIN: '1' }), /simulated registry failure/)
         git('switch', '--detach', sha)
         assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(state))), ['@keajs/kea-typegen-linux-x64'])

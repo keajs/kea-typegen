@@ -29,7 +29,7 @@ func TestPortablePlugin(t *testing.T) {
 	write("main.go", `package main
 import "github.com/keajs/kea-typegen/plugin"
 func main(){plugin.Serve(func(r plugin.Request)(plugin.Result,error){
-	return plugin.Result{Reducers: []plugin.Value{{Name:r.Properties[0].Name, Type:r.Properties[0].Type}}},nil
+	if !r.SupportsLogicFieldMembers { return plugin.Result{Delegate:true},nil }; return plugin.Result{LogicFieldMembers:map[string][]plugin.Value{"workers": {{Name:r.Properties[0].Name,Type:"Saga"}}}, Reducers: []plugin.Value{{Name:r.Properties[0].Name, Type:r.Properties[0].Type}}},nil
 })}`)
 	write("node_modules/widget/package.json", `{"name":"widget","types":"index.d.ts"}`)
 	write("node_modules/widget/index.d.ts", "export declare function widget(x:unknown):unknown")
@@ -46,7 +46,7 @@ func main(){plugin.Serve(func(r plugin.Request)(plugin.Result,error){
 declare function kea(x:unknown):unknown
 declare function resetContext(x:unknown):void
 resetContext({plugins:[widget]})
-export const first = kea([widget({count:0})])
+export const first = kea([widget({count:0}), widget({more:1})])
 export const second = kea({widget:{text:"hello"}})`)
 	opts := options{RootPath: root, TsConfigPath: filepath.Join(root, "tsconfig.json"), Inline: true}
 	result, err := analyze(opts)
@@ -56,6 +56,17 @@ export const second = kea({widget:{text:"hello"}})`)
 	if len(result.Logics) != 2 || len(result.PluginFiles) != 0 || len(result.PluginContexts) != 0 ||
 		!strings.Contains(result.Logics[0].Declaration, "count: number") || !strings.Contains(result.Logics[1].Declaration, "text: string") {
 		t.Fatal("portable builder or global dispatch failed:", result.Logics)
+	}
+	for _, inline := range []bool{true, false} {
+		opts.Inline = inline
+		result, err := analyze(opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decl := result.Logics[0].Declaration
+		if strings.Count(decl, "workers:") != 1 || !strings.Contains(decl, "count: Saga;") || !strings.Contains(decl, "more: Saga;") {
+			t.Fatalf("missing merged logic fields, inline=%v: %s", inline, decl)
+		}
 	}
 	t.Setenv("KEA_TYPEGEN_JS_PLUGINS", "1")
 	result, err = analyze(opts)
